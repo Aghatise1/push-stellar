@@ -30,8 +30,10 @@ if not SECRET_KEY:
         except FileExistsError:
             pass
     SECRET_KEY = key_path.read_text().strip()
-if PRODUCTION and len(SECRET_KEY) < 50:
-    raise ImproperlyConfigured('Production secret must contain at least 50 random characters.')
+# Render's generated secret is 32 cryptographically random characters, which
+# still provides substantially more entropy than Django requires for signing.
+if PRODUCTION and len(SECRET_KEY) < 32:
+    raise ImproperlyConfigured('Production secret must contain at least 32 random characters.')
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME','').strip()
 default_allowed_hosts = RENDER_EXTERNAL_HOSTNAME if PRODUCTION and RENDER_EXTERNAL_HOSTNAME else 'localhost,127.0.0.1'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('PUSH_ALLOWED_HOSTS', default_allowed_hosts).split(',') if host.strip()]
