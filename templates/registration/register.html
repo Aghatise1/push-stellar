@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Create your Push account{% endblock %}
+{% block meta_description %}Create one Push account for finding independent work and hiring talent.{% endblock %}
+{% block content %}
+<section class="auth-panel">
+  <p class="eyebrow">Create your work record</p>
+  <h1>Make room for good work.</h1>
+  <p class="lead">One account to find work and build your team.</p>
+  {% if google_auth_enabled %}
+    {% include 'google_auth_button.html' with google_label='Continue with Google' %}
+    <div class="auth-divider"><span>or use email</span></div>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include 'fields.html' %}
+    <button class="button full" type="submit">Create account</button>
+  </form>
+  <p class="form-assurance">By creating an account, you confirm the <a href="{% url 'terms' %}" target="_blank">Push Terms of Use</a>. Email registration also requires the checkbox above.</p>
+  <p class="form-assurance">Private development preview · Your email stays private · No real payment is collected.</p>
+  <a href="{% url 'login' %}">Already registered? Sign in</a>
+</section>
+{% endblock %}

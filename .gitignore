@@ -1,0 +1,13 @@
+.venv/
+.env
+.local-key
+*.sqlite3
+*.sqlite3-*
+__pycache__/
+*.pyc
+private-mail/
+private-demo-credentials.txt
+staticfiles/
+
+.local/
+.runtime-venv/

@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block title %}{{ title }} — Push{% endblock %}{% block meta_description %}A status update from your Push account.{% endblock %}{% block content %}<section class="auth-panel"><h1>{{ title }}</h1><p>{{ description }}</p><a class="button" href="{% url 'workspace' %}">Go to workspace</a></section>{% endblock %}

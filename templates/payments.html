@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Payments — Push{% endblock %}
+{% block meta_description %}Review recorded earnings, pending work and settlement evidence in Push.{% endblock %}
+{% block app_location %}Payments{% endblock %}
+{% block content %}
+<div class="app-page payments-page">
+  <header class="app-heading app-reveal"><div><p class="app-kicker">Payments</p><h1>Your earnings and settlement record.</h1><p>This is the work record. Your connected wallet remains separate and controls the actual assets.</p></div><a class="button secondary" href="{% url 'wallet' %}">Open wallet</a></header>
+  <section class="payments-summary app-reveal"><div><span>Total recorded earnings</span><strong><sup>$</sup>{{ total_earnings }}<small>.00</small></strong><p>Completed work recorded by Push</p></div><div class="payment-stat"><span>Verified testnet</span><strong>${{ verified_earnings }}.00</strong><small>Network evidence recorded</small></div><div class="payment-stat"><span>Simulated</span><strong>${{ simulated_earnings }}.00</strong><small>Demo-only payments</small></div><div class="payment-stat pending-stat"><span>Pending work</span><strong>${{ pending_earnings }}.00</strong><small>Active assignment value</small></div></section>
+  <section id="history" class="work-section scroll-reveal"><div class="app-section-heading"><div><span>Ledger</span><h2>Payment history</h2></div><strong>{{ payments|length }}</strong></div><div class="app-list">{% for payment in payments %}<div class="app-list-row payment-row"><span class="status-dot complete-dot"></span><span class="row-copy"><strong>{{ payment.assignment.job.title }}</strong><small>{{ payment.created_at|date:'j M Y' }} · {% if payment.simulated %}Simulation{% else %}Verified testnet{% endif %}</small></span><span class="row-amount">${{ payment.amount }}.00</span><span class="row-status">Recorded</span></div>{% empty %}<div class="app-empty compact"><div class="empty-illustration" aria-hidden="true"><span></span><i></i><b></b></div><h3>No payment records yet.</h3><p>Completed assignment payments will appear here.</p></div>{% endfor %}</div></section>
+  <section class="cashout-panel scroll-reveal"><div><span>Bank withdrawal</span><h2>Cash-out comes after the payment rails.</h2></div><p>A future regulated provider will handle conversion to bank money after the supported country and compliance scope are decided.</p><button class="button secondary" disabled>Provider not configured</button></section>
+</div>
+{% endblock %}

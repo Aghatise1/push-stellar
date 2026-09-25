@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-24T01:26:04.249Z",
+  "title": "Design System: Push",
+  "extensions": {
+    "colorMeta": {
+      "signal": {
+        "role": "primary",
+        "displayName": "Vermilion signal"
+      },
+      "forest": {
+        "role": "secondary",
+        "displayName": "Functional forest"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Dark ink"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Dossier headline",
+        "purpose": "Home headline only."
+      },
+      "headline": {
+        "displayName": "Page heading",
+        "purpose": "Task and record headings."
+      }
+    },
+    "shadows": [
+      {
+        "name": "field-focus",
+        "value": "0 0 0 .2rem rgba(23,107,84,.1)",
+        "purpose": "Focused field feedback only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(.23,1,.32,1)",
+        "purpose": "Button, navigation and job-row interaction transforms."
+      },
+      {
+        "name": "button-state",
+        "value": "background 160ms ease,color 160ms ease,border-color 160ms ease,transform 140ms var(--ease-out)",
+        "purpose": "Hover and active button feedback."
+      },
+      {
+        "name": "job-row",
+        "value": "background 180ms ease,transform 180ms var(--ease-out)",
+        "purpose": "Sheet fill and horizontal hover shift."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition:none!important;scroll-behavior:auto!important",
+        "purpose": "Global reduced-motion override."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1050px"
+      },
+      {
+        "name": "mobile",
+        "value": "720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Forest action with a small press response.",
+      "html": "<button class=\"ds-control ds-button\">Find work</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;padding:.76rem 1.1rem;background:var(--forest,#173d31);color:#fff;border:1px solid var(--forest,#173d31);border-radius:.2rem;font:600 .86rem/1.3 'Instrument Sans',sans-serif;cursor:pointer;min-height:2.9rem;transition:background 160ms ease,transform 140ms var(--ease-out,cubic-bezier(.23,1,.32,1))}.ds-button:hover{background:#0e2d24;color:#fff}.ds-button:active{transform:scale(.97)}.ds-button:disabled{opacity:.5;cursor:not-allowed}.ds-control:focus-visible{outline:.1875rem solid var(--focus,#176b54);outline-offset:.25rem}@media(prefers-reduced-motion:reduce){.ds-button{transition:none!important}}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Paper field with explicit label and focus feedback.",
+      "html": "<label class=\"ds-label\" for=\"ds-search\">Search opportunities</label><input id=\"ds-search\" class=\"ds-control ds-input\" placeholder=\"Role, skill or project\">",
+      "css": ".ds-label{display:block;font:600 .78rem/1.55 'Instrument Sans',sans-serif;color:var(--ink,#171b18);margin-bottom:.42rem}.ds-input{width:100%;max-width:100%;padding:.78rem .85rem;border:1px solid var(--line-strong,#8e928a);border-radius:.15rem;background:var(--sheet,#fbfaf6);color:var(--ink,#171b18);min-height:2.9rem;font:400 16px/1.55 'Instrument Sans',sans-serif;caret-color:var(--signal,#d95536);transition:border-color 150ms ease,box-shadow 150ms ease}.ds-input:hover{border-color:var(--ink,#171b18)}.ds-input:focus{border-color:var(--focus,#176b54);box-shadow:0 0 0 .2rem rgba(23,107,84,.1)}.ds-input::placeholder{color:#626862}.ds-control:focus-visible{outline:.1875rem solid var(--focus,#176b54);outline-offset:.25rem}@media(prefers-reduced-motion:reduce){.ds-input{transition:none!important}}"
+    },
+    {
+      "name": "Current Navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "Dark ink rail with a vermilion current-page marker.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Example navigation\"><a class=\"ds-nav\" href=\"#workspace\" aria-current=\"page\">Workspace</a></nav>",
+      "css": ".ds-rail{background:var(--ink,#171b18);padding:1rem 1.75rem}.ds-nav{display:block;position:relative;padding:.82rem .9rem;color:#c7c8c0;text-decoration:none;border:1px solid transparent;font:400 16px/1.55 'Instrument Sans',sans-serif;transition:color 160ms ease,background 160ms ease,transform 160ms var(--ease-out,cubic-bezier(.23,1,.32,1))}.ds-nav:hover,.ds-nav[aria-current]{color:#fff;background:#242a26}.ds-nav[aria-current]{border-color:#353c37}.ds-nav[aria-current]:before{content:'';position:absolute;left:-1.76rem;top:50%;width:.55rem;height:1px;background:var(--signal,#d95536)}.ds-nav:active{transform:scale(.98)}.ds-nav:focus-visible{outline:.1875rem solid #ff9a80;outline-offset:.25rem}@media(prefers-reduced-motion:reduce){.ds-nav{transition:none!important}}"
+    },
+    {
+      "name": "Status Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Non-interactive document status.",
+      "html": "<span class=\"ds-tag\">Open</span>",
+      "css": ".ds-tag{display:inline-block;font:400 .72rem/1.55 'Instrument Sans',sans-serif;border-radius:.15rem;padding:.35rem .5rem;background:var(--paper-deep,#e8e3d8);color:#424943;border:1px solid var(--line,#c8c5ba)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The architectural tender dossier",
+    "overview": "An architectural tender dossier translated into software: precise briefs, numbered stages, strong typographic hierarchy and paper-like neutral surfaces. A dark ink rail anchors the workspace; a controlled vermilion signal marks the identity and key structural moments. Forest-green actions remain deliberately functional.\n\nThe result is mature, legible and procedural. Fine rules organise evidence and stages; flat surfaces keep the document itself prominent. Glass and black-hole visual effects are excluded. Push is still a working name. This record describes the shipped local build, not a production launch approval.",
+    "keyCharacteristics": [
+      "Paper neutrals, dark ink navigation and controlled vermilion markers.",
+      "Large Instrument Sans headlines paired with compact document metadata.",
+      "Numbered process stages and ruled work records.",
+      "Briefs, current status and evidence remain easy to inspect."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Keep vermilion as a controlled structural signal; preserve forest-green task actions.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do preserve the distinction between vermilion signals and forest-green actions.",
+      "Do use numbered stages, fine rules and aligned metadata to organise work.",
+      "Do retain labelled fields, visible focus and reduced-motion support.",
+      "Do distinguish sample activity, payment simulations and Stellar testnet verification in visible copy."
+    ],
+    "donts": [
+      "Don't add glass surfaces or black-hole visual effects.",
+      "Don't replace open records with layers of decorative cards.",
+      "Don't use colour alone to convey status.",
+      "Don't imply mainnet settlement, custody, invented activity or production readiness."
+    ]
+  }
+}

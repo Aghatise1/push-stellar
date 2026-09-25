@@ -1,0 +1,77 @@
+{% extends 'base.html' %}{% block title %}{{ job.title }} — Push{% endblock %}{% block meta_description %}Review the scope, budget, deadline and deliverables for {{ job.title }} on Push.{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'jobs' %}">Back to opportunities</a>
+<div class="page-heading">
+  <div>
+    <div class="tags">
+      <span class="tag">{{ job.category }}</span>
+      <span class="tag">{{ job.get_status_display }}</span>
+      {% if job.demo %}<span class="tag">Sample brief</span>{% endif %}
+    </div>
+    <h1>{{ job.title }}</h1>
+    <p class="lead">{{ job.project }}</p>
+    {% if can_edit %}<a href="{% url 'job_edit' job.pk %}">Edit this brief</a>{% endif %}
+  </div>
+  <div class="large-budget">${{ job.budget }}<small>Illustrative USD budget</small></div>
+</div>
+<div class="detail-layout">
+  <div>
+    <section><h2>The opportunity</h2><p class="preline">{{ job.description }}</p></section>
+    <section><h2>What you'll deliver</h2><p class="preline">{{ job.deliverables }}</p></section>
+    {% if is_owner %}
+      {% if job.status == 'open' and not job.demo %}
+      <details class="action-detail">
+        <summary>Close this job</summary>
+        <p>This stops new applications and worker selection. Existing applications stay in your records. To hire later, publish a new job.</p>
+        <form method="post" action="{% url 'job_close' job.pk %}">
+          {% csrf_token %}<button class="button secondary">Confirm job closure</button>
+        </form>
+      </details>
+      {% endif %}
+      <section>
+        <h2>Applications</h2>
+        {% for application in applications %}
+        <article class="application">
+          <h3>{{ application.worker.display_name }}</h3>
+          <p class="preline">{{ application.proposal }}</p>
+          {% if application.worker.public_profile %}<p><a href="{% url 'public_profile' application.worker_id %}">View public profile</a></p>{% endif %}
+          {% if application.withdrawn %}
+            <p class="tag">Withdrawn</p>
+          {% elif job.status == 'open' %}
+            <form method="post" action="{% url 'select' application.pk %}">
+              {% csrf_token %}<button class="button secondary">Select this worker</button>
+            </form>
+          {% endif %}
+        </article>
+        {% empty %}<p class="muted">No applications yet.</p>{% endfor %}
+        {% if active_assignment %}<a class="button" href="{% url 'assignment' active_assignment.pk %}">Open assignment</a>{% endif %}
+      </section>
+    {% elif job.demo %}
+      <div class="notice">This is an illustrative brief, not a real hiring opportunity. Create a job to try applications.</div>
+    {% elif existing %}
+      <div class="notice success">{% if existing.withdrawn %}You withdrew this application. It cannot be selected or resubmitted in this preview.{% else %}Your application has been sent. Review it in your workspace.{% endif %}</div>
+    {% elif job.status == 'open' %}
+      <section>
+        <h2>Make your introduction</h2>
+        {% if user.is_authenticated %}
+          <form method="post" action="{% url 'apply' job.pk %}">
+            {% csrf_token %}{% include 'fields.html' %}<button class="button">Send application</button>
+          </form>
+        {% else %}
+          <p>Sign in to apply. Your proposal is private to the hiring account.</p>
+          <a class="button" href="{% url 'login' %}?next={{ request.path|urlencode }}">Sign in to apply</a>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+  <aside class="side-note">
+    <h2>At a glance</h2>
+    <dl>
+      <dt>Deadline</dt><dd>{{ job.deadline|date:'j F Y' }}</dd>
+      <dt>Posted</dt><dd>{{ job.created_at|date:'j F Y' }}</dd>
+      <dt>Payment</dt><dd>Simulation only</dd>
+    </dl>
+    <p>Never share passwords, recovery phrases or payment credentials in an application.</p>
+  </aside>
+</div>
+{% endblock %}

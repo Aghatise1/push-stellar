@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}The Push product{% endblock %}
+{% block meta_description %}Explore the Push product vision for clear briefs, private workrooms and verifiable settlement records.{% endblock %}{% block content %}
+<div class="page-heading product-heading">
+  <div>
+    <p class="eyebrow">Product dossier · inherited from the original Push concept</p>
+    <h1>Built on trust, not gatekeepers.</h1>
+    <p class="lead">Push is a work marketplace for Web3 teams and independent talent. It brings discovery, a fixed brief, delivery evidence and payment records into one controllable system.</p>
+  </div>
+  <a class="button" href="{% url 'register' %}">Create an account</a>
+</div>
+
+<section>
+  <div class="section-heading"><h2>The problem we are solving</h2><span>Original concept · clarified</span></div>
+  <div class="numbered-grid">
+    <article><strong>01</strong><h3>Fragmented discovery</h3><p>Work is scattered across X, Discord, Telegram and unrelated job boards.</p></article>
+    <article><strong>02</strong><h3>Missing trust</h3><p>Workers face unpaid work and vague promises; hiring teams face unverifiable claims.</p></article>
+    <article><strong>03</strong><h3>Proof does not travel</h3><p>Briefs, decisions, deliverables and payment evidence live in different places.</p></article>
+    <article><strong>04</strong><h3>Access beats ability</h3><p>Who someone knows can matter more than what they can demonstrate.</p></article>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><h2>How Push answers it</h2><a href="{% url 'how_it_works' %}">Read the operating rules</a></div>
+  <div class="solution-ledger">
+    <div><span>01</span><h3>One marketplace</h3><p>Searchable briefs across community, growth, design, operations, content and engineering.</p></div>
+    <div><span>02</span><h3>One agreed record</h3><p>The scope, budget and deadline are preserved before work begins.</p></div>
+    <div><span>03</span><h3>Evidence-led delivery</h3><p>Submissions, revisions, approvals and disputes remain attached to the assignment.</p></div>
+    <div><span>04</span><h3>Flexible settlement</h3><p>Bank/card and stablecoin routes can coexist. The prototype verifies Stellar testnet USDC and simulates the other routes.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><h2>Work across the full Web3 stack</h2><span>Both specialists and generalists</span></div>
+  <div class="role-index">
+    <article><h3>Community</h3><p>Community managers, moderators, ambassadors and support leads.</p></article>
+    <article><h3>Growth</h3><p>Content, social media, business development and partnerships.</p></article>
+    <article><h3>Design</h3><p>Product design, research, brand systems and illustration.</p></article>
+    <article><h3>Operations</h3><p>Project management, research, strategy and programme operations.</p></article>
+    <article><h3>Finance &amp; legal</h3><p>Treasury operations, compliance support and specialist counsel.</p></article>
+    <article><h3>Engineering</h3><p>Smart contracts, frontend, backend, infrastructure and developer relations.</p></article>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><h2>What makes the model different</h2><span>No invented performance claims</span></div>
+  <div class="comparison" role="table" aria-label="Marketplace comparison">
+    <div class="comparison-row comparison-head" role="row"><span role="columnheader">Question</span><span role="columnheader">Push</span><span role="columnheader">Typical gig platform</span><span role="columnheader">Informal recruiting</span></div>
+    <div class="comparison-row" role="row"><strong role="rowheader">Where is the brief?</strong><span>Preserved with the assignment</span><span>Stored by the platform</span><span>Often split across messages</span></div>
+    <div class="comparison-row" role="row"><strong role="rowheader">Who can see proposals?</strong><span>Applicant and hiring account</span><span>Depends on platform</span><span>Depends on the channel</span></div>
+    <div class="comparison-row" role="row"><strong role="rowheader">How is delivery recorded?</strong><span>Against the agreed scope</span><span>Platform-specific workflow</span><span>Usually manual</span></div>
+    <div class="comparison-row" role="row"><strong role="rowheader">Payment choice</strong><span>Designed for bank/card and stablecoins</span><span>Platform-defined</span><span>Agreed privately</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><h2>Build sequence</h2><span>Dates follow evidence, not theatre</span></div>
+  <div class="roadmap">
+    <article><strong>Now · Working prototype</strong><h3>Marketplace foundation</h3><p>Accounts, profiles, briefs, applications, assignment states, delivery records and Stellar testnet verification.</p></article>
+    <article><strong>Next · Controlled pilot</strong><h3>Real users and operations</h3><p>Production provider selection, support, dispute policy, privacy controls, monitoring and a limited country launch.</p></article>
+    <article><strong>Later · Trust network</strong><h3>Portable evidence</h3><p>Verified reviews, organisation profiles, broader payment rails and carefully selected chain integrations.</p></article>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><h2>Straight answers</h2><span>Current position</span></div>
+  <div class="faq-list">
+    <details><summary>Is Push live?</summary><p>No. This is a private development build. Accounts and workflows function locally; production payments and public launch controls are not enabled.</p></details>
+    <details><summary>Does Push have a token?</summary><p>No. Push does not require or issue a proprietary token.</p></details>
+    <details><summary>Is Push tied to one blockchain?</summary><p>No final chain exclusivity has been chosen. Stellar is used for the current testnet payment proof. Other integrations must solve a specific product need.</p></details>
+    <details><summary>Does Push hold money?</summary><p>No. The prototype is non-custodial and does not provide escrow. Production custody or escrow would require legal, operational and security work.</p></details>
+    <details><summary>What is the platform fee?</summary><p>Undecided. The original concept proposed 12.5%, but that is now a candidate to test rather than a published promise.</p></details>
+    <details><summary>Who is building it?</summary><p>Push is founded by Aghatise. A full public biography and verified contact details should be added before launch.</p></details>
+  </div>
+</section>
+
+<section class="product-cta">
+  <p class="eyebrow">The preview is part of the product</p>
+  <h2>Inspect real screens and sample briefs.</h2>
+  <p>The original preview concept now lives in the working opportunities board and assignment workflow rather than as a disconnected mock page.</p>
+  <div class="actions"><a class="button" href="{% url 'jobs' %}">Open the preview</a><a class="button secondary" href="{% url 'how_it_works' %}">Read the rules</a></div>
+</section>
+{% endblock %}

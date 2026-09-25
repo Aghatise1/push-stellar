@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Verify your email — Push{% endblock %}
+{% block meta_description %}Enter the six-digit code sent to your email to activate your Push account.{% endblock %}
+{% block content %}
+<section class="auth-panel verification-panel">
+  <p class="eyebrow">Account security</p>
+  <h1>Check your email.</h1>
+  <p class="lead">Enter the six-digit code sent to <strong>{{ user.email }}</strong>. It expires after 15 minutes.</p>
+  {% if local_email %}<div class="notice"><strong>Local preview</strong><p>This preview is not connected to an email sender yet. Open the newest file in the project’s <code>private-mail</code> folder and copy the six-digit code.</p></div>{% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include 'fields.html' %}
+    <button class="button full" type="submit">Verify email</button>
+  </form>
+  <form method="post" action="{% url 'resend' %}" class="resend-form">
+    {% csrf_token %}
+    <button class="button secondary full" type="submit">Send a new code</button>
+  </form>
+  <p class="form-assurance">Codes can be used once. Push never asks for your email password.</p>
+</section>
+{% endblock %}

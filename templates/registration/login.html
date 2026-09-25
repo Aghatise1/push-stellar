@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Sign in to Push{% endblock %}
+{% block meta_description %}Sign in to continue your briefs, applications, messages and payment records on Push.{% endblock %}
+{% block content %}
+<section class="auth-panel">
+  <p class="eyebrow">Private workspace</p>
+  <h1>Welcome back.</h1>
+  <p class="lead">Sign in to continue your briefs, applications and assignments.</p>
+  {% if google_auth_enabled %}
+    {% include 'google_auth_button.html' with google_label='Sign in with Google' %}
+    <div class="auth-divider"><span>or use email</span></div>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include 'fields.html' %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="button full" type="submit">Sign in</button>
+  </form>
+  <p class="form-assurance">Demo credentials are stored only in the local project’s private credentials file.</p>
+  <div class="auth-links"><a href="{% url 'password_reset' %}">Forgot your password?</a><a href="{% url 'register' %}">Create an account</a></div>
+</section>
+{% endblock %}

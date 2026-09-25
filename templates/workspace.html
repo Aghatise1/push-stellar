@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Overview — Push{% endblock %}
+{% block meta_description %}Track work, messages, earnings and payment records from the Push workspace.{% endblock %}
+{% block app_location %}Overview{% endblock %}
+{% block content %}
+<div class="app-page">
+  <header class="app-heading app-reveal">
+    <div><p class="app-kicker">Good {{ request.user.date_joined|date:'l' }}, {{ user.display_name }}</p><h1>Your work, money and messages.</h1><p>Everything that needs your attention is collected here.</p></div>
+    <a class="button" href="{% url 'jobs' %}">Find new work</a>
+  </header>
+
+  <section class="dashboard-grid">
+    <article class="balance-panel app-reveal">
+      <div class="balance-copy">
+        <span class="balance-label">Total recorded earnings</span>
+        <strong class="hero-balance"><sup>$</sup>{{ total_earnings }}<small>.00</small></strong>
+        <p>Testnet and simulated payments are separated below so the record stays clear.</p>
+        <div class="wallet-actions" aria-label="Payment actions">
+          <a href="{% url 'wallet' %}#send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-5z"/></svg><span>Send</span></a>
+          <a href="{% url 'wallet' %}#receive"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></svg><span>Receive</span></a>
+          <a href="{% url 'payments' %}#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>History</span></a>
+        </div>
+      </div>
+      <div class="payment-motion" aria-hidden="true">
+        <div class="motion-stage">
+          <span class="stage-node stage-work"><i></i><b>Work</b><small>Delivered</small></span>
+          <span class="stage-node stage-review"><i></i><b>Approve</b><small>Recorded</small></span>
+          <span class="stage-node stage-paid"><i></i><b>Paid</b><small>Settled</small></span>
+          <span class="flow-line"></span>
+          <span class="flow-token"><img src="{% static 'images/usdc.png' %}" alt=""></span>
+          <span class="flow-spark spark-a"></span><span class="flow-spark spark-b"></span>
+        </div>
+        <p>Delivery to settlement, in one visible trail.</p>
+      </div>
+    </article>
+
+    <article class="messages-panel app-reveal" id="messages">
+      <div class="panel-title"><div><span>Messages</span><h2>Workroom</h2></div><strong>{{ message_count }}</strong></div>
+      <div class="message-preview-list">
+        {% for message in recent_messages %}
+          <a href="{% url 'conversation' message.assignment.pk %}"><span class="mini-avatar">{{ message.sender.display_name|first|upper }}</span><span><strong>{{ message.sender.display_name }}</strong><small>{{ message.assignment.job.title }}</small><p>{{ message.body|truncatechars:56 }}</p></span><time>{{ message.created_at|date:'H:i' }}</time></a>
+        {% empty %}
+          <div class="panel-empty"><span class="empty-ring"></span><h3>No messages yet</h3><p>Your conversation begins after a hiring account selects an application.</p></div>
+        {% endfor %}
+      </div>
+      <a class="panel-link" href="{% url 'inbox' %}">Open messages <span>→</span></a>
+    </article>
+
+    <article class="metric-card app-reveal"><span>Available record</span><strong>${{ verified_earnings }}<small>.00</small></strong><p>Verified testnet earnings</p></article>
+    <article class="metric-card app-reveal"><span>Simulation record</span><strong>${{ simulated_earnings }}<small>.00</small></strong><p>Demonstration payments</p></article>
+    <article class="metric-card signal app-reveal"><span>Pending work</span><strong>${{ pending_earnings }}<small>.00</small></strong><p>{{ active_count }} active assignment{{ active_count|pluralize }}</p></article>
+  </section>
+
+  <section class="work-section scroll-reveal">
+    <div class="app-section-heading"><div><span>Active work</span><h2>Assignments</h2></div><strong>{{ assignments|length }}</strong></div>
+    <div class="app-list">
+      {% for item in assignments %}
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.project }} · {% if item.worker_id == user.pk %}Working{% else %}Hiring{% endif %}</small></span><span class="row-amount">${{ item.budget }}</span><span class="row-status">{{ item.get_status_display }}</span><span class="row-arrow">→</span></a>
+      {% empty %}
+        <div class="app-empty"><div class="empty-illustration" aria-hidden="true"><span></span><i></i><b></b></div><h3>Your next project will appear here.</h3><p>Browse clear briefs, apply, and keep the resulting work record in one place.</p><a class="button" href="{% url 'jobs' %}">Browse work</a></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="work-split scroll-reveal">
+    <div><div class="app-section-heading"><div><span>Hiring</span><h2>Your briefs</h2></div><a href="{% url 'job_create' %}">Post a brief</a></div>{% for job in own_jobs %}<a class="compact-row" href="{% url 'job_detail' job.pk %}"><span><strong>{{ job.title }}</strong><small>{{ job.get_status_display }}</small></span><b>{{ job.applications.count }}</b></a>{% empty %}<div class="small-empty">No briefs posted yet.</div>{% endfor %}</div>
+    <div><div class="app-section-heading"><div><span>Pipeline</span><h2>Your applications</h2></div><a href="{% url 'jobs' %}">Find work</a></div>{% for application in applications %}<details class="compact-application"><summary><span><strong>{{ application.job.title }}</strong><small>{{ application.created_at|date:'j M Y' }}</small></span><b>{% if application.withdrawn %}Withdrawn{% else %}Sent{% endif %}</b></summary><p class="preline">{{ application.proposal }}</p>{% if not application.withdrawn and application.job.status == 'open' %}<form method="post" action="{% url 'withdraw' application.pk %}">{% csrf_token %}<button class="link-button">Withdraw application</button></form>{% endif %}</details>{% empty %}<div class="small-empty">No applications sent yet.</div>{% endfor %}</div>
+  </section>
+</div>
+{% endblock %}

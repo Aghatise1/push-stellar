@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Push — Work with a clear record{% endblock %}
+{% block meta_description %}Keep freelance briefs, delivery, messages and settlement evidence together with Push.{% endblock %}
+{% block content %}
+<section class="intro" data-reveal>
+  <div class="intro-visual-column">
+    <h1>Good work needs a record.</h1>
+    <div class="settlement-orbit" aria-hidden="true">
+      <span class="settlement-track track-outer"></span>
+      <span class="settlement-track track-inner"></span>
+      <span class="orbit-carrier carrier-idea"><span class="orbit-face idea-face">IDEA</span></span>
+      <span class="orbit-carrier carrier-work"><span class="orbit-face work-face">WORK</span></span>
+      <span class="orbit-carrier carrier-usdc"><span class="orbit-face usdc-face"><img src="{% static 'images/usdc.png' %}" alt=""></span></span>
+      <span class="orbit-core">PUSH</span>
+    </div>
+  </div>
+  <div class="intro-copy">
+    <p class="lead">Push keeps the brief, the delivery and the payment trail in one place—so independent work does not depend on scattered messages and vague promises.</p>
+    <div class="actions"><a class="button" href="{% url 'jobs' %}">Find work</a><a class="button secondary" href="{% url 'job_create' %}">Post a brief</a></div>
+    <p class="intro-meta">Built for Web3 teams and independent talent. No Push token. Stellar payments are currently testnet only.</p>
+  </div>
+</section>
+<section class="landing-film" data-reveal>
+  <div class="landing-film-frame">
+    <video data-story-video autoplay muted loop playsinline preload="metadata" aria-hidden="true">
+      <source src="{% static 'video/landing-story.mp4' %}" type="video/mp4">
+    </video>
+    <span class="film-index">01 / THE RELATIONSHIP</span>
+  </div>
+  <div class="landing-film-copy">
+    <p class="eyebrow">Built around people</p>
+    <h2>People do the work. Push keeps the record.</h2>
+    <p>A clear brief moves between a client and independent talent. The agreement, delivery and settlement stay connected while the people remain in control.</p>
+    <a class="text-action" href="#how-it-works">Follow the work journey ↓</a>
+  </div>
+</section>
+<section class="landing-product landing-anchor-section" id="product" aria-labelledby="product-heading" data-reveal>
+  <div class="section-heading">
+    <div><p class="eyebrow">The product</p><h2 id="product-heading">One workspace. One reliable trail.</h2></div>
+    <a href="{% url 'product' %}">Explore the full product</a>
+  </div>
+  <div class="product-ledger" data-stagger>
+    <article><span>01</span><h3>A brief everyone can trust</h3><p>Scope, budget and deadline are agreed before work begins, then preserved when applications arrive.</p></article>
+    <article><span>02</span><h3>A workroom for the actual work</h3><p>Messages, files, decisions and revisions stay beside the assignment instead of disappearing across apps.</p></article>
+    <article><span>03</span><h3>A payment record with evidence</h3><p>Settlement links the completed work to its payment route and verifiable reference.</p></article>
+  </div>
+</section>
+<section id="how-it-works" class="landing-anchor-section" data-reveal>
+  <div class="section-heading"><h2>How work moves</h2><a href="{% url 'how_it_works' %}">Read the complete rules</a></div>
+  <div class="workflow-collage" data-parallax aria-hidden="true"><img src="{% static 'images/work-journey-collage.png' %}" alt=""></div>
+  <div class="process" data-stagger>
+    <article><strong>01 · Brief</strong><h3>Set the terms</h3><p>Outcome, deliverables, budget and deadline are visible before anyone applies.</p></article>
+    <article><strong>02 · Agreement</strong><h3>Select and accept</h3><p>The chosen worker accepts a preserved copy of the scope before work begins.</p></article>
+    <article><strong>03 · Delivery</strong><h3>Submit against scope</h3><p>Files, links, revisions and decisions remain attached to the assignment.</p></article>
+    <article><strong>04 · Settlement</strong><h3>Approve with evidence</h3><p>Completion records the chosen payment route and its verifiable reference.</p></article>
+  </div>
+</section>
+<section id="opportunities" class="landing-anchor-section" data-reveal>
+  <div class="section-heading"><h2>Open briefs</h2><a href="{% url 'jobs' %}">View all opportunities</a></div>
+  <div class="talent-collage" data-parallax aria-hidden="true"><img src="{% static 'images/independent-talent-collage.png' %}" alt=""></div>
+  <div class="job-list">{% for job in jobs %}{% include 'job_row.html' %}{% empty %}<div class="empty"><h3>The board is ready for its first brief.</h3><p>Create an account to post an opportunity.</p></div>{% endfor %}</div>
+</section>
+<section class="principles" data-reveal data-stagger>
+  <div><h3>Terms cannot quietly move</h3><p>A brief becomes read-only once the first application arrives, preserving what applicants considered.</p></div>
+  <div><h3>Private until published</h3><p>Profiles stay private by default, and proposals remain between the worker and hiring account.</p></div>
+  <div><h3>Evidence before status</h3><p>Push records actual workflow events and verified testnet settlement references, never invented reputation.</p></div>
+</section>
+<section id="investors" class="landing-investors landing-anchor-section" data-reveal>
+  <div class="landing-investor-copy">
+    <p class="eyebrow">For investors and ecosystem partners</p>
+    <h2>Independent work is global. Its trust layer should be portable.</h2>
+    <p>Push is building a clear record between a brief and its settlement: who agreed, what was delivered and how payment was completed. The current build proves the workflow on Stellar testnet.</p>
+    <div class="actions"><a class="button" href="{% url 'investors' %}">See the investor story</a><a class="investor-contact" href="mailto:aghatiseehioghae644@gmail.com">Email the founder ↗</a><a class="investor-contact" href="https://x.com/push__io" target="_blank" rel="noopener noreferrer">X · @push__io ↗</a></div>
+  </div>
+  <div class="landing-handshake" aria-hidden="true">
+    <img src="{% static 'images/paper-handshake-v2.png' %}" alt="">
+    <span>BRIEF</span><span>SETTLED</span>
+  </div>
+</section>
+{% endblock %}
+{% block extra_scripts %}<script src="{% static 'home-motion.js' %}?v=20260925-3" defer></script>{% endblock %}

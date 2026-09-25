@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: push-preview
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py check --deploy && python manage.py check_release
+    startCommand: waitress-serve --listen=*:10000 config.wsgi:application
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PUSH_ENV
+        value: production
+      - key: PUSH_SECRET_KEY
+        generateValue: true
+      - key: PUSH_DATABASE_URL
+        sync: false
+      - key: PUSH_GOOGLE_CLIENT_ID
+        sync: false
+      - key: PUSH_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: PUSH_EMAIL_HOST
+        sync: false
+      - key: PUSH_EMAIL_PORT
+        value: 587
+      - key: PUSH_EMAIL_USER
+        sync: false
+      - key: PUSH_EMAIL_PASSWORD
+        sync: false
+      - key: PUSH_EMAIL_FROM
+        sync: false
+      - key: STELLAR_TESTNET_HORIZON
+        value: https://horizon-testnet.stellar.org
+      - key: STELLAR_TESTNET_USDC_ISSUER
+        value: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5

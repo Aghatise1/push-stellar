@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Verify your email — Push{% endblock %}
+{% block meta_description %}Verify your email before Push creates your account.{% endblock %}
+{% block content %}
+<section class="auth-panel verification-panel">
+  <p class="eyebrow">One step before your account</p>
+  <h1>Check your email.</h1>
+  <p class="lead">Enter the six-digit code sent to <strong>{{ pending.email }}</strong>. Push will create your account only after the code is accepted.</p>
+  {% if local_email %}<div class="notice"><strong>Email delivery is not connected yet</strong><p>For this local preview, the code is stored in the newest file inside <code>private-mail</code>. Deployment will use protected SMTP settings on the host.</p></div>{% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include 'fields.html' %}
+    <button class="button full" type="submit">Verify and create account</button>
+  </form>
+  <form method="post" action="{% url 'resend_registration' %}" class="resend-form">
+    {% csrf_token %}
+    <button class="button secondary full" type="submit">Send a new code</button>
+  </form>
+  <p class="form-assurance">The pending request expires after 15 minutes. Your password is never included in the email.</p>
+</section>
+{% endblock %}

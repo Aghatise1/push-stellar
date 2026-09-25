@@ -1,0 +1,57 @@
+from django.conf import settings
+from django.urls import include, path
+from django.contrib.auth import views as auth_views
+from core import views
+
+urlpatterns = [
+    path('healthz/',views.health,name='health'),
+    path('',views.home,name='home'),
+    path('product/',views.product,name='product'),
+    path('how-it-works/',views.how_it_works,name='how_it_works'),
+    path('investors/',views.investors,name='investors'),
+    path('terms/',views.terms,name='terms'),
+    path('terms/accept/',views.accept_terms,name='accept_terms'),
+    path('help/',views.help_center,name='help'),
+    path('register/',views.register,name='register'),
+    path('register/verify/',views.verify_registration,name='verify_registration'),
+    path('register/resend/',views.resend_registration,name='resend_registration'),
+    path('login/',views.SignIn.as_view(),name='login'),
+    path('logout/',auth_views.LogoutView.as_view(),name='logout'),
+    path('verify/',views.verify_email,name='verify_email'),
+    path('verify/<str:code>/',views.verify_link,name='verify'),
+    path('verify-resend/',views.resend,name='resend'),
+    path('password-reset/',views.Recovery.as_view(),name='password_reset'),
+    path('password-reset/sent/',auth_views.PasswordResetDoneView.as_view(template_name='registration/reset_done.html'),name='password_reset_done'),
+    path('reset/<uidb64>/<token>/',auth_views.PasswordResetConfirmView.as_view(template_name='registration/reset_confirm.html'),name='password_reset_confirm'),
+    path('reset/complete/',auth_views.PasswordResetCompleteView.as_view(template_name='registration/reset_complete.html'),name='password_reset_complete'),
+    path('workspace/',views.workspace,name='workspace'),
+    path('work/',views.work,name='work'),
+    path('notifications/',views.notifications,name='notifications'),
+    path('notifications/read-all/',views.notifications_read_all,name='notifications_read_all'),
+    path('notifications/<int:pk>/read/',views.notification_read,name='notification_read'),
+    path('messages/',views.inbox,name='inbox'),
+    path('messages/<uuid:pk>/',views.conversation,name='conversation'),
+    path('wallet/',views.wallet,name='wallet'),
+    path('payments/',views.payments,name='payments'),
+    path('wallet/connect/',views.wallet_connect,name='wallet_connect'),
+    path('profile/',views.profile,name='profile'),
+    path('people/<int:pk>/',views.public_profile,name='public_profile'),
+    path('jobs/',views.jobs,name='jobs'),
+    path('jobs/new/',views.job_create,name='job_create'),
+    path('jobs/<uuid:pk>/edit/',views.job_edit,name='job_edit'),
+    path('jobs/<uuid:pk>/',views.job_detail,name='job_detail'),
+    path('jobs/<uuid:pk>/close/',views.job_close,name='job_close'),
+    path('applications/<uuid:pk>/withdraw/',views.withdraw,name='withdraw'),
+    path('jobs/<uuid:pk>/apply/',views.apply,name='apply'),
+    path('applications/<uuid:pk>/select/',views.select,name='select'),
+    path('assignments/<uuid:pk>/',views.assignment,name='assignment'),
+    path('assignments/<uuid:pk>/messages/',views.assignment_message,name='assignment_message'),
+    path('assignments/<uuid:pk>/action/',views.assignment_action,name='assignment_action'),
+    path('moderation/',views.moderation,name='moderation'),
+    path('moderation/disputes/<int:pk>/',views.moderate_dispute,name='moderate_dispute'),
+    path('moderation/jobs/<uuid:pk>/',views.moderate_job,name='moderate_job'),
+    path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
+]
+
+if settings.GOOGLE_AUTH_ENABLED:
+    urlpatterns.append(path('accounts/',include('allauth.urls')))

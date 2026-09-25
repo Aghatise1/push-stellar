@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Investors — Push{% endblock %}
+{% block meta_description %}Push is building a trustworthy work record for independent talent and Web3 teams, from agreed scope through settlement evidence.{% endblock %}
+{% block content %}
+<section class="investor-hero">
+  <p class="eyebrow">For investors and ecosystem partners</p>
+  <h1>The infrastructure between a promise and payment.</h1>
+  <div class="investor-hero-copy">
+    <p class="lead">Push gives independent work a durable record: agreed scope, private delivery, decisions, messages and settlement evidence in one accountable flow.</p>
+    <div class="actions"><a class="button" href="{% url 'product' %}">Explore the product</a><a class="text-action" href="mailto:aghatiseehioghae644@gmail.com">Email the founder ↗</a><a class="text-action" href="{% url 'how_it_works' %}">Read the operating rules</a></div>
+  </div>
+</section>
+
+<section id="agreement" class="handshake-scroll" data-handshake>
+  <div class="handshake-sticky">
+    <div class="handshake-copy">
+      <p class="eyebrow">Aligned incentives</p>
+      <h2>Good work begins with terms both sides can trust.</h2>
+      <p>Scroll to bring the participants together. Push preserves the agreement and the evidence around it; every payment still requires an explicit action.</p>
+    </div>
+    <div class="handshake-stage" aria-hidden="true">
+      <span class="paper-shadow"></span>
+      <div class="hand-half hand-left">
+        <img src="{% static 'images/paper-handshake-v2.png' %}" alt="">
+      </div>
+      <div class="hand-half hand-right">
+        <img src="{% static 'images/paper-handshake-v2.png' %}" alt="">
+      </div>
+      <span class="agreement-seal">AGREED</span>
+    </div>
+  </div>
+</section>
+
+<section class="investor-thesis">
+  <div class="section-heading"><h2>A focused first market</h2><span>Working prototype · controlled pilot next</span></div>
+  <div class="thesis-grid">
+    <article class="thesis-lead"><span>01</span><h3>Trust before scale</h3><p>Independent workers need proof of scope, delivery and payment. Hiring teams need an auditable way to select, review and settle work without scattered records.</p></article>
+    <article><span>02</span><h3>One portable work history</h3><p>Completed assignments can become verifiable reputation while private proposals, messages and evidence remain permissioned.</p></article>
+    <article><span>03</span><h3>Payment-route neutral</h3><p>The workflow can support stablecoins and regulated bank or card providers without inventing a Push token or taking custody by default.</p></article>
+  </div>
+</section>
+
+<section class="capital-plan">
+  <div><p class="eyebrow">What support unlocks</p><h2>From working prototype to a carefully operated pilot.</h2></div>
+  <ol>
+    <li><span>01</span><div><strong>Production security</strong><p>Independent testing, managed infrastructure, monitoring and incident response.</p></div></li>
+    <li><span>02</span><div><strong>Settlement partnerships</strong><p>Compliant payment providers, signed wallet ownership and explicit fee/refund policy.</p></div></li>
+    <li><span>03</span><div><strong>Trust operations</strong><p>Moderation, dispute handling, support standards and a small invitation-only pilot.</p></div></li>
+  </ol>
+</section>
+
+<section class="investor-close">
+  <p class="eyebrow">Built with restraint</p>
+  <h2>No invented traction. No proprietary token. A serious record for serious work.</h2>
+  <div class="actions"><a class="button" href="{% url 'register' %}">Review the working preview</a><a class="investor-contact" href="mailto:aghatiseehioghae644@gmail.com">Email · aghatiseehioghae644@gmail.com ↗</a><a class="investor-contact" href="https://x.com/push__io" target="_blank" rel="noopener noreferrer">X · @push__io ↗</a></div>
+</section>
+{% endblock %}
+{% block extra_scripts %}<script src="{% static 'investor-motion.js' %}?v=20260924-2" defer></script>{% endblock %}
