@@ -29,7 +29,7 @@
       {% if user.is_staff %}<a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'moderate_dispute' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Trust desk</span></a>{% endif %}
     </nav>
     <div class="account-box">
-      <span class="avatar">{{ user.display_name|first|upper }}</span>
+      {% if user.profile_image %}<img class="avatar avatar-image" src="{% url 'profile_image' user.pk %}" alt="">{% else %}<span class="avatar">{{ user.display_name|first|upper }}</span>{% endif %}
       <strong>{{ user.display_name }}</strong>
       <small>{{ user.email }}</small>
       <a class="quiet-link" href="{% url 'profile' %}">Profile and settings</a>
@@ -91,6 +91,7 @@
   <script src="{% static 'wallet-connect.js' %}?v=20260924-3" defer></script>
   {% endif %}
   <script src="{% static 'menu-behavior.js' %}?v=20260924-2" defer></script>
+  <script src="{% static 'share-link.js' %}?v=20260927-1" defer></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

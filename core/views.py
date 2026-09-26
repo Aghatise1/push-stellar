@@ -2,6 +2,8 @@ import hashlib
 import hmac
 import json
 import secrets
+import os
+from urllib.parse import quote
 from datetime import timedelta
 from functools import wraps
 from django.conf import settings
@@ -20,6 +22,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification
 from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, verify_payment, valid_account_id
@@ -445,9 +448,20 @@ def wallet_connect(request):
 
 @login_required
 def profile(request):
-    form = ProfileForm(request.POST or None,instance=request.user)
+    form = ProfileForm(request.POST or None,request.FILES or None,instance=request.user)
     if request.method == 'POST' and form.is_valid():
-        form.save()
+        user=form.save(commit=False)
+        if form.cleaned_data.get('remove_profile_image'):
+            user.profile_image=None;user.profile_image_content_type=''
+        image=form.cleaned_data.get('profile_image')
+        if image:
+            user.profile_image=image.read();user.profile_image_content_type=image.push_content_type
+        if form.cleaned_data.get('remove_resume'):
+            user.resume_file=None;user.resume_filename=''
+        resume=form.cleaned_data.get('resume_file')
+        if resume:
+            user.resume_file=resume.read();user.resume_filename=os.path.basename(resume.name)[:160]
+        user.save()
         messages.success(request,'Profile saved. Your email stays private.')
         return redirect('profile')
     return render(request,'profile.html',{'form':form})
@@ -458,6 +472,35 @@ def public_profile(request,pk):
     return render(request,'public_profile.html',{'person':person})
 
 
+@require_GET
+def profile_image(request,pk):
+    person=get_object_or_404(User,pk=pk,is_active=True)
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+        raise Http404
+    if not person.profile_image: raise Http404
+    content_type=person.profile_image_content_type if person.profile_image_content_type in {'image/jpeg','image/png','image/webp'} else 'application/octet-stream'
+    response=HttpResponse(bytes(person.profile_image),content_type=content_type)
+    response['Cache-Control']='public, max-age=3600' if person.public_profile else 'private, max-age=300'
+    response['X-Content-Type-Options']='nosniff'
+    return response
+
+
+@require_GET
+def resume_download(request,pk):
+    person=get_object_or_404(User,pk=pk,is_active=True)
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+        raise Http404
+    if not person.resume_file: raise Http404
+    filename=person.resume_filename or 'resume.pdf'
+    response=HttpResponse(bytes(person.resume_file),content_type='application/pdf')
+    response['Content-Disposition']=f"attachment; filename*=UTF-8''{quote(filename)}"
+    response['Cache-Control']='private, no-store'
+    response['X-Content-Type-Options']='nosniff'
+    response['Content-Security-Policy']="default-src 'none'; sandbox"
+    return response
+
+
+@never_cache
 def jobs(request):
     qs = Job.objects.filter(status='open',moderation_status='approved').select_related('owner')
     q = request.GET.get('q','').strip()[:120]

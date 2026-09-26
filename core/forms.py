@@ -77,6 +77,20 @@ class VerificationCodeForm(forms.Form):
     )
 
 class ProfileForm(forms.ModelForm):
+    profile_image = forms.FileField(
+        required=False,
+        label='Profile picture',
+        help_text='JPG, PNG or WebP. Maximum 2 MB.',
+        widget=forms.FileInput(attrs={'accept':'image/jpeg,image/png,image/webp'}),
+    )
+    remove_profile_image = forms.BooleanField(required=False,label='Remove current profile picture')
+    resume_file = forms.FileField(
+        required=False,
+        label='Résumé',
+        help_text='PDF only. Maximum 5 MB. It appears only when your public profile is enabled.',
+        widget=forms.FileInput(attrs={'accept':'application/pdf'}),
+    )
+    remove_resume = forms.BooleanField(required=False,label='Remove current résumé')
     stellar_address = forms.RegexField(
         regex=STELLAR_ADDRESS_PATTERN,
         required=False,
@@ -92,6 +106,28 @@ class ProfileForm(forms.ModelForm):
         value = self.cleaned_data['stellar_address'].strip()
         if value and not valid_account_id(value):
             raise forms.ValidationError('That public Stellar address has an invalid checksum.')
+        return value
+    def clean_profile_image(self):
+        value=self.cleaned_data.get('profile_image')
+        if not value: return value
+        if value.size > 2*1024*1024:
+            raise forms.ValidationError('Choose an image smaller than 2 MB.')
+        header=value.read(16);value.seek(0)
+        detected = ('image/jpeg' if header.startswith(b'\xff\xd8\xff') else
+                    'image/png' if header.startswith(b'\x89PNG\r\n\x1a\n') else
+                    'image/webp' if len(header)>=12 and header[:4]==b'RIFF' and header[8:12]==b'WEBP' else '')
+        if not detected:
+            raise forms.ValidationError('Upload a valid JPG, PNG or WebP image.')
+        value.push_content_type=detected
+        return value
+    def clean_resume_file(self):
+        value=self.cleaned_data.get('resume_file')
+        if not value: return value
+        if value.size > 5*1024*1024:
+            raise forms.ValidationError('Choose a PDF smaller than 5 MB.')
+        header=value.read(5);value.seek(0)
+        if header != b'%PDF-':
+            raise forms.ValidationError('Upload a valid PDF résumé.')
         return value
 
 class JobForm(forms.ModelForm):

@@ -5,6 +5,7 @@ from django.test import TestCase, Client, override_settings
 from django.conf import settings
 from django.urls import reverse
 from django.core import mail, signing
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -87,6 +88,10 @@ class WorkspaceTests(TestCase):
         results=self.client.get(reverse('jobs'),{'q':'Lantern Studio'})
         self.assertContains(results,'Edit four product videos')
         self.assertContains(results,'1 job')
+        self.assertIn('no-store',results['Cache-Control'])
+        detail=self.client.get(reverse('job_detail',args=[job.pk]))
+        self.assertContains(detail,'data-copy-current')
+        self.assertContains(detail,'Copy job link')
 
     def test_workspace_greeting_uses_the_current_weekday(self):
         self.owner.date_joined=timezone.now()-timedelta(days=2)
@@ -148,6 +153,43 @@ class WorkspaceTests(TestCase):
         response=self.client.post(reverse('profile'),{'display_name':'Worker','portfolio':'javascript:alert(1)'})
         self.assertEqual(response.status_code,200)
         self.worker.refresh_from_db();self.assertEqual(self.worker.portfolio,'')
+
+    def test_profile_photo_and_resume_are_database_backed_and_privacy_scoped(self):
+        self.login_as(self.worker)
+        image=SimpleUploadedFile('portrait.png',b'\x89PNG\r\n\x1a\n'+b'profile-image',content_type='image/png')
+        resume=SimpleUploadedFile('worker-resume.pdf',b'%PDF-1.4\nresume',content_type='application/pdf')
+        response=self.client.post(reverse('profile'),{
+            'display_name':'Worker','bio':'Product designer','skills':'Design','portfolio':'',
+            'stellar_address':'','profile_image':image,'resume_file':resume,
+        })
+        self.assertRedirects(response,reverse('profile'))
+        self.worker.refresh_from_db()
+        self.assertEqual(bytes(self.worker.profile_image),b'\x89PNG\r\n\x1a\nprofile-image')
+        self.assertEqual(self.worker.profile_image_content_type,'image/png')
+        self.assertEqual(self.worker.resume_filename,'worker-resume.pdf')
+
+        outsider=Client()
+        self.assertEqual(outsider.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(outsider.get(reverse('resume_download',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(self.client.get(reverse('profile_image',args=[self.worker.pk])).status_code,200)
+        self.worker.public_profile=True;self.worker.save(update_fields=['public_profile'])
+        self.assertEqual(outsider.get(reverse('profile_image',args=[self.worker.pk])).status_code,200)
+        download=outsider.get(reverse('resume_download',args=[self.worker.pk]))
+        self.assertEqual(download.status_code,200)
+        self.assertEqual(download['Content-Type'],'application/pdf')
+        self.assertIn('attachment',download['Content-Disposition'])
+        self.assertContains(outsider.get(reverse('public_profile',args=[self.worker.pk])),'Download résumé')
+
+    def test_profile_rejects_disguised_uploads(self):
+        self.login_as(self.worker)
+        response=self.client.post(reverse('profile'),{
+            'display_name':'Worker','bio':'','skills':'','portfolio':'','stellar_address':'',
+            'profile_image':SimpleUploadedFile('fake.png',b'not-an-image',content_type='image/png'),
+            'resume_file':SimpleUploadedFile('fake.pdf',b'not-a-pdf',content_type='application/pdf'),
+        })
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,'Upload a valid JPG, PNG or WebP image')
+        self.assertContains(response,'Upload a valid PDF résumé')
     def test_applications_private_and_duplicate_prevented(self):
         self.login_as(self.worker)
         url=reverse('apply',args=[self.job.pk])
