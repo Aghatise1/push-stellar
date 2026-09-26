@@ -10,6 +10,7 @@ urlpatterns = [
     path('how-it-works/',views.how_it_works,name='how_it_works'),
     path('investors/',views.investors,name='investors'),
     path('terms/',views.terms,name='terms'),
+    path('privacy/',views.privacy,name='privacy'),
     path('terms/accept/',views.accept_terms,name='accept_terms'),
     path('help/',views.help_center,name='help'),
     path('register/',views.register,name='register'),

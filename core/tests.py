@@ -34,7 +34,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(health.status_code,200)
         self.assertEqual(health.json(),{'ok':True,'service':'push','network':'stellar-testnet'})
         self.assertEqual(health['Cache-Control'],'no-store')
-        for name in ['home','product','how_it_works','jobs','register','login','password_reset','password_reset_done','password_reset_complete']:
+        for name in ['home','product','how_it_works','privacy','jobs','register','login','password_reset','password_reset_done','password_reset_complete']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
         self.login_as(self.owner)
         for name in ['workspace','profile','job_create','wallet','payments','inbox']:

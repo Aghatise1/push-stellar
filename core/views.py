@@ -40,6 +40,11 @@ def health(request):
     response['Cache-Control']='no-store'
     return response
 
+
+@require_GET
+def privacy(request):
+    return render(request,'privacy.html')
+
 def notify(recipient,kind,title,body,link=''):
     return Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
 
