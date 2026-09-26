@@ -6,7 +6,7 @@
 {% block content %}
 <div class="app-page">
   <header class="app-heading app-reveal">
-    <div><p class="app-kicker">Good {{ request.user.date_joined|date:'l' }}, {{ user.display_name }}</p><h1>Your work, money and messages.</h1><p>Everything that needs your attention is collected here.</p></div>
+    <div><p class="app-kicker">Good {% now "l" %}, {{ user.display_name }}</p><h1>Your work, money and messages.</h1><p>Everything that needs your attention is collected here.</p></div>
     <a class="button" href="{% url 'jobs' %}">Find new work</a>
   </header>
 

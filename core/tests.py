@@ -88,6 +88,13 @@ class WorkspaceTests(TestCase):
         self.assertContains(results,'Edit four product videos')
         self.assertContains(results,'1 job')
 
+    def test_workspace_greeting_uses_the_current_weekday(self):
+        self.owner.date_joined=timezone.now()-timedelta(days=2)
+        self.owner.save(update_fields=['date_joined'])
+        self.login_as(self.owner)
+        response=self.client.get(reverse('workspace'))
+        self.assertContains(response,f'Good {timezone.localdate().strftime("%A")},')
+
     def test_unverified_wallet_redirects_to_code_screen(self):
         self.worker.email_verified=False;self.worker.save();self.login_as(self.worker)
         self.assertRedirects(self.client.get(reverse('wallet')),reverse('verify_email'))
