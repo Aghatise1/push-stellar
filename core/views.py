@@ -462,11 +462,16 @@ def jobs(request):
     qs = Job.objects.filter(status='open',moderation_status='approved').select_related('owner')
     q = request.GET.get('q','').strip()[:120]
     category = request.GET.get('category','')
-    if q: qs = qs.filter(Q(title__icontains=q)|Q(project__icontains=q)|Q(description__icontains=q))
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q)|Q(project__icontains=q)|Q(description__icontains=q)|
+            Q(deliverables__icontains=q)|Q(category__icontains=q)
+        )
     if category: qs = qs.filter(category=category)
     from django.core.paginator import Paginator
     page = Paginator(qs,20).get_page(request.GET.get('page'))
-    return render(request,'jobs.html',{'jobs':page,'q':q,'category':category,'categories':['Design','Content','Community','Engineering','Operations']})
+    categories = [choice for choice,_label in Job._meta.get_field('category').choices]
+    return render(request,'jobs.html',{'jobs':page,'q':q,'category':category,'categories':categories})
 
 
 @verified
@@ -476,10 +481,13 @@ def job_create(request):
         job = form.save(commit=False)
         job.owner = request.user
         flags=review_job_text(job)
-        job.moderation_status='review'
+        job.moderation_status='review' if flags else 'approved'
         job.moderation_notes='\n'.join(flags)
         job.save()
-        messages.success(request,'Job submitted for moderator review. You will receive a notification when it is approved or removed.')
+        if flags:
+            messages.success(request,'Job saved for moderator review. You will receive a notification after the decision.')
+        else:
+            messages.success(request,'Job published. It is now visible in Find work and searchable by other members.')
         return redirect('job_detail',pk=job.pk)
     return render(request,'job_form.html',{'form':form})
 
@@ -501,8 +509,14 @@ def job_edit(request,pk):
             locked = Job.objects.get(pk=job.pk)
             for field in form._meta.fields:
                 setattr(locked,field,form.cleaned_data[field])
-            locked.save(update_fields=form._meta.fields)
-        messages.success(request,'Job updated. The brief will lock when the first application arrives.')
+            flags=review_job_text(locked)
+            locked.moderation_status='review' if flags else 'approved'
+            locked.moderation_notes='\n'.join(flags)
+            locked.save(update_fields=[*form._meta.fields,'moderation_status','moderation_notes'])
+        if flags:
+            messages.success(request,'Job updated and sent for moderator review because its wording needs a safety check.')
+        else:
+            messages.success(request,'Job updated and visible in Find work. It will lock when the first application arrives.')
         return redirect('job_detail',pk=job.pk)
     return render(request,'job_form.html',{'form':form,'editing':True,'job':job})
 

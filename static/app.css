@@ -149,3 +149,13 @@ body.app-mode{--app-blue:#171b18;background:
 .payment-motion:before{background:radial-gradient(circle at 70% 20%,rgba(255,255,255,.08),transparent 30%),radial-gradient(circle at 20% 80%,rgba(186,244,90,.17),transparent 34%)}
 .wallet-visual{background:radial-gradient(circle at 50% 45%,rgba(186,244,90,.12),transparent 30%),linear-gradient(145deg,#18251e,#0c110e)}
 .wallet-glow{background:#171b18}
+
+/* Clear paper panels for hiring and application records. */
+.work-split>div{background:var(--sheet);border-color:var(--line-strong);box-shadow:none}
+.work-split .app-section-heading{padding-bottom:1rem;border-bottom:1px solid var(--line-strong)}
+.work-split .app-section-heading>a{display:inline-flex;align-items:center;justify-content:center;min-height:2.35rem;padding:.45rem .75rem;border:1px solid var(--line-strong);border-radius:.65rem;background:var(--paper-deep);color:var(--app-ink);text-decoration:none;transition:background-color 160ms ease,border-color 160ms ease,transform 140ms var(--ease-out)}
+.work-split .app-section-heading>a:hover{background:var(--forest-soft);border-color:var(--forest)}
+.work-split .app-section-heading>a:active{transform:scale(.97)}
+.work-split .compact-row,.work-split .compact-application summary{padding:1rem .75rem;border-top:0;border-bottom:1px solid var(--line);border-radius:.5rem;transition:background-color 160ms ease}
+.work-split .compact-row:hover,.work-split .compact-application summary:hover{background:var(--paper-deep)}
+.work-split .small-empty{margin-top:.25rem;padding:1.25rem;border:1px solid var(--line);border-radius:.75rem;background:var(--paper-deep);color:var(--ink)}

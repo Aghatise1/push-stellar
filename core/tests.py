@@ -71,6 +71,23 @@ class WorkspaceTests(TestCase):
         self.worker.email_verified=False;self.worker.save();self.login_as(self.worker)
         self.assertRedirects(self.client.post(reverse('job_create'),{}),reverse('verify_email'))
 
+    def test_safe_job_publishes_immediately_and_is_searchable_by_another_user(self):
+        self.login_as(self.owner)
+        data={'project':'Lantern Studio','title':'Edit four product videos','category':'Video Editing',
+              'description':'Create four concise launch videos for our product page.',
+              'deliverables':'Four MP4 files and editable project files.',
+              'acceptance_criteria':'Each video is 30 seconds, captioned, and exported at 1080p.',
+              'budget':450,'deadline':timezone.localdate()+timedelta(days=10),'revision_limit':2,'response_days':3}
+        response=self.client.post(reverse('job_create'),data)
+        self.assertEqual(response.status_code,302)
+        job=Job.objects.get(title='Edit four product videos')
+        self.assertEqual(job.moderation_status,'approved')
+
+        self.login_as(self.outsider)
+        results=self.client.get(reverse('jobs'),{'q':'Lantern Studio'})
+        self.assertContains(results,'Edit four product videos')
+        self.assertContains(results,'1 job')
+
     def test_unverified_wallet_redirects_to_code_screen(self):
         self.worker.email_verified=False;self.worker.save();self.login_as(self.worker)
         self.assertRedirects(self.client.get(reverse('wallet')),reverse('verify_email'))
