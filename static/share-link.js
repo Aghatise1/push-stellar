@@ -1,6 +1,11 @@
 (function () {
   function copyText(value) {
-    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(value).catch(function () { return legacyCopy(value); });
+    }
+    return legacyCopy(value);
+  }
+  function legacyCopy(value) {
     var field = document.createElement('textarea');
     field.value = value;
     field.setAttribute('readonly', '');
