@@ -18,9 +18,8 @@
     field.remove();
     return copied;
   }
-  document.addEventListener('click', function (event) {
-    var button = event.target.closest('[data-copy-current]');
-    if (!button) return;
+  function attach(button) {
+    button.addEventListener('click', function () {
     var url = window.location.origin + window.location.pathname;
     copyText(url).then(function () {
       var original = button.textContent;
@@ -30,5 +29,11 @@
     }).catch(function () {
       window.prompt('Copy this job link:', url);
     });
-  });
+    });
+  }
+  function init() {
+    document.querySelectorAll('[data-copy-current]').forEach(attach);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 }());
