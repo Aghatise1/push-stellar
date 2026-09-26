@@ -184,3 +184,44 @@ body.app-mode{--app-blue:#171b18;background:
 .record-empty{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.25rem 1rem;align-items:center;padding:1.25rem;border:1px solid var(--line-strong);border-radius:.75rem;background:var(--paper-deep);color:var(--ink)}
 .record-empty strong,.record-empty span{display:block}.record-empty strong{font-size:.95rem}.record-empty span{color:var(--ink);font-size:.78rem}.record-empty a{grid-column:2;grid-row:1/3;display:inline-flex;align-items:center;justify-content:center;min-height:2.55rem;padding:.55rem .75rem;border:1px solid var(--ink);border-radius:.6rem;background:var(--sheet);color:var(--ink);font-size:.72rem;font-weight:700;text-decoration:none}.record-empty a:hover{background:var(--ink);color:var(--sheet)}
 @media(max-width:760px){.work-page .page-heading{padding:1.25rem}.work-page .work-tabs{overflow-x:auto}.work-record-card{padding:1.15rem}.work-record-card .section-heading{display:block}.work-record-card .section-heading>span{margin-top:.8rem}.record-empty{grid-template-columns:1fr}.record-empty a{grid-column:1;grid-row:auto;justify-self:start;margin-top:.75rem}.work-record-card .app-list-row{padding:1rem .5rem}}
+
+/* Authenticated product surfaces: one high-contrast paper system across every page. */
+body.app-mode{--app-muted:#4f5952;--app-line:#cbd1cb}
+.app-mode main>.page-heading,.app-mode .app-heading{margin-bottom:1rem;padding:clamp(1.5rem,3vw,2.25rem);border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode main>.page-heading{align-items:center}
+.app-mode main>.page-heading h1,.app-mode .app-heading h1{margin-top:.75rem}
+.app-mode main>.page-heading .lead,.app-mode .app-heading>div>p:last-child{color:var(--ink)}
+.app-mode .tag,.app-mode .security-chip{border-color:var(--line-strong);background:var(--paper-deep);color:var(--ink);font-weight:700}
+.app-mode .section-heading,.app-mode .app-section-heading{margin:0 0 1rem;padding-bottom:1rem;border-bottom:1px solid var(--line-strong)}
+.app-mode .section-heading>span,.app-mode .app-section-heading>strong{display:inline-flex;align-items:center;justify-content:center;min-height:2.25rem;padding:.4rem .7rem;border:1px solid var(--ink);border-radius:99rem;background:var(--paper-deep);color:var(--ink);font-size:.7rem;font-weight:700;white-space:nowrap}
+.app-mode .form-panel,.app-mode .search-form,.app-mode .side-note,.app-mode .detail-layout>div>section,.app-mode .detail-layout>aside,.app-mode main>.notification-feed,.app-mode main>.moderation-metrics,.app-mode main>.help-grid,.app-mode main>.help-callout,.app-mode main>.rule-grid,.app-mode main>.auth-panel{border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode .form-panel{max-width:none;padding:clamp(1.25rem,2.5vw,2rem)}
+.app-mode .search-form{margin-bottom:1rem;border-top-width:1px;padding:1.25rem}
+.app-mode .side-note,.app-mode .detail-layout>aside{padding:1.5rem;border-top-width:1px;color:var(--ink)}
+.app-mode .side-note p,.app-mode .side-note li span{color:var(--ink)}
+.app-mode .detail-layout>div>section{margin:0 0 1rem;padding:clamp(1.25rem,2.5vw,2rem)}
+.app-mode .detail-layout>div>section+section{margin-top:1rem}
+.app-mode .detail-layout>div>section>h2:first-child{margin-top:0;padding-bottom:1rem;border-bottom:1px solid var(--line-strong)}
+.app-mode .notice,.app-mode .complete,.app-mode .truth-note,.app-mode .agreement-confirm{border-radius:.75rem}
+.app-mode .record-strip,.app-mode .moderation-metrics{gap:0;margin-bottom:1rem;overflow:hidden;border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode .record-strip>div,.app-mode .moderation-metrics>div{padding:1.25rem;border-color:var(--line-strong)}
+.app-mode main>section:not(.wallet-hero):not(.wallet-tools):not(.payments-summary):not(.cashout-panel):not(.work-section):not(.work-record-card){padding:clamp(1.25rem,2.5vw,2rem);border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode .job-list,.app-mode .notification-feed,.app-mode .review-list{overflow:hidden;border:1px solid var(--line-strong);border-radius:.85rem;background:var(--sheet)}
+.app-mode .job-row,.app-mode .notification-item,.app-mode .review-list a,.app-mode .moderation-row{padding:1.15rem;border-bottom:1px solid var(--line-strong);border-left:0}
+.app-mode .job-row:last-child,.app-mode .notification-item:last-child,.app-mode .review-list a:last-child,.app-mode .moderation-row:last-child{border-bottom:0}
+.app-mode .job-row:hover,.app-mode .notification-item:hover,.app-mode .review-list a:hover,.app-mode .moderation-row:hover{background:var(--paper-deep);box-shadow:inset .24rem 0 var(--ink)}
+.app-mode .notification-item.unread{background:#edf4ee}
+.app-mode .notification-item p,.app-mode .job-summary p,.app-mode .job-category,.app-mode .review-list small{color:var(--ink)}
+.app-mode .empty,.app-mode .small-empty,.app-mode .app-empty,.app-mode .panel-empty,.app-mode .conversation-empty,.app-mode .chat-empty,.app-mode .receive-empty{margin:.5rem 0;padding:1.5rem;border:1px solid var(--line-strong);border-radius:.75rem;background:var(--paper-deep);color:var(--ink)}
+.app-mode .empty p,.app-mode .small-empty,.app-mode .app-empty p,.app-mode .panel-empty p,.app-mode .conversation-empty p,.app-mode .chat-empty p,.app-mode .receive-empty p{color:var(--ink)}
+.app-mode .help-grid{grid-template-columns:repeat(3,1fr);overflow:hidden;border-top-width:1px}
+.app-mode .help-grid article{background:var(--sheet);border-color:var(--line-strong)}
+.app-mode .help-grid article:hover{background:var(--paper-deep)}
+.app-mode .help-grid p{color:var(--ink)}
+.app-mode .help-callout{margin-top:1rem;background:var(--forest);border-color:var(--forest)}
+.app-mode main>section+section{margin-top:1rem}
+.app-mode .message-hub,.app-mode .tool-panel,.app-mode .work-section,.app-mode .cashout-panel,.app-mode .payments-summary,.app-mode .balance-panel,.app-mode .messages-panel,.app-mode .metric-card{border-color:var(--line-strong)}
+.app-mode .tool-heading p,.app-mode .cashout-panel p,.app-mode .metric-card p,.app-mode .row-copy small,.app-mode .compact-row small,.app-mode .compact-application small{color:var(--ink)}
+.app-mode input,.app-mode textarea,.app-mode select{border-radius:.55rem;background:#fff}
+.app-mode .button,.app-mode button,.app-mode .top-wallet-link{border-radius:.6rem}
+@media(max-width:760px){.app-mode main>.page-heading,.app-mode .app-heading{display:block;padding:1.25rem}.app-mode main>.page-heading>.button,.app-mode .app-heading>.button,.app-mode .security-chip{display:inline-flex;margin-top:1rem}.app-mode .form-layout,.app-mode .detail-layout{gap:1rem}.app-mode .form-panel,.app-mode .side-note,.app-mode .detail-layout>aside,.app-mode .detail-layout>div>section{padding:1.15rem}.app-mode .section-heading{display:block}.app-mode .section-heading>span{margin-top:.75rem}.app-mode .search-form{padding:1rem}.app-mode .help-grid{grid-template-columns:1fr}.app-mode .help-grid article{min-height:0;border-right:0}.app-mode .job-row{padding:1rem}.app-mode .record-strip>div,.app-mode .moderation-metrics>div{padding:1rem}.app-mode main>section:not(.wallet-hero):not(.wallet-tools):not(.payments-summary):not(.cashout-panel):not(.work-section):not(.work-record-card){padding:1.15rem}}
