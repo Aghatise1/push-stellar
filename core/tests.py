@@ -37,7 +37,7 @@ class WorkspaceTests(TestCase):
         for name in ['home','product','how_it_works','privacy','jobs','register','login','password_reset','password_reset_done','password_reset_complete']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
         self.login_as(self.owner)
-        for name in ['workspace','profile','job_create','wallet','payments','inbox']:
+        for name in ['workspace','work','profile','job_create','wallet','payments','inbox']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
     def test_google_auth_visibility_matches_configuration(self):
         self.assertEqual(self.client.get(reverse('login')).context['google_auth_enabled'],settings.GOOGLE_AUTH_ENABLED)

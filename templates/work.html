@@ -1,8 +1,62 @@
-{% extends 'base.html' %}{% block title %}My work — Push{% endblock %}{% block app_location %}My work{% endblock %}{% block content %}
-<div class="page-heading"><div><span class="tag">Work record</span><h1>My work.</h1><p class="lead">Jobs you are doing, people you hired, applications and published listings.</p></div><a class="button" href="{% url 'job_create' %}">Post a job</a></div>
-<nav class="work-tabs" aria-label="Work sections"><a href="#assigned">Assigned to me <b>{{ assigned|length }}</b></a><a href="#hiring">People I hired <b>{{ hiring|length }}</b></a><a href="#applications">Applications <b>{{ applications|length }}</b></a><a href="#posted">Jobs I posted <b>{{ posted|length }}</b></a></nav>
-<section id="assigned"><div class="section-heading"><h2>Assigned to me</h2><span>Accepted and active work</span></div><div class="app-list">{% for item in assigned %}<a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }} · {{ item.get_status_display }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>{% empty %}<p class="small-empty">No work has been assigned to you yet.</p>{% endfor %}</div></section>
-<section id="hiring"><div class="section-heading"><h2>People I hired</h2><span>Selected workers and delivery status</span></div><div class="app-list">{% for item in hiring %}<a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.worker.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>{% empty %}<p class="small-empty">No workers selected yet.</p>{% endfor %}</div></section>
-<section id="applications"><div class="section-heading"><h2>Applications</h2><span>Your proposals</span></div><div class="app-list">{% for application in applications %}<a class="app-list-row" href="{% url 'job_detail' application.job.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ application.job.title }}</strong><small>{{ application.job.owner.display_name }}</small></span><span class="status-bubble">{% if application.withdrawn %}Withdrawn{% else %}{{ application.job.get_status_display }}{% endif %}</span></a>{% empty %}<p class="small-empty">You have not applied for a job yet.</p>{% endfor %}</div></section>
-<section id="posted"><div class="section-heading"><h2>Jobs I posted</h2><span>Publication and moderation status</span></div><div class="app-list">{% for job in posted %}<a class="app-list-row" href="{% url 'job_detail' job.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ job.title }}</strong><small>{{ job.project }}</small></span><span class="row-amount">${{ job.budget }}</span><span class="status-bubble {{ job.moderation_status }}">{{ job.get_moderation_status_display }} · {{ job.get_status_display }}</span></a>{% empty %}<p class="small-empty">You have not posted a job yet.</p>{% endfor %}</div></section>
+{% extends 'base.html' %}
+{% block title %}My work — Push{% endblock %}
+{% block app_location %}My work{% endblock %}
+{% block content %}
+<div class="work-page">
+  <div class="page-heading app-reveal">
+    <div><span class="tag">Work record</span><h1>My work.</h1><p class="lead">Jobs you are doing, people you hired, applications and published listings.</p></div>
+    <a class="button" href="{% url 'job_create' %}">Post a job</a>
+  </div>
+
+  <nav class="work-tabs app-reveal" aria-label="Work sections">
+    <a href="#assigned">Assigned to me <b>{{ assigned|length }}</b></a>
+    <a href="#hiring">People I hired <b>{{ hiring|length }}</b></a>
+    <a href="#applications">Applications <b>{{ applications|length }}</b></a>
+    <a href="#posted">Jobs I posted <b>{{ posted|length }}</b></a>
+  </nav>
+
+  <section class="work-record-card scroll-reveal" id="assigned">
+    <div class="section-heading"><div><h2>Assigned to me</h2><p>Accepted jobs and work currently in progress.</p></div><span>{{ assigned|length }} active</span></div>
+    <div class="app-list">
+      {% for item in assigned %}
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }} · {{ item.get_status_display }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+      {% empty %}
+        <div class="record-empty"><strong>No assigned work yet.</strong><span>When a client selects your application, the job will appear here.</span><a href="{% url 'jobs' %}">Find work</a></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="work-record-card scroll-reveal" id="hiring">
+    <div class="section-heading"><div><h2>People I hired</h2><p>Selected workers, agreements and delivery status.</p></div><span>{{ hiring|length }} hired</span></div>
+    <div class="app-list">
+      {% for item in hiring %}
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.worker.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+      {% empty %}
+        <div class="record-empty"><strong>No workers selected yet.</strong><span>Choose an applicant from one of your open jobs to create an agreement.</span><a href="#posted">View posted jobs</a></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="work-record-card scroll-reveal" id="applications">
+    <div class="section-heading"><div><h2>Applications</h2><p>Your private proposals and their current status.</p></div><span>{{ applications|length }} sent</span></div>
+    <div class="app-list">
+      {% for application in applications %}
+        <a class="app-list-row" href="{% url 'job_detail' application.job.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ application.job.title }}</strong><small>{{ application.job.owner.display_name }}</small></span><span class="status-bubble">{% if application.withdrawn %}Withdrawn{% else %}{{ application.job.get_status_display }}{% endif %}</span></a>
+      {% empty %}
+        <div class="record-empty"><strong>No applications sent yet.</strong><span>Find a suitable job and send a proposal to begin your pipeline.</span><a href="{% url 'jobs' %}">Browse opportunities</a></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="work-record-card scroll-reveal" id="posted">
+    <div class="section-heading"><div><h2>Jobs I posted</h2><p>Publication, moderation and application status.</p></div><span>{{ posted|length }} posted</span></div>
+    <div class="app-list">
+      {% for job in posted %}
+        <a class="app-list-row" href="{% url 'job_detail' job.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ job.title }}</strong><small>{{ job.project }}</small></span><span class="row-amount">${{ job.budget }}</span><span class="status-bubble {{ job.moderation_status }}">{{ job.get_moderation_status_display }} · {{ job.get_status_display }}</span></a>
+      {% empty %}
+        <div class="record-empty"><strong>No jobs posted yet.</strong><span>Publish a clear job so suitable workers can find and apply to it.</span><a href="{% url 'job_create' %}">Post a job</a></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
 {% endblock %}
