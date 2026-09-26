@@ -12,7 +12,7 @@
     <p class="lead">{{ job.project }}</p>
     {% if can_edit %}<a href="{% url 'job_edit' job.pk %}">Edit this brief</a>{% endif %}
   </div>
-  <div class="job-heading-actions"><div class="large-budget">${{ job.budget }}<small>Illustrative USD budget</small></div><button class="button secondary" type="button" data-copy-current data-copied-label="Job link copied">Copy job link</button></div>
+  <div class="job-heading-actions"><div class="large-budget">${{ job.budget }}<small>Illustrative USD budget</small></div><button class="button secondary" type="button" data-copy-target="#job-share-url" data-copied-label="Job link copied">Copy job link</button></div>
 </div>
 <div class="detail-layout">
   <div>
@@ -73,6 +73,7 @@
     </dl>
     <p>Never share passwords, recovery phrases or payment credentials in an application.</p>
     <p>The job link can be shared with anyone. Private proposals and hiring records remain restricted.</p>
+    <label class="job-share-field" for="job-share-url">Shareable job link<input id="job-share-url" value="{{ request.build_absolute_uri }}" readonly></label>
   </aside>
 </div>
 {% endblock %}

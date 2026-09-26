@@ -20,19 +20,30 @@
   }
   function attach(button) {
     button.addEventListener('click', function () {
-    var url = window.location.origin + window.location.pathname;
-    copyText(url).then(function () {
-      var original = button.textContent;
-      button.textContent = button.getAttribute('data-copied-label') || 'Link copied';
+    var targetSelector = button.getAttribute('data-copy-target');
+    var target = targetSelector ? document.querySelector(targetSelector) : null;
+    var url = target ? target.value : window.location.origin + window.location.pathname;
+    var original = button.textContent;
+    var settled = false;
+    if (target) { target.focus(); target.select(); target.setSelectionRange(0, target.value.length); }
+    button.textContent = 'Copying…';
+    function finish(label) {
+      if (settled) return;
+      settled = true;
+      button.textContent = label;
       button.setAttribute('aria-live', 'polite');
       window.setTimeout(function () { button.textContent = original; }, 1800);
+    }
+    copyText(url).then(function () {
+      finish(button.getAttribute('data-copied-label') || 'Link copied');
     }).catch(function () {
-      window.prompt('Copy this job link:', url);
+      finish('Select link below');
     });
+    window.setTimeout(function () { finish('Select link below'); }, 900);
     });
   }
   function init() {
-    document.querySelectorAll('[data-copy-current]').forEach(attach);
+    document.querySelectorAll('[data-copy-current],[data-copy-target]').forEach(attach);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

@@ -90,8 +90,9 @@ class WorkspaceTests(TestCase):
         self.assertContains(results,'1 job')
         self.assertIn('no-store',results['Cache-Control'])
         detail=self.client.get(reverse('job_detail',args=[job.pk]))
-        self.assertContains(detail,'data-copy-current')
+        self.assertContains(detail,'data-copy-target')
         self.assertContains(detail,'Copy job link')
+        self.assertContains(detail,reverse('job_detail',args=[job.pk]))
 
     def test_workspace_greeting_uses_the_current_weekday(self):
         self.owner.date_joined=timezone.now()-timedelta(days=2)
