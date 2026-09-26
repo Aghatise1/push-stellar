@@ -1,9 +1,10 @@
 (function () {
   function copyText(value) {
+    if (legacyCopy(value)) return Promise.resolve();
     if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(value).catch(function () { return legacyCopy(value); });
+      return navigator.clipboard.writeText(value);
     }
-    return legacyCopy(value);
+    return Promise.reject(new Error('Copy unavailable'));
   }
   function legacyCopy(value) {
     var field = document.createElement('textarea');
@@ -15,7 +16,7 @@
     field.select();
     var copied = document.execCommand('copy');
     field.remove();
-    return copied ? Promise.resolve() : Promise.reject(new Error('Copy unavailable'));
+    return copied;
   }
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-copy-current]');
