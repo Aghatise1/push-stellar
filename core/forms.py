@@ -53,6 +53,15 @@ class RecoveryForm(PasswordResetForm):
     def clean_email(self):
         return self.cleaned_data['email'].strip().lower()
 
+    def get_users(self, email):
+        """Allow Google-created accounts to set their first local password.
+
+        Django's default implementation excludes users whose password is
+        unusable. Social-login accounts begin in exactly that state, which made
+        the recovery screen report success without sending any email.
+        """
+        return User.objects.filter(email__iexact=email, is_active=True).iterator()
+
 class VerificationCodeForm(forms.Form):
     code = forms.RegexField(
         regex=r'^\d{6}$',

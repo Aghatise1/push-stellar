@@ -288,6 +288,20 @@ class WorkspaceTests(TestCase):
         self.assertFalse(default_token_generator.check_token(self.worker,credential))
         attacker=Client();attacker.cookies['sessionid']=old_session
         self.assertEqual(attacker.get(reverse('workspace')).status_code,302)
+
+    def test_password_reset_emails_google_only_account(self):
+        google_user=User.objects.create_user(
+            username='google-only@example.test',
+            email='google-only@example.test',
+            display_name='Google Account',
+            email_verified=True,
+        )
+        google_user.set_unusable_password()
+        google_user.save(update_fields=['password'])
+        response=self.client.post(reverse('password_reset'),{'email':'GOOGLE-ONLY@example.test'})
+        self.assertRedirects(response,reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox),1)
+        self.assertIn('/reset/',mail.outbox[0].body)
     def test_sample_jobs_not_actionable(self):
         self.job.demo=True;self.job.save();self.login_as(self.worker)
         self.assertEqual(self.client.post(reverse('apply',args=[self.job.pk]),{'proposal':'Test'}).status_code,400)
