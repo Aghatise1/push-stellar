@@ -23,8 +23,9 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation
-from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess
+from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm
+from .access import has_staff_access, staff_only, staff_role
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
@@ -147,6 +148,12 @@ def remember_new_invitation(request,invitation,code):
     }
 
 
+def queue_verification_success(request,title,description,next_name):
+    request.session['verification_success']={
+        'title':title,'description':description,'next_name':next_name,
+    }
+
+
 def home(request):
     # The public landing page may show illustrative briefs, but never exposes
     # live tester jobs. Real opportunities belong to the invite-only product.
@@ -227,8 +234,12 @@ def invite_redeem(request):
             form.add_error('code','That invitation is invalid, expired, revoked or already used.')
         else:
             remember_invitation(request,invitation)
-            messages.success(request,f'Invitation accepted for {invitation.email}. Create your account using that email.')
-            return redirect('register')
+            queue_verification_success(
+                request,'Invitation verified.',
+                f'Access is approved for {invitation.email}. Your account setup is ready.',
+                'register',
+            )
+            return redirect('verification_success')
     return render(request,'invite.html',{'form':form})
 
 
@@ -314,8 +325,12 @@ def verify_registration(request):
                     pending.delete()
                     request.session.pop('pending_registration_id',None)
                     login(request,user,backend='django.contrib.auth.backends.ModelBackend')
-                    messages.success(request,'Email verified and account created. Welcome to Push.')
-                    return redirect('workspace')
+                    queue_verification_success(
+                        request,'Account verified.',
+                        'Your secure tester account is ready. Opening your workspace now.',
+                        'workspace',
+                    )
+                    return redirect('verification_success')
     return render(request,'registration/verify_registration.html',{'form':form,'pending':pending})
 
 
@@ -339,6 +354,35 @@ class SignIn(LoginView):
         if request.method == 'POST' and limited(request,'login'):
             return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
         return super().dispatch(request,*args,**kwargs)
+
+
+class StaffSignIn(LoginView):
+    template_name='registration/staff_login.html'
+    authentication_form=StaffLoginForm
+    redirect_authenticated_user=False
+    def dispatch(self,request,*args,**kwargs):
+        if request.user.is_authenticated:
+            if has_staff_access(request.user): return redirect('moderation')
+            raise Http404
+        if request.method == 'POST' and limited(request,'staff-login',8):
+            return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+        return super().dispatch(request,*args,**kwargs)
+    def get_success_url(self):
+        return reverse('moderation')
+
+
+@never_cache
+def verification_success(request):
+    state=request.session.pop('verification_success',None)
+    if not state:
+        return redirect('workspace' if request.user.is_authenticated else 'login')
+    allowed={'register','workspace','login'}
+    next_name=state.get('next_name') if state.get('next_name') in allowed else 'login'
+    return render(request,'registration/verification_success.html',{
+        'success_title':state.get('title','Verified.'),
+        'success_description':state.get('description','Your verification was successful.'),
+        'success_next_url':reverse(next_name),
+    })
 
 
 class Recovery(PasswordResetView):
@@ -382,8 +426,12 @@ def verify_email(request):
                 User.objects.filter(pk=request.user.pk,email_verified=False).update(email_verified=True)
                 record.delete()
                 request.user.email_verified = True
-                messages.success(request,'Email verified. Wallet, Messages and work actions are now available.')
-                return redirect('workspace')
+                queue_verification_success(
+                    request,'Email verified.',
+                    'Wallet, messages and protected work actions are now available.',
+                    'workspace',
+                )
+                return redirect('verification_success')
     return render(request,'registration/verify_code.html',{'form':form})
 
 
@@ -396,8 +444,12 @@ def verify_link(request,code):
     if request.method == 'POST':
         User.objects.filter(pk=user.pk,email_verified=False).update(email_verified=True)
         EmailVerificationCode.objects.filter(user=user).delete()
-        messages.success(request,'Email verified. You can now post jobs and apply for work.')
-        return redirect('workspace' if request.user.is_authenticated else 'login')
+        queue_verification_success(
+            request,'Email verified.',
+            'Your protected Push features are now available.',
+            'workspace' if request.user.is_authenticated else 'login',
+        )
+        return redirect('verification_success')
     return render(request,'verify.html')
 
 
@@ -429,6 +481,41 @@ def workspace(request):
         'verified_earnings':verified,'simulated_earnings':simulated,'pending_earnings':pending,
         'total_earnings':verified+simulated,'completed_count':completed,'active_count':active,
         'message_count':message_count,'recent_messages':participant_messages.select_related('sender','assignment__job').order_by('-created_at')[:3]})
+
+
+@verified
+def analytics(request):
+    applications=Application.objects.filter(worker=request.user,withdrawn=False)
+    worker_assignments=Assignment.objects.filter(worker=request.user)
+    posted_jobs=Job.objects.filter(owner=request.user,demo=False)
+    hired_assignments=Assignment.objects.filter(job__owner=request.user)
+    completed_worker=worker_assignments.filter(status='paid')
+    application_total=applications.count()
+    selected_total=worker_assignments.count()
+    tips=[]
+    if not request.user.bio or not request.user.skills:
+        tips.append(('Complete your profile','Add a concise bio and relevant skills so hiring accounts can assess you quickly.',reverse('profile')))
+    if application_total and not selected_total:
+        tips.append(('Make proposals specific','Lead with the result you will deliver and one relevant example.',reverse('jobs')))
+    if posted_jobs.exists() and not hired_assignments.exists():
+        tips.append(('Make the brief easier to price','List formats, quantities, acceptance checks and the decision deadline.',reverse('work')))
+    if not tips:
+        tips.append(('Keep your record current','Respond to active work and preserve key decisions inside the assignment workroom.',reverse('work')))
+    return render(request,'analytics.html',{
+        'worker_metrics':{
+            'applications':application_total,'selected':selected_total,
+            'selection_rate':round(selected_total*100/application_total) if application_total else 0,
+            'active':worker_assignments.exclude(status__in=['paid','cancelled']).count(),
+            'completed':completed_worker.count(),
+            'recorded_value':completed_worker.aggregate(total=Sum('budget'))['total'] or 0,
+        },
+        'hiring_metrics':{
+            'jobs':posted_jobs.count(),'applications':Application.objects.filter(job__owner=request.user,withdrawn=False).count(),
+            'hired':hired_assignments.count(),'active':hired_assignments.exclude(status__in=['paid','cancelled']).count(),
+            'completed':hired_assignments.filter(status='paid').count(),
+        },
+        'tips':tips,
+    })
 
 
 @verified
@@ -707,7 +794,7 @@ def job_edit(request,pk):
 def job_detail(request,pk):
     job = get_object_or_404(Job.objects.select_related('owner'),pk=pk)
     is_owner = request.user.is_authenticated and job.owner_id == request.user.pk
-    if job.moderation_status != 'approved' and not (is_owner or (request.user.is_authenticated and request.user.is_staff)):
+    if job.moderation_status != 'approved' and not (is_owner or has_staff_access(request.user)):
         raise Http404
     existing = request.user.is_authenticated and Application.objects.filter(job=job,worker=request.user).first()
     can_edit = is_owner and job.status == 'open' and not job.demo and not job.applications.exists()
@@ -902,9 +989,8 @@ def assignment_action(request,pk):
     return redirect('assignment',pk=item.pk)
 
 
-@login_required
+@staff_only()
 def moderation(request):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
     waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
@@ -913,7 +999,8 @@ def moderation(request):
         'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
         'invitations':invitations,'invitation_form':StaffInvitationForm(),
         'new_invitation':request.session.pop('push_new_invitation',None),
-        'moderation_now':timezone.now(),
+        'moderation_now':timezone.now(),'staff_role':staff_role(request.user),
+        'can_moderate':staff_role(request.user) in {'owner','admin','moderator'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
@@ -921,10 +1008,9 @@ def moderation(request):
     })
 
 
-@login_required
+@staff_only('owner','admin','moderator')
 @require_POST
 def review_waitlist(request,pk):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     application=get_object_or_404(WaitlistApplication,pk=pk)
     decision=request.POST.get('decision')
     if decision not in {'approve','reject'}:
@@ -954,10 +1040,9 @@ def review_waitlist(request,pk):
     return redirect('moderation')
 
 
-@login_required
+@staff_only('owner','admin','moderator')
 @require_POST
 def create_staff_invitation(request):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     form=StaffInvitationForm(request.POST)
     if not form.is_valid():
         detail=' '.join(str(error) for errors in form.errors.values() for error in errors)
@@ -989,18 +1074,16 @@ def create_staff_invitation(request):
     return redirect('moderation')
 
 
-@login_required
+@staff_only('owner','admin','moderator')
 @require_POST
 def revoke_invitation(request,pk):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     updated=Invitation.objects.filter(pk=pk,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
     messages.success(request,'Invitation revoked.' if updated else 'That invitation was already used or revoked.')
     return redirect('moderation')
 
 
-@login_required
+@staff_only('owner','admin','moderator')
 def moderate_dispute(request,pk):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     dispute=get_object_or_404(Dispute.objects.select_related('assignment__job','assignment__worker','opened_by'),pk=pk)
     form=DisputeResolutionForm(request.POST or None)
     sanction_form=SanctionForm(prefix='sanction')
@@ -1024,10 +1107,9 @@ def moderate_dispute(request,pk):
     return render(request,'moderate_dispute.html',{'dispute':dispute,'form':form,'sanction_form':sanction_form})
 
 
-@login_required
+@staff_only('owner','admin','moderator')
 @require_POST
 def moderate_job(request,pk):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     job=get_object_or_404(Job,pk=pk)
     decision=request.POST.get('decision')
     if decision not in ['approved','removed']: return HttpResponseBadRequest('Choose approve or remove.')
@@ -1037,16 +1119,58 @@ def moderate_job(request,pk):
     return redirect('moderation')
 
 
-@login_required
+@staff_only('owner','admin')
 @require_POST
 def sanction_account(request,pk):
-    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     target=get_object_or_404(User,pk=pk)
     form=SanctionForm(request.POST,prefix='sanction')
     if not form.is_valid(): return HttpResponseBadRequest('Choose a sanction and give a reason.')
     sanction=form.save(commit=False); sanction.user=target; sanction.created_by=request.user; sanction.save()
     messages.success(request,'Account action recorded with an audit trail.')
     return redirect('moderation')
+
+
+@staff_only('owner','admin')
+def staff_team(request):
+    form=StaffAccessForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        target=User.objects.get(email__iexact=form.cleaned_data['email'])
+        actor_role=staff_role(request.user)
+        requested_role=form.cleaned_data['role']
+        if actor_role == 'admin' and requested_role in {'owner','admin'}:
+            form.add_error('role','Only an owner can grant owner or administrator access.')
+        elif target == request.user and requested_role != actor_role:
+            form.add_error('role','Another owner or administrator must change your own operations role.')
+        else:
+            access,_=StaffAccess.objects.update_or_create(
+                user=target,
+                defaults={'role':requested_role,'status':'approved','approved_by':request.user,'approved_at':timezone.now()},
+            )
+            if not target.is_staff:
+                target.is_staff=True;target.save(update_fields=['is_staff'])
+            messages.success(request,f'{target.email} now has approved {access.get_role_display().lower()} access.')
+            return redirect('staff_team')
+    team=StaffAccess.objects.select_related('user','approved_by').order_by('role','user__email')
+    return render(request,'staff_team.html',{'form':form,'team':team})
+
+
+@staff_only('owner','admin')
+@require_POST
+def staff_access_update(request,pk):
+    access=get_object_or_404(StaffAccess.objects.select_related('user'),pk=pk)
+    decision=request.POST.get('decision')
+    if decision not in {'suspended','revoked','approved'}:
+        return HttpResponseBadRequest('Choose an access decision.')
+    if access.user_id == request.user.pk:
+        return HttpResponseBadRequest('Another owner or administrator must change your own access.')
+    if staff_role(request.user) == 'admin' and access.role in {'owner','admin'}:
+        return HttpResponseBadRequest('Only an owner can change owner or administrator access.')
+    access.status=decision
+    if decision == 'approved':
+        access.approved_by=request.user;access.approved_at=timezone.now()
+    access.save(update_fields=['status','approved_by','approved_at','updated_at'])
+    messages.success(request,f'Operations access for {access.user.email} is now {access.get_status_display().lower()}.')
+    return redirect('staff_team')
 
 
 @verified

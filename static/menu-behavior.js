@@ -41,4 +41,11 @@
       closeMenu(details);
     });
   });
+
+  var verificationSuccess = document.querySelector('[data-success-next]');
+  if (verificationSuccess) {
+    window.setTimeout(function () {
+      window.location.assign(verificationSuccess.getAttribute('data-success-next'));
+    }, reduceMotion ? 500 : 1700);
+  }
 }());

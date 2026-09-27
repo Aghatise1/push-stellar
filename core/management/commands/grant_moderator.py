@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
-from core.models import User
+from django.utils import timezone
+from core.models import User, StaffAccess
 
 class Command(BaseCommand):
     help='Grant Trust Desk access to one existing, verified account.'
@@ -10,8 +11,9 @@ class Command(BaseCommand):
         user=User.objects.filter(email__iexact=email,email_verified=True,is_active=True).first()
         if not user:
             raise CommandError('No active verified account uses that email.')
-        if user.is_staff:
-            self.stdout.write(self.style.WARNING('That account is already a moderator.'))
-            return
-        user.is_staff=True;user.save(update_fields=['is_staff'])
+        if not user.is_staff:
+            user.is_staff=True;user.save(update_fields=['is_staff'])
+        StaffAccess.objects.update_or_create(
+            user=user,defaults={'role':'moderator','status':'approved','approved_at':timezone.now()}
+        )
         self.stdout.write(self.style.SUCCESS('Moderator access granted.'))

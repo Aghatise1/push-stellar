@@ -8,7 +8,7 @@
   <meta name="description" content="{% block meta_description %}Push keeps the brief, delivery and payment record together for independent work.{% endblock %}">
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260927-6">
+  <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260927-7">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260927-4">{% endif %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
@@ -26,8 +26,9 @@
       <a class="notification-link{% if unread_notification_count %} has-unread{% endif %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Notifications</span><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
       <a {% if request.resolver_match.url_name == 'wallet' %}aria-current="page"{% endif %} href="{% url 'wallet' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15v12H4zM15 12h4v3h-4z"/></svg><span>Wallet</span></a>
       <a {% if request.resolver_match.url_name == 'payments' %}aria-current="page"{% endif %} href="{% url 'payments' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v12H5zM5 10h14M8 15h3"/></svg><span>Payments</span></a>
+      <a {% if request.resolver_match.url_name == 'analytics' %}aria-current="page"{% endif %} href="{% url 'analytics' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-7M3 19h18"/></svg><span>Analytics</span></a>
       <a href="{% url 'job_create' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Post a job</span></a>
-      {% if user.is_staff %}<a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'moderate_dispute' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Trust desk</span></a>{% endif %}
+      {% if staff_portal_role %}<a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'moderate_dispute' or request.resolver_match.url_name == 'staff_team' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Trust desk</span></a>{% endif %}
     </nav>
     <div class="account-box">
       {% if user.profile_image %}<img class="avatar avatar-image" src="{% url 'profile_image' user.pk %}" alt="">{% else %}<span class="avatar">{{ user.display_name|first|upper }}</span>{% endif %}
@@ -93,7 +94,7 @@
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>
   <script src="{% static 'activity-status.js' %}?v=20260927-1" defer></script>
   {% endif %}
-  <script src="{% static 'menu-behavior.js' %}?v=20260924-2" defer></script>
+  <script src="{% static 'menu-behavior.js' %}?v=20260927-3" defer></script>
   <script src="{% static 'share-link.js' %}?v=20260927-5" defer></script>
   {% block extra_scripts %}{% endblock %}
 </body>

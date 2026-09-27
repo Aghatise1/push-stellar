@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Operations sign in — Push{% endblock %}
+{% block content %}
+<section class="auth-panel staff-auth-panel">
+  <span class="tag">Restricted operations</span>
+  <h1>Staff sign in.</h1>
+  <p class="lead">For approved Push owners, administrators, moderators and support staff.</p>
+  <form method="post" novalidate>{% csrf_token %}{% include 'fields.html' %}<button class="button full" type="submit">Enter operations</button></form>
+  <p class="form-assurance">Access is role-based, approved by an administrator and recorded. Member accounts should use <a href="{% url 'login' %}">tester sign in</a>.</p>
+</section>
+{% endblock %}

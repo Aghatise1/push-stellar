@@ -21,6 +21,17 @@ class User(AbstractUser):
     class Meta:
         constraints = [models.UniqueConstraint(Lower('email'),name='unique_email_lower')]
 
+class StaffAccess(models.Model):
+    ROLE_CHOICES=[('owner','Owner'),('admin','Administrator'),('moderator','Moderator'),('support','Support')]
+    STATUS_CHOICES=[('pending','Pending approval'),('approved','Approved'),('suspended','Suspended'),('revoked','Revoked')]
+    user = models.OneToOneField(User,on_delete=models.CASCADE,related_name='staff_access')
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES,default='moderator')
+    status = models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
+    approved_by = models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='approved_staff_access')
+    approved_at = models.DateTimeField(null=True,blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
 class EmailVerificationCode(models.Model):
     user = models.OneToOneField(User,on_delete=models.CASCADE,related_name='verification_code')
     code_hash = models.CharField(max_length=64)

@@ -3,7 +3,8 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
-from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication
+from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication, StaffAccess
+from .access import has_staff_access
 from .stellar import valid_account_id
 
 STELLAR_ADDRESS_PATTERN = r'^G[A-Z2-7]{55}$'
@@ -85,6 +86,21 @@ class LoginForm(AuthenticationForm):
     error_messages = {'invalid_login':'That email and password were not recognised. Check both fields or reset your password.','inactive':'This account is inactive.'}
     def clean_username(self):
         return self.cleaned_data['username'].strip().lower()
+
+class StaffLoginForm(LoginForm):
+    def confirm_login_allowed(self,user):
+        super().confirm_login_allowed(user)
+        if not has_staff_access(user):
+            raise forms.ValidationError('This account has not been approved for the Push operations team.',code='staff_access')
+
+class StaffAccessForm(forms.Form):
+    email=forms.EmailField(label='Existing Push account email')
+    role=forms.ChoiceField(choices=StaffAccess.ROLE_CHOICES)
+    def clean_email(self):
+        email=self.cleaned_data['email'].strip().lower()
+        if not User.objects.filter(email__iexact=email,is_active=True).exists():
+            raise forms.ValidationError('Create and verify this member account before granting staff access.')
+        return email
 
 class RecoveryForm(PasswordResetForm):
     def clean_email(self):

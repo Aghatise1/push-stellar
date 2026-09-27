@@ -1,5 +1,6 @@
 from django.conf import settings
 from .models import Assignment, Notification
+from .access import staff_role
 
 def app_context(request):
     conversation_count = 0
@@ -26,4 +27,5 @@ def app_context(request):
             'unread_notification_count':unread_notification_count,
             'notification_preview':notification_preview,
             'assigned_active_count':assigned_active_count,
-            'work_attention_count':work_attention_count}
+            'work_attention_count':work_attention_count,
+            'staff_portal_role':staff_role(request.user)}

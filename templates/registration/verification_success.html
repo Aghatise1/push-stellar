@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Verified — Push{% endblock %}
+{% block content %}
+<section class="verification-success" role="status" aria-live="polite" data-success-next="{{ success_next_url }}">
+  <div class="verification-orbit" aria-hidden="true">
+    <span class="verification-ring"></span>
+    <span class="verification-check"><svg viewBox="0 0 48 48"><path d="m13 25 7 7 16-17"/></svg></span>
+    <i class="verification-spark spark-one"></i><i class="verification-spark spark-two"></i><i class="verification-spark spark-three"></i>
+  </div>
+  <p class="eyebrow">Access confirmed</p>
+  <h1>{{ success_title }}</h1>
+  <p class="lead">{{ success_description }}</p>
+  <a class="button" href="{{ success_next_url }}">Continue now</a>
+</section>
+{% endblock %}

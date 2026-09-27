@@ -17,8 +17,10 @@ urlpatterns = [
     path('invite/',views.invite_redeem,name='invite_redeem'),
     path('register/',views.register,name='register'),
     path('register/verify/',views.verify_registration,name='verify_registration'),
+    path('verified/',views.verification_success,name='verification_success'),
     path('register/resend/',views.resend_registration,name='resend_registration'),
     path('login/',views.SignIn.as_view(),name='login'),
+    path('staff/login/',views.StaffSignIn.as_view(),name='staff_login'),
     path('logout/',auth_views.LogoutView.as_view(),name='logout'),
     path('verify/',views.verify_email,name='verify_email'),
     path('verify/<str:code>/',views.verify_link,name='verify'),
@@ -28,6 +30,7 @@ urlpatterns = [
     path('reset/<uidb64>/<token>/',auth_views.PasswordResetConfirmView.as_view(template_name='registration/reset_confirm.html'),name='password_reset_confirm'),
     path('reset/complete/',auth_views.PasswordResetCompleteView.as_view(template_name='registration/reset_complete.html'),name='password_reset_complete'),
     path('workspace/',views.workspace,name='workspace'),
+    path('analytics/',views.analytics,name='analytics'),
     path('work/',views.work,name='work'),
     path('work/assigned/',views.assigned_work,name='assigned_work'),
     path('activity/status/',views.activity_status,name='activity_status'),
@@ -61,6 +64,8 @@ urlpatterns = [
     path('moderation/invitations/create/',views.create_staff_invitation,name='create_staff_invitation'),
     path('moderation/invitations/<uuid:pk>/revoke/',views.revoke_invitation,name='revoke_invitation'),
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
+    path('moderation/team/',views.staff_team,name='staff_team'),
+    path('moderation/team/<int:pk>/access/',views.staff_access_update,name='staff_access_update'),
 ]
 
 if settings.GOOGLE_AUTH_ENABLED:

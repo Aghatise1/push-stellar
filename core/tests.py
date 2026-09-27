@@ -11,7 +11,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation
+from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
 
@@ -32,6 +32,9 @@ class WorkspaceTests(TestCase):
     def action(self,item,action,**data):
         if action == 'accept': data.setdefault('accept_terms','on')
         return self.client.post(reverse('assignment_action',args=[item.pk]),{'action':action,**data})
+    def grant_staff(self,user,role='moderator'):
+        user.is_staff=True;user.save(update_fields=['is_staff'])
+        return StaffAccess.objects.update_or_create(user=user,defaults={'role':role,'status':'approved','approved_at':timezone.now()})[0]
     def grant_invitation(self,email,code='PUSH-ABCD1234-EFGH5678'):
         application=WaitlistApplication.objects.create(
             name='Invited Tester',email=email.lower(),role='Developer',intended_use='Test hiring',
@@ -42,7 +45,7 @@ class WorkspaceTests(TestCase):
             application=application,email=email.lower(),code_hash=hash_invitation_code(code),
             created_by=self.owner,expires_at=timezone.now()+timedelta(days=7),
         )
-        self.assertRedirects(self.client.post(reverse('invite_redeem'),{'code':code}),reverse('register'))
+        self.assertRedirects(self.client.post(reverse('invite_redeem'),{'code':code}),reverse('verification_success'))
         return invitation
     def test_public_and_auth_pages_render(self):
         health=self.client.get(reverse('health'))
@@ -68,7 +71,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(response.status_code,200)
         application=WaitlistApplication.objects.get(email='ada@example.test')
         self.assertEqual(application.status,'pending')
-        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        self.grant_staff(self.owner);self.login_as(self.owner)
         response=self.client.post(reverse('review_waitlist',args=[application.pk]),{'decision':'approve'})
         self.assertRedirects(response,reverse('moderation'))
         application.refresh_from_db();self.assertEqual(application.status,'approved')
@@ -81,7 +84,7 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'Join as a tester')
         self.assertContains(response,'class="tester-entry"')
     def test_staff_can_create_copy_and_revoke_direct_invitation(self):
-        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        self.grant_staff(self.owner);self.login_as(self.owner)
         response=self.client.post(reverse('create_staff_invitation'),{
             'name':'Founder Friend','email':'friend@example.test','role':'Product designer',
         },follow=True)
@@ -102,10 +105,27 @@ class WorkspaceTests(TestCase):
         self.login_as(self.worker)
         self.assertEqual(self.client.post(reverse('create_staff_invitation'),{
             'name':'No Access','email':'blocked@example.test','role':'Tester',
-        }).status_code,403)
+        }).status_code,404)
         application=WaitlistApplication.objects.create(name='Tester',email='invite@example.test',role='Tester',intended_use='Test',reason='Test',accepted_testing_terms=True)
         invitation=Invitation.objects.create(application=application,email=application.email,code_hash=hash_invitation_code('PUSH-AAAABBBB-CCCCDDDD'),created_by=self.owner,expires_at=timezone.now()+timedelta(days=7))
-        self.assertEqual(self.client.post(reverse('revoke_invitation',args=[invitation.pk])).status_code,403)
+        self.assertEqual(self.client.post(reverse('revoke_invitation',args=[invitation.pk])).status_code,404)
+    def test_staff_portal_uses_approved_role_and_separate_login(self):
+        self.assertRedirects(self.client.get(reverse('moderation')),f'{reverse("staff_login")}?next={reverse("moderation")}')
+        self.login_as(self.worker)
+        self.assertEqual(self.client.get(reverse('moderation')).status_code,404)
+        self.client.logout()
+        denied=self.client.post(reverse('staff_login'),{'username':self.worker.email,'password':'Independent-cobalt-732!'})
+        self.assertContains(denied,'has not been approved',status_code=200)
+        self.grant_staff(self.owner,'admin')
+        approved=self.client.post(reverse('staff_login'),{'username':self.owner.email,'password':'Independent-cobalt-732!'})
+        self.assertRedirects(approved,reverse('moderation'))
+        self.assertContains(self.client.get(reverse('staff_team')),'Operations team')
+    def test_analytics_is_private_and_uses_existing_records(self):
+        self.assertRedirects(self.client.get(reverse('analytics')),f'{reverse("login")}?next={reverse("analytics")}')
+        self.login_as(self.worker)
+        response=self.client.get(reverse('analytics'))
+        self.assertContains(response,'Work performance')
+        self.assertContains(response,'No private data is sent to an external AI')
     def test_invitation_is_email_bound_and_registration_is_closed_without_it(self):
         self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
         self.grant_invitation('approved@example.test')
@@ -134,7 +154,8 @@ class WorkspaceTests(TestCase):
         self.assertNotEqual(pending.password_hash,'Long-example-password-723!')
         code=re.search(r'\b(\d{6})\b',mail.outbox[0].body).group(1)
         self.assertEqual(self.client.get(reverse('verify_registration')).status_code,200)
-        self.assertEqual(self.client.post(reverse('verify_registration'),{'code':code}).status_code,302)
+        first_verification=self.client.post(reverse('verify_registration'),{'code':code})
+        self.assertRedirects(first_verification,reverse('verification_success'))
         user=User.objects.get(email='new@example.test')
         user.refresh_from_db();self.assertTrue(user.email_verified)
         invitation.refresh_from_db();self.assertEqual(invitation.used_by,user);self.assertIsNotNone(invitation.used_at)
@@ -592,8 +613,8 @@ class WorkspaceTests(TestCase):
         self.login_as(self.worker);self.action(item,'dispute',note='The delivery was rejected without reference to the criteria.')
         dispute=Dispute.objects.get(assignment=item)
         self.login_as(self.outsider)
-        self.assertEqual(self.client.post(reverse('moderate_dispute',args=[dispute.pk]),{'resolution':'release','decision_note':'No'}).status_code,403)
-        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        self.assertEqual(self.client.post(reverse('moderate_dispute',args=[dispute.pk]),{'resolution':'release','decision_note':'No'}).status_code,404)
+        self.grant_staff(self.owner);self.login_as(self.owner)
         response=self.client.post(reverse('moderate_dispute',args=[dispute.pk]),{'resolution':'split','split_percent':60,'decision_note':'Both parties contributed to the missed handover.'})
         self.assertEqual(response.status_code,302)
         dispute.refresh_from_db();item.refresh_from_db()
@@ -609,7 +630,7 @@ class WorkspaceTests(TestCase):
         response=self.client.post(reverse('job_create'),data);self.assertEqual(response.status_code,302)
         flagged=Job.objects.get(title='Fast work');self.assertEqual(flagged.moderation_status,'review')
         self.login_as(self.outsider);self.assertEqual(self.client.get(reverse('job_detail',args=[flagged.pk])).status_code,404)
-        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        self.grant_staff(self.owner);self.login_as(self.owner)
         self.client.post(reverse('moderate_job',args=[flagged.pk]),{'decision':'approved'})
         flagged.refresh_from_db();self.assertEqual(flagged.moderation_status,'approved')
 
