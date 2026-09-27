@@ -250,3 +250,31 @@ body.site-mode{background:
 .verification-panel input[name="code"]{font-size:2rem;font-weight:800;letter-spacing:.55em;text-align:center;font-variant-numeric:tabular-nums;padding-left:calc(1rem + .55em)}
 .verification-panel .resend-form{margin-top:.75rem}
 .google-mark{position:absolute;left:1rem;width:1.15rem;height:1.15rem;flex:0 0 1.15rem}
+
+/* Tester access: make the path for a new account impossible to miss. */
+.auth-recovery{display:inline-block;margin:.9rem 0 1.5rem;font-size:.8rem}
+.tester-entry{margin-top:.35rem;padding:1.4rem;background:var(--forest);color:#fff;border-radius:.9rem;box-shadow:0 .55rem 1.4rem rgba(18,32,25,.14)}
+.tester-entry>span{display:block;margin-bottom:.55rem;color:#bdd0c3;font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+.tester-entry h2{margin-bottom:.65rem;color:#fff;font-size:1.5rem}
+.tester-entry p{margin-bottom:1.15rem;color:#d7e2da;font-size:.84rem}
+.tester-entry .button{background:#fff;border-color:#fff;color:var(--forest)}
+.tester-entry .button:hover{background:#eef3ef;border-color:#eef3ef;color:#0e2d24}
+.tester-entry .button.secondary{margin-top:.65rem;background:transparent;border-color:#91a599;color:#fff}
+.tester-entry .button.secondary:hover{background:rgba(255,255,255,.1);border-color:#fff;color:#fff}
+.invite-help{margin-top:1.5rem;padding:1.2rem;border:1px solid var(--line-strong);border-radius:.8rem;background:var(--sheet)}
+.invite-help p{margin:.35rem 0 1rem;color:var(--muted);font-size:.82rem}
+
+/* Staff invitation controls retain the paper system with stronger hierarchy. */
+.moderation-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
+.invitation-desk{padding:clamp(1.25rem,3vw,2rem);border:1px solid var(--line-strong);border-radius:1rem;background:rgba(255,255,255,.62)}
+.invitation-desk>.section-heading:first-child{margin-top:0}
+.invitation-desk .section-heading p{margin:.35rem 0 0;color:var(--muted);font-size:.8rem}
+.invitation-reveal{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,.8fr);gap:1.5rem;align-items:end;margin:1.25rem 0;padding:1.35rem;border-radius:.85rem;background:var(--forest);color:#fff;box-shadow:0 .55rem 1.4rem rgba(18,32,25,.14)}
+.invitation-reveal span,.invitation-reveal strong{display:block}.invitation-reveal span{color:#bdd0c3;font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase}.invitation-reveal strong{margin-top:.35rem;font-size:1.05rem}.invitation-reveal p{margin:.35rem 0 0;color:#d7e2da;font-size:.76rem}
+.invitation-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.55rem}.invitation-copy input{font-weight:700;letter-spacing:.04em}.invitation-copy .button{white-space:nowrap;background:#fff;border-color:#fff;color:var(--forest)}
+.invitation-create{display:grid;grid-template-columns:minmax(12rem,.7fr) minmax(18rem,1fr);gap:clamp(1.5rem,5vw,4rem);padding:1.5rem 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.invitation-create>div p{color:var(--muted);font-size:.82rem}.invitation-create .field{margin-bottom:1rem}
+.invitation-list{border-top:1px solid var(--ink)}.invitation-row{display:flex;justify-content:space-between;gap:1.5rem;padding:1.15rem 0;border-bottom:1px solid var(--line)}.invitation-row>div:first-child{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.35rem .7rem;align-items:center}.invitation-row strong{overflow-wrap:anywhere}.invitation-row small{grid-column:2;color:var(--muted)}
+.invitation-actions{display:flex;align-items:center;gap:.75rem}.invitation-actions form{margin:0}.danger-link{color:#8f2d1c}.status-bubble.open{border-color:#a9c6af;background:#edf8ef;color:#205d33}
+@media(max-width:860px){.moderation-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.invitation-reveal,.invitation-create{grid-template-columns:1fr}.invitation-copy{grid-template-columns:1fr}.invitation-row{display:block}.invitation-actions{margin-top:1rem}.invitation-row>div:first-child{grid-template-columns:auto minmax(0,1fr)}}
+@media(max-width:520px){.moderation-metrics{grid-template-columns:1fr}.invitation-desk{padding:1rem}.invitation-actions{align-items:stretch;flex-direction:column}.invitation-actions .button{width:100%}.invitation-row>div:first-child{display:block}.invitation-row .status-bubble,.invitation-row strong,.invitation-row small{display:block;margin-bottom:.45rem}}

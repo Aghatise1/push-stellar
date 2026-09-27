@@ -24,7 +24,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation
-from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm
+from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
@@ -126,6 +126,25 @@ def send_registration_verification(pending):
     pending.attempts = 0
     pending.save(update_fields=['code_hash','expires_at','attempts','sent_at'])
     deliver_verification_code(pending.email,code,'Use this code to create your Push account:')
+
+
+def issue_invitation(application,created_by):
+    Invitation.objects.filter(
+        application=application,used_at__isnull=True,revoked_at__isnull=True,
+    ).update(revoked_at=timezone.now())
+    code='PUSH-'+secrets.token_hex(4).upper()+'-'+secrets.token_hex(4).upper()
+    invitation=Invitation.objects.create(
+        application=application,email=application.email,code_hash=hash_invitation_code(code),
+        created_by=created_by,expires_at=timezone.now()+timedelta(days=7),
+    )
+    return invitation,code
+
+
+def remember_new_invitation(request,invitation,code):
+    request.session['push_new_invitation']={
+        'code':code,'email':invitation.email,
+        'expires':timezone.localtime(invitation.expires_at).strftime('%d %b %Y, %H:%M'),
+    }
 
 
 def home(request):
@@ -889,8 +908,12 @@ def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
     waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
+    invitations=Invitation.objects.select_related('application','created_by','used_by')[:100]
     return render(request,'moderation.html',{
         'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
+        'invitations':invitations,'invitation_form':StaffInvitationForm(),
+        'new_invitation':request.session.pop('push_new_invitation',None),
+        'moderation_now':timezone.now(),
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
@@ -913,13 +936,9 @@ def review_waitlist(request,pk):
         application.reviewed_at=timezone.now()
         application.save(update_fields=['status','reviewed_by','reviewed_at'])
         Invitation.objects.filter(application=application,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
-        code='PUSH-'+secrets.token_hex(4).upper()+'-'+secrets.token_hex(4).upper() if decision == 'approve' else ''
-        if code:
-            Invitation.objects.create(
-                application=application,email=application.email,code_hash=hash_invitation_code(code),
-                created_by=request.user,expires_at=timezone.now()+timedelta(days=7),
-            )
+        invitation,code=issue_invitation(application,request.user) if decision == 'approve' else (None,'')
     if decision == 'approve':
+        remember_new_invitation(request,invitation,code)
         try:
             send_mail(
                 'Your Push testing invitation',
@@ -932,6 +951,50 @@ def review_waitlist(request,pk):
             messages.success(request,f'Approved and sent a one-time invitation to {application.email}.')
     else:
         messages.success(request,f'{application.email} was not approved for this testing round.')
+    return redirect('moderation')
+
+
+@login_required
+@require_POST
+def create_staff_invitation(request):
+    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
+    form=StaffInvitationForm(request.POST)
+    if not form.is_valid():
+        detail=' '.join(str(error) for errors in form.errors.values() for error in errors)
+        messages.error(request,f'The invitation was not created. {detail}')
+        return redirect('moderation')
+    with transaction.atomic():
+        application,_=WaitlistApplication.objects.update_or_create(
+            email=form.cleaned_data['email'],
+            defaults={
+                'name':form.cleaned_data['name'],'role':form.cleaned_data['role'] or 'Invited tester',
+                'skills':'','intended_use':'Direct invitation from the Push testing team.',
+                'reason':'Invited directly by an authorised Push founder or moderator.',
+                'accepted_testing_terms':False,'status':'approved','reviewed_by':request.user,
+                'reviewed_at':timezone.now(),
+            },
+        )
+        invitation,code=issue_invitation(application,request.user)
+    remember_new_invitation(request,invitation,code)
+    try:
+        send_mail(
+            'Your Push testing invitation',
+            f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+            settings.DEFAULT_FROM_EMAIL,[application.email],fail_silently=False,
+        )
+    except Exception:
+        messages.warning(request,'The code was created, but email delivery failed. Copy it from the secure one-time panel below.')
+    else:
+        messages.success(request,f'Invitation created and emailed to {application.email}.')
+    return redirect('moderation')
+
+
+@login_required
+@require_POST
+def revoke_invitation(request,pk):
+    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
+    updated=Invitation.objects.filter(pk=pk,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
+    messages.success(request,'Invitation revoked.' if updated else 'That invitation was already used or revoked.')
     return redirect('moderation')
 
 

@@ -2,14 +2,14 @@
 {% block title %}Use your Push invitation{% endblock %}
 {% block content %}
 <section class="auth-panel">
-  <p class="eyebrow">Invite-only access</p>
-  <h1>Enter your invitation.</h1>
-  <p class="lead">Use the one-time code sent to your approved email address. You will then create your account with that same address.</p>
+  <h1>Create your tester account.</h1>
+  <p class="lead">First, enter the one-time code sent to your approved email address. Next, you will create the account using that same address.</p>
   <form method="post" novalidate>
     {% csrf_token %}
     {% include 'fields.html' %}
-    <button class="button full" type="submit">Continue to account creation</button>
+    <button class="button full" type="submit">Verify code and create account</button>
   </form>
-  <p class="form-assurance">No invitation yet? <a href="{% url 'waitlist' %}">Join the waitlist</a>. Already registered? <a href="{% url 'login' %}">Sign in</a>.</p>
+  <div class="invite-help"><strong>Do you need an invitation?</strong><p>Apply to the testing group. Approved applicants receive a code tied to their email.</p><a class="button secondary full" href="{% url 'waitlist' %}">Join as a tester</a></div>
+  <p class="form-assurance">Already registered? <a href="{% url 'login' %}">Sign in to your existing account</a>.</p>
 </section>
 {% endblock %}

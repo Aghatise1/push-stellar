@@ -33,6 +33,16 @@ class InvitationCodeForm(forms.Form):
     def clean_code(self):
         return self.cleaned_data['code'].strip().upper()
 
+class StaffInvitationForm(forms.Form):
+    name=forms.CharField(max_length=80,label='Tester name')
+    email=forms.EmailField(max_length=150,label='Tester email')
+    role=forms.CharField(max_length=80,label='Role or discipline',required=False)
+    def clean_email(self):
+        email=self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('This email already has a Push account. They can sign in normally.')
+        return email
+
 class Registration(UserCreationForm):
     accept_terms = forms.BooleanField(label='I agree to the Push Terms of Use and Privacy Notice.')
     display_name = forms.CharField(

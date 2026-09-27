@@ -58,6 +58,8 @@ urlpatterns = [
     path('moderation/disputes/<int:pk>/',views.moderate_dispute,name='moderate_dispute'),
     path('moderation/jobs/<uuid:pk>/',views.moderate_job,name='moderate_job'),
     path('moderation/waitlist/<int:pk>/',views.review_waitlist,name='review_waitlist'),
+    path('moderation/invitations/create/',views.create_staff_invitation,name='create_staff_invitation'),
+    path('moderation/invitations/<uuid:pk>/revoke/',views.revoke_invitation,name='revoke_invitation'),
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
 ]
 

@@ -74,6 +74,38 @@ class WorkspaceTests(TestCase):
         application.refresh_from_db();self.assertEqual(application.status,'approved')
         invitation=application.invitations.get();self.assertIsNone(invitation.used_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn('Invitation code:',mail.outbox[0].body)
+    def test_login_makes_new_tester_route_prominent(self):
+        response=self.client.get(reverse('login'))
+        self.assertContains(response,'Create your tester account')
+        self.assertContains(response,'Use invitation code')
+        self.assertContains(response,'Join as a tester')
+        self.assertContains(response,'class="tester-entry"')
+    def test_staff_can_create_copy_and_revoke_direct_invitation(self):
+        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        response=self.client.post(reverse('create_staff_invitation'),{
+            'name':'Founder Friend','email':'friend@example.test','role':'Product designer',
+        },follow=True)
+        self.assertEqual(response.status_code,200)
+        match=re.search(r'PUSH-[A-F0-9]{8}-[A-F0-9]{8}',response.content.decode())
+        self.assertIsNotNone(match)
+        code=match.group(0)
+        invitation=Invitation.objects.get(email='friend@example.test')
+        self.assertIsNone(invitation.revoked_at)
+        self.assertEqual(len(mail.outbox),1);self.assertIn(code,mail.outbox[0].body)
+        self.assertNotContains(self.client.get(reverse('moderation')),code)
+        self.client.post(reverse('revoke_invitation',args=[invitation.pk]))
+        invitation.refresh_from_db();self.assertIsNotNone(invitation.revoked_at)
+        self.client.logout()
+        response=self.client.post(reverse('invite_redeem'),{'code':code})
+        self.assertContains(response,'invalid, expired, revoked or already used')
+    def test_non_staff_cannot_manage_invitations(self):
+        self.login_as(self.worker)
+        self.assertEqual(self.client.post(reverse('create_staff_invitation'),{
+            'name':'No Access','email':'blocked@example.test','role':'Tester',
+        }).status_code,403)
+        application=WaitlistApplication.objects.create(name='Tester',email='invite@example.test',role='Tester',intended_use='Test',reason='Test',accepted_testing_terms=True)
+        invitation=Invitation.objects.create(application=application,email=application.email,code_hash=hash_invitation_code('PUSH-AAAABBBB-CCCCDDDD'),created_by=self.owner,expires_at=timezone.now()+timedelta(days=7))
+        self.assertEqual(self.client.post(reverse('revoke_invitation',args=[invitation.pk])).status_code,403)
     def test_invitation_is_email_bound_and_registration_is_closed_without_it(self):
         self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
         self.grant_invitation('approved@example.test')

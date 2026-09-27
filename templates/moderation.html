@@ -1,7 +1,68 @@
-{% extends 'base.html' %}{% block title %}Trust desk — Push{% endblock %}{% block content %}
-<div class="page-heading"><div><span class="tag">Staff only</span><h1>Trust desk.</h1><p class="lead">Review contested work and risky listings from the complete record.</p></div></div>
-<div class="moderation-metrics"><div><span>Waitlist</span><strong>{{ metrics.waitlist }}</strong></div><div><span>Open disputes</span><strong>{{ metrics.open_disputes }}</strong></div><div><span>Jobs</span><strong>{{ metrics.jobs }}</strong></div><div><span>Assignments</span><strong>{{ metrics.assignments }}</strong></div><div><span>Recorded value</span><strong>${{ metrics.recorded_value }}</strong></div></div>
-<section><div class="section-heading"><h2>Tester waitlist</h2><span>Approve only people invited into this testing round</span></div>{% for application in waitlist_items %}<article class="moderation-row"><div><span class="tag">{{ application.get_status_display }}</span><strong>{{ application.name }} · {{ application.email }}</strong><p>{{ application.role }}{% if application.skills %} · {{ application.skills }}{% endif %}</p><p>{{ application.reason }}</p></div>{% if application.status == 'pending' %}<form method="post" action="{% url 'review_waitlist' application.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approve">Approve & invite</button><button class="button secondary small" name="decision" value="reject">Not this round</button></form>{% endif %}</article>{% empty %}<p class="empty">No tester applications yet.</p>{% endfor %}</section>
+{% extends 'base.html' %}
+{% block title %}Trust desk — Push{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="tag">Staff only</span><h1>Trust desk.</h1><p class="lead">Control tester access, review contested work and assess risky listings.</p></div>
+</div>
+
+<div class="moderation-metrics">
+  <div><span>Waiting</span><strong>{{ metrics.waitlist }}</strong></div>
+  <div><span>Open disputes</span><strong>{{ metrics.open_disputes }}</strong></div>
+  <div><span>Jobs</span><strong>{{ metrics.jobs }}</strong></div>
+  <div><span>Assignments</span><strong>{{ metrics.assignments }}</strong></div>
+  <div><span>Recorded value</span><strong>${{ metrics.recorded_value }}</strong></div>
+</div>
+
+<section class="invitation-desk" aria-labelledby="invitation-desk-title">
+  <div class="section-heading"><div><h2 id="invitation-desk-title">Founder invitation desk</h2><p>Create an email-bound code for a tester you already know.</p></div><span>Codes expire after 7 days</span></div>
+  {% if new_invitation %}
+  <div class="invitation-reveal" role="status">
+    <div><span>Copy this code now</span><strong>{{ new_invitation.email }}</strong><p>This full code is shown once. It expires {{ new_invitation.expires }}.</p></div>
+    <div class="invitation-copy">
+      <input id="new-invitation-code" value="{{ new_invitation.code }}" readonly aria-label="New invitation code">
+      <button class="button" type="button" data-copy-target="#new-invitation-code" data-copied-label="Code copied">Copy invitation code</button>
+    </div>
+  </div>
+  {% endif %}
+  <div class="invitation-create">
+    <div><h3>Invite a tester directly</h3><p>Use this when a founder already knows the tester. The code only works with the email entered here.</p></div>
+    <form method="post" action="{% url 'create_staff_invitation' %}">
+      {% csrf_token %}
+      {% include 'fields.html' with form=invitation_form %}
+      <button class="button full" type="submit">Create and email invitation</button>
+    </form>
+  </div>
+  <div class="section-heading"><div><h3>Invitation activity</h3><p>Readable codes are never stored. Reissue a code if the tester loses it.</p></div></div>
+  <div class="invitation-list">
+    {% for invitation in invitations %}
+    <article class="invitation-row">
+      <div>
+        {% if invitation.used_at %}<span class="status-bubble approved">Used</span>
+        {% elif invitation.revoked_at %}<span class="status-bubble removed">Revoked</span>
+        {% elif invitation.expires_at <= moderation_now %}<span class="status-bubble review">Expired</span>
+        {% else %}<span class="status-bubble open">Active</span>{% endif %}
+        <strong>{{ invitation.email }}</strong>
+        <small>Created {{ invitation.created_at|date:'j M Y, H:i' }} by {{ invitation.created_by.display_name }} · expires {{ invitation.expires_at|date:'j M Y, H:i' }}</small>
+      </div>
+      <div class="invitation-actions">
+        {% if not invitation.used_at %}<form method="post" action="{% url 'create_staff_invitation' %}">{% csrf_token %}<input type="hidden" name="name" value="{{ invitation.application.name }}"><input type="hidden" name="email" value="{{ invitation.email }}"><input type="hidden" name="role" value="{{ invitation.application.role }}"><button class="button secondary small" type="submit">Reissue code</button></form>{% endif %}
+        {% if not invitation.used_at and not invitation.revoked_at and invitation.expires_at > moderation_now %}<form method="post" action="{% url 'revoke_invitation' invitation.pk %}">{% csrf_token %}<button class="link-button danger-link" type="submit">Revoke</button></form>{% endif %}
+      </div>
+    </article>
+    {% empty %}<div class="record-empty"><strong>No invitations created yet.</strong><span>Approve a waitlist application or invite a known tester above.</span></div>{% endfor %}
+  </div>
+</section>
+
+<section>
+  <div class="section-heading"><div><h2>Tester waitlist</h2><p>Review people who applied through the public landing page.</p></div><span>Approve only this testing round</span></div>
+  {% for application in waitlist_items %}
+  <article class="moderation-row">
+    <div><span class="tag">{{ application.get_status_display }}</span><strong>{{ application.name }} · {{ application.email }}</strong><p>{{ application.role }}{% if application.skills %} · {{ application.skills }}{% endif %}</p><p>{{ application.reason }}</p></div>
+    {% if application.status == 'pending' %}<form method="post" action="{% url 'review_waitlist' application.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approve">Approve and create code</button><button class="button secondary small" name="decision" value="reject">Not this round</button></form>{% endif %}
+  </article>
+  {% empty %}<div class="record-empty"><strong>No applications are waiting.</strong><span>New waitlist applications will appear here.</span></div>{% endfor %}
+</section>
+
 <section><div class="section-heading"><h2>Dispute queue</h2><span>Human decisions with an audit trail</span></div><div class="review-list">{% for dispute in disputes %}<a href="{% url 'moderate_dispute' dispute.pk %}"><span class="tag">{{ dispute.get_status_display }}</span><strong>{{ dispute.assignment.job.title }}</strong><small>Opened by {{ dispute.opened_by.display_name }} · {{ dispute.created_at|date:'j M, H:i' }}</small></a>{% empty %}<p class="empty">No disputes are waiting.</p>{% endfor %}</div></section>
-<section><div class="section-heading"><h2>Listing review</h2><span>Flagged before public discovery</span></div>{% for job in flagged_jobs %}<article class="moderation-row"><div><strong>{{ job.title }}</strong><p>{{ job.moderation_notes }}</p></div><form method="post" action="{% url 'moderate_job' job.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approved">Approve</button><button class="button secondary small" name="decision" value="removed">Remove</button></form></article>{% empty %}<p class="empty">No listings need review.</p>{% endfor %}</section>
+<section><div class="section-heading"><h2>Listing review</h2><span>Flagged before member discovery</span></div>{% for job in flagged_jobs %}<article class="moderation-row"><div><strong>{{ job.title }}</strong><p>{{ job.moderation_notes }}</p></div><form method="post" action="{% url 'moderate_job' job.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approved">Approve</button><button class="button secondary small" name="decision" value="removed">Remove</button></form></article>{% empty %}<p class="empty">No listings need review.</p>{% endfor %}</section>
 {% endblock %}

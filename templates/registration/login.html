@@ -3,9 +3,8 @@
 {% block meta_description %}Sign in to continue your briefs, applications, messages and payment records on Push.{% endblock %}
 {% block content %}
 <section class="auth-panel">
-  <p class="eyebrow">Private workspace</p>
-  <h1>Welcome back.</h1>
-  <p class="lead">Sign in to continue your briefs, applications and assignments.</p>
+  <h1>Sign in to Push.</h1>
+  <p class="lead">Existing testers can continue their briefs, applications and assignments.</p>
   {% if google_auth_enabled %}
     {% include 'google_auth_button.html' with google_label='Sign in with Google' %}
     <div class="auth-divider"><span>or use email</span></div>
@@ -16,7 +15,14 @@
     <input type="hidden" name="next" value="{{ next }}">
     <button class="button full" type="submit">Sign in</button>
   </form>
-  <p class="form-assurance">Demo credentials are stored only in the local project’s private credentials file.</p>
-  <div class="auth-links"><a href="{% url 'password_reset' %}">Forgot your password?</a><a href="{% url 'invite_redeem' %}">Use an invitation</a><a href="{% url 'waitlist' %}">Join the waitlist</a></div>
+  <a class="auth-recovery" href="{% url 'password_reset' %}">Forgot your password?</a>
+  <aside class="tester-entry" aria-labelledby="tester-entry-title">
+    <span>New tester</span>
+    <h2 id="tester-entry-title">Create your tester account.</h2>
+    <p>Already received a code? Verify it first, then create your account with the approved email address.</p>
+    <a class="button full" href="{% url 'invite_redeem' %}">Use invitation code</a>
+    <a class="button secondary full" href="{% url 'waitlist' %}">Join as a tester</a>
+  </aside>
+  <p class="form-assurance">Access is currently limited to approved testers. Existing accounts do not need another invitation.</p>
 </section>
 {% endblock %}

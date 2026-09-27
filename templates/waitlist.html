@@ -3,14 +3,13 @@
 {% block meta_description %}Apply to join the limited Push product test for independent talent and Web3 teams.{% endblock %}
 {% block content %}
 <section class="auth-panel wide-auth">
-  <p class="eyebrow">Limited product test</p>
-  <h1>Help us test better work.</h1>
+  <h1>Join as a Push tester.</h1>
   <p class="lead">Push is accepting a small group of freelancers, hiring teams and Web3 builders. Applications are reviewed before invitations are issued.</p>
   <div class="notice"><strong>Testing terms</strong><p>Access is limited and revocable. Testing is voluntary, compensation is not guaranteed, and Stellar testnet assets have no monetary value.</p></div>
   <form method="post" novalidate>
     {% csrf_token %}
     {% include 'fields.html' %}
-    <button class="button full" type="submit">Apply to the waitlist</button>
+    <button class="button full" type="submit">Apply to become a tester</button>
   </form>
   <p class="form-assurance">Already approved? <a href="{% url 'invite_redeem' %}">Use your invitation</a>. Existing tester? <a href="{% url 'login' %}">Sign in</a>.</p>
 </section>
