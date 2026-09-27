@@ -411,13 +411,19 @@ class StaffSignIn(LoginView):
     redirect_authenticated_user=False
     def dispatch(self,request,*args,**kwargs):
         if request.user.is_authenticated:
-            if has_staff_access(request.user): return redirect('moderation')
+            if has_staff_access(request.user): return redirect('staff_entry')
             raise Http404
         if request.method == 'POST' and limited(request,'staff-login',8):
             return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
         return super().dispatch(request,*args,**kwargs)
     def get_success_url(self):
-        return reverse('moderation')
+        return reverse('staff_entry')
+
+
+@staff_only()
+def staff_entry(request):
+    """Let an authenticated staff member choose their current work context."""
+    return render(request,'staff_entry.html',{'staff_role':staff_role(request.user)})
 
 
 @never_cache
@@ -1060,7 +1066,7 @@ def moderation(request):
     })
 
 
-@staff_only()
+@staff_only('owner','admin','support')
 def operations_tickets(request):
     tickets=SupportTicket.objects.select_related('requester','assigned_to')
     status=request.GET.get('status','open')
@@ -1069,7 +1075,7 @@ def operations_tickets(request):
     return render(request,'operations_tickets.html',{'tickets':tickets,'selected_status':status})
 
 
-@staff_only()
+@staff_only('owner','admin','support')
 def operations_ticket(request,pk):
     ticket=get_object_or_404(SupportTicket.objects.select_related('requester','assigned_to'),pk=pk)
     reply_form=TicketReplyForm(request.POST or None,prefix='reply')
@@ -1115,7 +1121,7 @@ def operations_user(request,pk):
     })
 
 
-@staff_only()
+@staff_only('owner','admin')
 def operations_email(request):
     deliveries=EmailDelivery.objects.all()[:100]
     return render(request,'operations_email.html',{
@@ -1127,7 +1133,7 @@ def operations_email(request):
     })
 
 
-@staff_only()
+@staff_only('owner','admin','moderator')
 def operations_payments(request):
     return render(request,'operations_payments.html',{
         'payments':Payment.objects.select_related('assignment__job','assignment__worker').order_by('-created_at')[:100],

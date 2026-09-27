@@ -23,6 +23,7 @@ urlpatterns = [
     path('register/resend/',views.resend_registration,name='resend_registration'),
     path('login/',views.SignIn.as_view(),name='login'),
     path('staff/login/',views.StaffSignIn.as_view(),name='staff_login'),
+    path('staff/entry/',views.staff_entry,name='staff_entry'),
     path('logout/',auth_views.LogoutView.as_view(),name='logout'),
     path('verify/',views.verify_email,name='verify_email'),
     path('verify/<str:code>/',views.verify_link,name='verify'),

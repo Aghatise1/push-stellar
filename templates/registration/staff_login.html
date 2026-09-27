@@ -5,7 +5,11 @@
   <span class="tag">Restricted operations</span>
   <h1>Staff sign in.</h1>
   <p class="lead">For approved Push owners, administrators, moderators and support staff.</p>
+  {% if google_auth_enabled %}
+    {% include 'google_auth_button.html' with google_label='Choose a Google account' google_next='/staff/entry/' %}
+    <div class="auth-divider"><span>or use staff credentials</span></div>
+  {% endif %}
   <form method="post" novalidate>{% csrf_token %}{% include 'fields.html' %}<button class="button full" type="submit">Enter operations</button></form>
-  <p class="form-assurance">Access is role-based, approved by an administrator and recorded. Member accounts should use <a href="{% url 'login' %}">tester sign in</a>.</p>
+  <p class="form-assurance">Google verifies the identity; Push decides the role. Unapproved accounts cannot enter Operations. Member accounts should use <a href="{% url 'login' %}">tester sign in</a>.</p>
 </section>
 {% endblock %}

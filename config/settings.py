@@ -156,7 +156,10 @@ SOCIALACCOUNT_PROVIDERS = ({
     'google': {
         'APPS': [{'client_id':GOOGLE_OAUTH_CLIENT_ID,'secret':GOOGLE_OAUTH_CLIENT_SECRET,'key':''}],
         'SCOPE':['profile','email'],
-        'AUTH_PARAMS':{'access_type':'online'},
+        # Always let a person choose the intended Google identity. This is
+        # especially important on shared devices and for staff who also keep a
+        # separate personal Google account signed in.
+        'AUTH_PARAMS':{'access_type':'online','prompt':'select_account'},
         'EMAIL_AUTHENTICATION':True,
         'EMAIL_AUTHENTICATION_AUTO_CONNECT':True,
     }

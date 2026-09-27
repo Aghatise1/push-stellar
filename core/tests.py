@@ -1,4 +1,5 @@
 import re
+from io import StringIO
 from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
@@ -6,6 +7,7 @@ from django.test import TestCase, Client, override_settings
 from django.conf import settings
 from django.urls import reverse
 from django.core import mail, signing
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
@@ -118,8 +120,19 @@ class WorkspaceTests(TestCase):
         self.assertContains(denied,'has not been approved',status_code=200)
         self.grant_staff(self.owner,'admin')
         approved=self.client.post(reverse('staff_login'),{'username':self.owner.email,'password':'Independent-cobalt-732!'})
-        self.assertRedirects(approved,reverse('moderation'))
+        self.assertRedirects(approved,reverse('staff_entry'))
+        entry=self.client.get(reverse('staff_entry'))
+        self.assertContains(entry,'Continue to Push')
+        self.assertContains(entry,'Open Operations')
+        self.assertContains(entry,self.owner.email)
         self.assertContains(self.client.get(reverse('staff_team')),'Operations team')
+
+    def test_google_staff_login_points_to_staff_entry(self):
+        if not settings.GOOGLE_AUTH_ENABLED:
+            self.skipTest('Google authentication is not configured in this environment.')
+        response=self.client.get(reverse('staff_login'))
+        self.assertContains(response,'Choose a Google account')
+        self.assertContains(response,'staff%2Fentry',html=False)
     def test_analytics_is_private_and_uses_existing_records(self):
         self.assertRedirects(self.client.get(reverse('analytics')),f'{reverse("login")}?next={reverse("analytics")}')
         self.login_as(self.worker)
@@ -149,6 +162,26 @@ class WorkspaceTests(TestCase):
         self.client.logout();self.grant_staff(self.owner,'admin');self.login_as(self.owner)
         for name in ['operations_tickets','operations_users','operations_email','operations_payments','operations_docs']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
+
+    def test_staff_roles_only_open_their_assigned_queues(self):
+        self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        self.assertEqual(self.client.get(reverse('operations_tickets')).status_code,200)
+        self.assertEqual(self.client.get(reverse('operations_users')).status_code,200)
+        self.assertEqual(self.client.get(reverse('operations_payments')).status_code,404)
+        self.assertEqual(self.client.get(reverse('operations_email')).status_code,404)
+        self.client.logout();self.grant_staff(self.owner,'moderator');self.login_as(self.owner)
+        self.assertEqual(self.client.get(reverse('operations_payments')).status_code,200)
+        self.assertEqual(self.client.get(reverse('operations_tickets')).status_code,404)
+        self.assertEqual(self.client.get(reverse('operations_email')).status_code,404)
+        self.assertEqual(self.client.get(reverse('operations_docs')).status_code,404)
+
+    def test_bootstrap_owner_requires_an_existing_verified_account(self):
+        output=StringIO()
+        call_command('bootstrap_owner',self.worker.email,stdout=output)
+        access=StaffAccess.objects.get(user=self.worker)
+        self.assertEqual(access.role,'owner');self.assertEqual(access.status,'approved')
+        self.assertTrue(User.objects.get(pk=self.worker.pk).is_staff)
+        self.assertIn('Owner access granted',output.getvalue())
     def test_documentation_audience_and_email_delivery_log(self):
         public=DocumentationArticle.objects.create(slug='public-test',title='Public test',summary='Summary',body='Body',audience='public',status='published')
         staff=DocumentationArticle.objects.create(slug='staff-test',title='Staff test',summary='Summary',body='Body',audience='staff',status='published')

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Choose workspace — Push{% endblock %}
+{% block app_location %}Staff access{% endblock %}
+{% block content %}
+<section class="staff-entry" aria-labelledby="staff-entry-title">
+  <div class="staff-entry-heading">
+    <span class="tag">Verified {{ staff_role|title }}</span>
+    <h1 id="staff-entry-title">Where are you working?</h1>
+    <p class="lead">You are signed in as {{ request.user.email }}. Choose a workspace; your permissions remain enforced by the server.</p>
+  </div>
+  <div class="staff-destinations">
+    <a href="{% url 'workspace' %}">
+      <span>Member</span>
+      <strong>Continue to Push</strong>
+      <p>Jobs, workrooms, messages, wallet records and your public profile.</p>
+      <b>Open member workspace →</b>
+    </a>
+    <a class="operations-destination" href="{% url 'moderation' %}">
+      <span>{{ staff_role|title }}</span>
+      <strong>Open Operations</strong>
+      <p>Only the administration tools authorised for your assigned role.</p>
+      <b>Open staff dashboard →</b>
+    </a>
+  </div>
+  <div class="staff-switch-note">
+    <p>Wrong Google identity?</p>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="button secondary" type="submit">Sign out and choose another account</button></form>
+  </div>
+</section>
+{% endblock %}
