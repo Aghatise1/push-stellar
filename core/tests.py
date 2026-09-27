@@ -175,6 +175,33 @@ class WorkspaceTests(TestCase):
         self.assertEqual(self.client.get(reverse('operations_email')).status_code,404)
         self.assertEqual(self.client.get(reverse('operations_docs')).status_code,404)
 
+    def test_each_staff_role_has_a_distinct_dashboard(self):
+        cases=[
+            ('owner','owner_dashboard','Owner control'),
+            ('admin','admin_dashboard','Administration'),
+            ('moderator','moderator_dashboard','Moderation desk'),
+            ('support','support_dashboard','Support centre'),
+        ]
+        for role,route,heading in cases:
+            with self.subTest(role=role):
+                self.client.logout();self.grant_staff(self.owner,role);self.login_as(self.owner)
+                self.assertRedirects(self.client.get(reverse('staff_dashboard')),reverse(route))
+                self.assertContains(self.client.get(reverse(route)),heading)
+                for other_role,other_route,_ in cases:
+                    if other_role != role:
+                        self.assertEqual(self.client.get(reverse(other_route)).status_code,404)
+
+    @override_settings(PUSH_BOOTSTRAP_OWNER_EMAILS={'worker@example.test'})
+    def test_verified_environment_owner_is_bootstrapped_once(self):
+        StaffAccess.objects.filter(user=self.worker).delete()
+        self.login_as(self.worker)
+        response=self.client.get(reverse('staff_entry'))
+        self.assertEqual(response.status_code,200)
+        access=StaffAccess.objects.get(user=self.worker)
+        self.assertEqual(access.role,'owner');self.assertEqual(access.status,'approved')
+        access.status='revoked';access.save(update_fields=['status'])
+        self.assertEqual(self.client.get(reverse('staff_entry')).status_code,404)
+
     def test_bootstrap_owner_requires_an_existing_verified_account(self):
         output=StringIO()
         call_command('bootstrap_owner',self.worker.email,stdout=output)

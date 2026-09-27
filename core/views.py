@@ -426,6 +426,119 @@ def staff_entry(request):
     return render(request,'staff_entry.html',{'staff_role':staff_role(request.user)})
 
 
+@staff_only()
+def staff_dashboard(request):
+    destination={
+        'owner':'owner_dashboard',
+        'admin':'admin_dashboard',
+        'moderator':'moderator_dashboard',
+        'support':'support_dashboard',
+    }[staff_role(request.user)]
+    return redirect(destination)
+
+
+def _role_dashboard(request,role):
+    open_tickets=SupportTicket.objects.exclude(status__in=['resolved','closed']).count()
+    open_disputes=Dispute.objects.exclude(status='resolved').count()
+    flagged_jobs=Job.objects.filter(moderation_status='review').count()
+    pending_waitlist=WaitlistApplication.objects.filter(status='pending').count()
+    active_restrictions=AccountSanction.objects.filter(active=True).count()
+    metrics={
+        'users':User.objects.count(),
+        'tickets':open_tickets,
+        'account_tickets':SupportTicket.objects.filter(category='account').exclude(status__in=['resolved','closed']).count(),
+        'waiting_user':SupportTicket.objects.filter(status='waiting_user').count(),
+        'disputes':open_disputes,
+        'flagged':flagged_jobs,
+        'waitlist':pending_waitlist,
+        'restrictions':active_restrictions,
+        'email_failures':EmailDelivery.objects.filter(status='failed').count(),
+        'staff':StaffAccess.objects.filter(status='approved').count(),
+    }
+    shared={
+        'role':role,
+        'metrics':metrics,
+        'recent_audit':AuditEvent.objects.select_related('actor')[:10] if role in {'owner','admin'} else [],
+    }
+    if role == 'owner':
+        shared.update({
+            'dashboard_title':'Owner control',
+            'dashboard_lead':'Govern staff access, account safety, communications and the complete operations record.',
+            'dashboard_note':'Full authority · every sensitive action is audited',
+            'cards':[
+                ('Team','Staff permissions','Approve, suspend and revoke operations access.',reverse('staff_team'),metrics['staff']),
+                ('Accounts','Users and restrictions','Inspect accounts and apply documented restrictions.',reverse('operations_users'),metrics['restrictions']),
+                ('Support','Tickets and appeals','Review account, work, safety and payment requests.',reverse('operations_tickets'),metrics['tickets']),
+                ('Trust','Moderation queues','Review waitlist applications, listings and disputes.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
+                ('Settlement','Payments and disputes','Inspect testnet evidence and recorded decisions.',reverse('operations_payments'),metrics['disputes']),
+                ('Delivery','Email health','Review delivery metadata and configuration health.',reverse('operations_email'),metrics['email_failures']),
+                ('Knowledge','Documentation','Publish and maintain product guidance.',reverse('operations_docs'),DocumentationArticle.objects.count()),
+            ],
+        })
+    elif role == 'admin':
+        shared.update({
+            'dashboard_title':'Administration',
+            'dashboard_lead':'Run member operations, staff workflows, communications and platform records.',
+            'dashboard_note':'Administrative authority · Owner accounts remain protected',
+            'cards':[
+                ('Team','Operations staff','Manage approved Moderator and Support access.',reverse('staff_team'),metrics['staff']),
+                ('Accounts','Account operations','Inspect members and record authorised restrictions.',reverse('operations_users'),metrics['restrictions']),
+                ('Support','Tickets and appeals','Assign, answer and close member requests.',reverse('operations_tickets'),metrics['tickets']),
+                ('Trust','Moderation queues','Review access, listings and disputed work.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
+                ('Settlement','Payment records','Inspect recorded settlements and disputes.',reverse('operations_payments'),metrics['disputes']),
+                ('Delivery','Email health','Monitor verification and invitation delivery.',reverse('operations_email'),metrics['email_failures']),
+                ('Knowledge','Documentation','Update member and staff guidance.',reverse('operations_docs'),DocumentationArticle.objects.count()),
+            ],
+        })
+    elif role == 'moderator':
+        shared.update({
+            'dashboard_title':'Moderation desk',
+            'dashboard_lead':'Review flagged listings, tester access and work disputes with a preserved evidence trail.',
+            'dashboard_note':'Trust and safety · no staff administration or email controls',
+            'cards':[
+                ('Review','Listing queue','Approve or remove listings held for human review.',reverse('moderation'),metrics['flagged']),
+                ('Disputes','Resolution queue','Assess agreements, messages and submitted evidence.',reverse('operations_payments'),metrics['disputes']),
+                ('Access','Tester waitlist','Review applications and issue controlled invitations.',reverse('moderation'),metrics['waitlist']),
+                ('Accounts','Member context','Inspect limited account context needed for a case.',reverse('operations_users'),metrics['users']),
+                ('Guidance','Staff documentation','Read the current moderation and safety guidance.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
+            ],
+        })
+    else:
+        shared.update({
+            'dashboard_title':'Support centre',
+            'dashboard_lead':'Answer member questions, investigate account access and keep every response attached to a ticket.',
+            'dashboard_note':'Customer support · no settlement, sanctions or staff administration',
+            'cards':[
+                ('Inbox','Open tickets','Assign and respond to member requests.',reverse('operations_tickets'),metrics['tickets']),
+                ('Appeals','Account access cases','Review open account-access requests and their history.',reverse('operations_tickets')+'?status=all',metrics['account_tickets']),
+                ('Accounts','Member lookup','Find verified account details relevant to support.',reverse('operations_users'),metrics['users']),
+                ('Waiting','Member responses','Track cases waiting for more information.',reverse('operations_tickets')+'?status=waiting_user',metrics['waiting_user']),
+                ('Guidance','Support documentation','Read current account and support procedures.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
+            ],
+        })
+    return render(request,'role_dashboard.html',shared)
+
+
+@staff_only('owner')
+def owner_dashboard(request):
+    return _role_dashboard(request,'owner')
+
+
+@staff_only('admin')
+def admin_dashboard(request):
+    return _role_dashboard(request,'admin')
+
+
+@staff_only('moderator')
+def moderator_dashboard(request):
+    return _role_dashboard(request,'moderator')
+
+
+@staff_only('support')
+def support_dashboard(request):
+    return _role_dashboard(request,'support')
+
+
 @never_cache
 def verification_success(request):
     state=request.session.pop('verification_success',None)
@@ -1044,7 +1157,7 @@ def assignment_action(request,pk):
     return redirect('assignment',pk=item.pk)
 
 
-@staff_only()
+@staff_only('owner','admin','moderator')
 def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')

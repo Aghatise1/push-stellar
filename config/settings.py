@@ -143,6 +143,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('PUSH_GOOGLE_CLIENT_ID','').strip()
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('PUSH_GOOGLE_CLIENT_SECRET','').strip()
 GOOGLE_AUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+PUSH_BOOTSTRAP_OWNER_EMAILS = {
+    email.strip().lower() for email in os.environ.get('PUSH_BOOTSTRAP_OWNER_EMAILS','').split(',') if email.strip()
+}
 if PRODUCTION and not GOOGLE_AUTH_ENABLED:
     raise ImproperlyConfigured('Production requires the Google OAuth client ID and client secret.')
 CSRF_TRUSTED_ORIGINS = [PUSH_ORIGIN] if PUSH_ORIGIN.startswith('https://') else []

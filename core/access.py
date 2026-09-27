@@ -1,9 +1,13 @@
 from functools import wraps
 
+from django.conf import settings
 from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
 from urllib.parse import urlencode
+
+from .models import StaffAccess, User
 
 
 def staff_role(user):
@@ -12,6 +16,17 @@ def staff_role(user):
     if user.is_superuser:
         return 'owner'
     access=getattr(user,'staff_access',None)
+    # A protected environment allow-list can establish the first recovery
+    # owner after Google has verified and created the account. It never stores
+    # a password and never silently restores revoked access.
+    if (not access and user.is_active and user.email_verified and
+            user.email.strip().lower() in settings.PUSH_BOOTSTRAP_OWNER_EMAILS):
+        access=StaffAccess.objects.create(
+            user=user,role='owner',status='approved',approved_at=timezone.now()
+        )
+        if not user.is_staff:
+            User.objects.filter(pk=user.pk).update(is_staff=True)
+            user.is_staff=True
     if access and access.status == 'approved' and user.is_active:
         return access.role
     return None
