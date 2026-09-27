@@ -231,9 +231,22 @@ class WorkspaceTests(TestCase):
     def test_wallet_request_is_non_custodial(self):
         self.login_as(self.worker)
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
-        response=self.client.post(reverse('wallet'),{'destination':address,'amount':'1.5','memo':'Push test'})
+        response=self.client.post(reverse('wallet'),{'destination':address,'asset':'USDC','amount':'1.5','memo':'Push test'})
         self.assertEqual(response.status_code,200)
         self.assertTrue(response.context['request_uri'].startswith('web+stellar:pay?'))
+        self.assertEqual(Payment.objects.count(),0)
+
+    def test_wallet_resolves_member_email_and_supports_native_xlm(self):
+        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+        self.owner.stellar_address=address;self.owner.save(update_fields=['stellar_address'])
+        self.login_as(self.worker)
+        response=self.client.post(reverse('wallet'),{
+            'destination':self.owner.email.upper(),'asset':'XLM','amount':'2.5','memo':'Push test',
+        })
+        self.assertEqual(response.status_code,200)
+        uri=response.context['request_uri']
+        self.assertIn('destination='+address,uri)
+        self.assertNotIn('asset_code',uri)
         self.assertEqual(Payment.objects.count(),0)
 
     @patch('core.views.account_balances')

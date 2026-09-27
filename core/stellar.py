@@ -32,17 +32,20 @@ def assignment_memo(assignment_id):
     return f'push-{assignment_id.hex[:20]}'
 
 
-def payment_uri(*, destination, amount, memo):
+def payment_uri(*, destination, amount, memo, asset='USDC'):
     query = urlencode({
         'destination': destination,
         'amount': str(amount),
-        'asset_code': 'USDC',
-        'asset_issuer': settings.STELLAR_TESTNET_USDC_ISSUER,
         'memo': memo,
         'memo_type': 'MEMO_TEXT',
         'network_passphrase': 'Test SDF Network ; September 2015',
         'msg': 'Push testnet assignment settlement. Test assets have no monetary value.',
     })
+    if asset == 'USDC':
+        query += '&' + urlencode({
+            'asset_code': 'USDC',
+            'asset_issuer': settings.STELLAR_TESTNET_USDC_ISSUER,
+        })
     return f'web+stellar:pay?{query}'
 
 

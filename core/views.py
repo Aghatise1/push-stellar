@@ -430,7 +430,16 @@ def wallet(request):
             balance_error=str(exc)
     form=WalletRequestForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        request_uri=payment_uri(destination=form.cleaned_data['destination'],amount=form.cleaned_data['amount'],memo=form.cleaned_data['memo'] or 'Push test payment')
+        destination=form.cleaned_data['destination']
+        if '@' in destination:
+            recipient=User.objects.filter(email__iexact=destination).only('stellar_address').first()
+            if not recipient or not recipient.stellar_address:
+                form.add_error('destination','That recipient is not ready to receive testnet payments through Push.')
+            else:
+                destination=recipient.stellar_address
+        if not form.errors:
+            request_uri=payment_uri(destination=destination,amount=form.cleaned_data['amount'],
+                memo=form.cleaned_data['memo'] or 'Push test payment',asset=form.cleaned_data['asset'])
     return render(request,'wallet.html',{
         'form':form,'request_uri':request_uri,'balances':balances,'balance_error':balance_error,
     })

@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordResetForm
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.utils import timezone
 from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction
 from .stellar import valid_account_id
@@ -193,12 +195,18 @@ class MessageForm(forms.ModelForm):
         widgets = {'body':forms.Textarea(attrs={'rows':3,'placeholder':'Keep decisions and questions attached to this assignment.'})}
 
 class WalletRequestForm(forms.Form):
-    destination = forms.RegexField(regex=STELLAR_ADDRESS_PATTERN,label='Recipient public address',error_messages={'invalid':'Enter a valid Stellar public G-address.'})
-    amount = forms.DecimalField(min_value=0.0000001,max_value=1000000,decimal_places=7,label='Test USDC amount')
+    destination = forms.CharField(max_length=254,label='Recipient email or public address',help_text='Use a Push member email or a Stellar testnet G-address.')
+    asset = forms.ChoiceField(choices=[('XLM','Test XLM'),('USDC','Test USDC')],label='Asset')
+    amount = forms.DecimalField(min_value=0.0000001,max_value=1000000,decimal_places=7,label='Test amount')
     memo = forms.CharField(max_length=28,required=False,initial='Push test payment')
     def clean_destination(self):
         value=self.cleaned_data['destination'].strip()
-        if not valid_account_id(value): raise forms.ValidationError('That public Stellar address has an invalid checksum.')
+        if valid_account_id(value):
+            return value
+        try:
+            validate_email(value)
+        except ValidationError as exc:
+            raise forms.ValidationError('Enter a Push member email or a valid Stellar public G-address.') from exc
         return value
 
 class ActionForm(forms.Form):
