@@ -6,6 +6,7 @@
   <p class="eyebrow">Create your work record</p>
   <h1>Make room for good work.</h1>
   <p class="lead">One account to find work and build your team.</p>
+  <div class="notice"><strong>Invitation accepted</strong><p>Create the account with {{ invitation.email }}. The invitation is used once after verification.</p></div>
   {% if google_auth_enabled %}
     {% include 'google_auth_button.html' with google_label='Continue with Google' %}
     <div class="auth-divider"><span>or use email</span></div>
@@ -17,6 +18,6 @@
   </form>
   <p class="form-assurance">By creating an account, you confirm the <a href="{% url 'terms' %}" target="_blank">Push Terms of Use</a>. Email registration also requires the checkbox above.</p>
   <p class="form-assurance">Private development preview · Your email stays private · No real payment is collected.</p>
-  <a href="{% url 'login' %}">Already registered? Sign in</a>
+  <a href="{% url 'login' %}">Already registered? Sign in</a> · <a href="{% url 'invite_redeem' %}">Use a different invitation</a>
 </section>
 {% endblock %}

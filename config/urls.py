@@ -13,6 +13,8 @@ urlpatterns = [
     path('privacy/',views.privacy,name='privacy'),
     path('terms/accept/',views.accept_terms,name='accept_terms'),
     path('help/',views.help_center,name='help'),
+    path('waitlist/',views.waitlist,name='waitlist'),
+    path('invite/',views.invite_redeem,name='invite_redeem'),
     path('register/',views.register,name='register'),
     path('register/verify/',views.verify_registration,name='verify_registration'),
     path('register/resend/',views.resend_registration,name='resend_registration'),
@@ -55,6 +57,7 @@ urlpatterns = [
     path('moderation/',views.moderation,name='moderation'),
     path('moderation/disputes/<int:pk>/',views.moderate_dispute,name='moderate_dispute'),
     path('moderation/jobs/<uuid:pk>/',views.moderate_job,name='moderate_job'),
+    path('moderation/waitlist/<int:pk>/',views.review_waitlist,name='review_waitlist'),
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
 ]
 

@@ -3,10 +3,35 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
-from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction
+from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication
 from .stellar import valid_account_id
 
 STELLAR_ADDRESS_PATTERN = r'^G[A-Z2-7]{55}$'
+
+class WaitlistForm(forms.ModelForm):
+    accepted_testing_terms = forms.BooleanField(label='I understand that access is limited, testing is voluntary, payment is not guaranteed and testnet assets have no monetary value.')
+    class Meta:
+        model=WaitlistApplication
+        fields=['name','email','role','skills','intended_use','reason','accepted_testing_terms']
+        labels={
+            'role':'Your role','skills':'Relevant skills (optional)',
+            'intended_use':'How would you use Push?','reason':'Why would you be a useful tester?',
+        }
+        widgets={'intended_use':forms.Textarea(attrs={'rows':4}),'reason':forms.Textarea(attrs={'rows':4})}
+    def clean_email(self):
+        return self.cleaned_data['email'].strip().lower()
+    def validate_unique(self):
+        # Returning applicants update the same application instead of seeing
+        # a confusing duplicate-email error.
+        return
+
+class InvitationCodeForm(forms.Form):
+    code=forms.CharField(
+        max_length=40,label='Invitation code',
+        widget=forms.TextInput(attrs={'autocomplete':'one-time-code','placeholder':'PUSH-XXXXXXXX-XXXXXXXX'}),
+    )
+    def clean_code(self):
+        return self.cleaned_data['code'].strip().upper()
 
 class Registration(UserCreationForm):
     accept_terms = forms.BooleanField(label='I agree to the Push Terms of Use and Privacy Notice.')

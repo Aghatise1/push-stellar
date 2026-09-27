@@ -167,6 +167,37 @@ class Notification(models.Model):
     class Meta:
         ordering=['-created_at']
 
+class WaitlistApplication(models.Model):
+    STATUS_CHOICES=[('pending','Pending'),('approved','Approved'),('rejected','Rejected')]
+    name = models.CharField(max_length=80)
+    email = models.EmailField(unique=True)
+    role = models.CharField(max_length=80)
+    skills = models.CharField(max_length=300,blank=True)
+    intended_use = models.TextField(max_length=1200)
+    reason = models.TextField(max_length=1200)
+    accepted_testing_terms = models.BooleanField(default=False)
+    status = models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
+    reviewed_by = models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='reviewed_waitlist_applications')
+    reviewed_at = models.DateTimeField(null=True,blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering=['-created_at']
+
+class Invitation(models.Model):
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    application = models.ForeignKey(WaitlistApplication,on_delete=models.PROTECT,related_name='invitations')
+    email = models.EmailField()
+    code_hash = models.CharField(max_length=64,unique=True)
+    created_by = models.ForeignKey(User,on_delete=models.PROTECT,related_name='created_invitations')
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True,blank=True)
+    used_by = models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='redeemed_invitations')
+    revoked_at = models.DateTimeField(null=True,blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-created_at']
+
 class RateBucket(models.Model):
     key = models.CharField(max_length=64,unique=True)
     count = models.PositiveIntegerField(default=0)

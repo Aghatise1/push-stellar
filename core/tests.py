@@ -11,7 +11,8 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification
+from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation
+from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
@@ -31,20 +32,69 @@ class WorkspaceTests(TestCase):
     def action(self,item,action,**data):
         if action == 'accept': data.setdefault('accept_terms','on')
         return self.client.post(reverse('assignment_action',args=[item.pk]),{'action':action,**data})
+    def grant_invitation(self,email,code='PUSH-ABCD1234-EFGH5678'):
+        application=WaitlistApplication.objects.create(
+            name='Invited Tester',email=email.lower(),role='Developer',intended_use='Test hiring',
+            reason='I can complete the test script.',accepted_testing_terms=True,status='approved',
+            reviewed_by=self.owner,reviewed_at=timezone.now(),
+        )
+        invitation=Invitation.objects.create(
+            application=application,email=email.lower(),code_hash=hash_invitation_code(code),
+            created_by=self.owner,expires_at=timezone.now()+timedelta(days=7),
+        )
+        self.assertRedirects(self.client.post(reverse('invite_redeem'),{'code':code}),reverse('register'))
+        return invitation
     def test_public_and_auth_pages_render(self):
         health=self.client.get(reverse('health'))
         self.assertEqual(health.status_code,200)
         self.assertEqual(health.json(),{'ok':True,'service':'push','network':'stellar-testnet'})
         self.assertEqual(health['Cache-Control'],'no-store')
-        for name in ['home','product','how_it_works','privacy','jobs','register','login','password_reset','password_reset_done','password_reset_complete']:
+        for name in ['home','product','how_it_works','privacy','waitlist','invite_redeem','login','password_reset','password_reset_done','password_reset_complete']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
+        self.assertRedirects(self.client.get(reverse('jobs')),f"{reverse('login')}?next={reverse('jobs')}")
+        self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
         self.login_as(self.owner)
         for name in ['workspace','work','profile','job_create','wallet','payments','inbox','notifications','help']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
     def test_google_auth_visibility_matches_configuration(self):
         self.assertEqual(self.client.get(reverse('login')).context['google_auth_enabled'],settings.GOOGLE_AUTH_ENABLED)
         self.assertEqual(self.client.get('/accounts/google/login/').status_code,302 if settings.GOOGLE_AUTH_ENABLED else 404)
+    def test_waitlist_is_public_and_staff_can_issue_one_time_invitation(self):
+        response=self.client.post(reverse('waitlist'),{
+            'name':'Ada Tester','email':'ADA@example.test','role':'Developer','skills':'Django',
+            'intended_use':'Test the complete hiring flow.','reason':'I can report reproducible bugs.',
+            'accepted_testing_terms':'on',
+        })
+        self.assertEqual(response.status_code,200)
+        application=WaitlistApplication.objects.get(email='ada@example.test')
+        self.assertEqual(application.status,'pending')
+        self.owner.is_staff=True;self.owner.save(update_fields=['is_staff']);self.login_as(self.owner)
+        response=self.client.post(reverse('review_waitlist',args=[application.pk]),{'decision':'approve'})
+        self.assertRedirects(response,reverse('moderation'))
+        application.refresh_from_db();self.assertEqual(application.status,'approved')
+        invitation=application.invitations.get();self.assertIsNone(invitation.used_at)
+        self.assertEqual(len(mail.outbox),1);self.assertIn('Invitation code:',mail.outbox[0].body)
+    def test_invitation_is_email_bound_and_registration_is_closed_without_it(self):
+        self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
+        self.grant_invitation('approved@example.test')
+        response=self.client.post(reverse('register'),{
+            'display_name':'Wrong Person','email':'wrong@example.test',
+            'password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on',
+        })
+        self.assertContains(response,'Use the approved email address')
+        self.assertFalse(PendingRegistration.objects.filter(email='wrong@example.test').exists())
+    def test_reapplying_revokes_an_earlier_unused_invitation(self):
+        invitation=self.grant_invitation('again@example.test')
+        self.client.post(reverse('waitlist'),{
+            'name':'Again Tester','email':'again@example.test','role':'Developer','skills':'QA',
+            'intended_use':'Run the workflow again.','reason':'I can retest regressions.',
+            'accepted_testing_terms':'on',
+        })
+        invitation.refresh_from_db()
+        self.assertIsNotNone(invitation.revoked_at)
+        self.assertEqual(WaitlistApplication.objects.get(email='again@example.test').status,'pending')
     def test_register_verify_and_replay(self):
+        invitation=self.grant_invitation('new@example.test')
         response=self.client.post(reverse('register'),{'display_name':'New Person','email':'New@Example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'})
         self.assertRedirects(response,reverse('verify_registration'))
         self.assertFalse(User.objects.filter(email='new@example.test').exists())
@@ -55,17 +105,21 @@ class WorkspaceTests(TestCase):
         self.assertEqual(self.client.post(reverse('verify_registration'),{'code':code}).status_code,302)
         user=User.objects.get(email='new@example.test')
         user.refresh_from_db();self.assertTrue(user.email_verified)
+        invitation.refresh_from_db();self.assertEqual(invitation.used_by,user);self.assertIsNotNone(invitation.used_at)
         self.assertFalse(PendingRegistration.objects.filter(email='new@example.test').exists())
         self.assertRedirects(self.client.post(reverse('verify_registration'),{'code':code}),reverse('workspace'))
     def test_registration_explains_weak_password_and_existing_email(self):
+        self.grant_invitation('atise@example.test')
         weak=self.client.post(reverse('register'),{'display_name':'Atise','email':'atise@example.test','password1':'password','password2':'password'})
         self.assertContains(weak,'at least 12 characters')
         self.assertContains(weak,'too common')
+        self.client.get(reverse('invite_redeem'));self.grant_invitation('owner@example.test','PUSH-11112222-33334444')
         duplicate=self.client.post(reverse('register'),{'display_name':'Owner','email':'OWNER@EXAMPLE.TEST','password1':'Independent-cobalt-732!','password2':'Independent-cobalt-732!'})
         self.assertContains(duplicate,'An account already uses this email')
     def test_verification_rejects_forgery(self):
         self.assertEqual(self.client.post('/verify/not-a-valid-signature/').status_code,400)
     def test_email_case_deduplication(self):
+        self.grant_invitation('owner@example.test')
         response=self.client.post(reverse('register'),{'display_name':'Fake','email':'OWNER@EXAMPLE.TEST','password1':'Long-example-password-723!','password2':'Long-example-password-723!'})
         self.assertEqual(response.status_code,200)
         self.assertEqual(User.objects.filter(email__iexact=self.owner.email).count(),1)
@@ -115,14 +169,14 @@ class WorkspaceTests(TestCase):
     def test_private_routes_redirect_signed_out_visitors(self):
         application=Application.objects.create(job=self.job,worker=self.worker,proposal='Private proposal')
         assignment=self.make_assignment()
-        private_urls=[reverse('workspace'),reverse('profile'),reverse('job_create'),
+        private_urls=[reverse('workspace'),reverse('profile'),reverse('jobs'),reverse('job_detail',args=[self.job.pk]),reverse('job_create'),
                       reverse('job_edit',args=[self.job.pk]),reverse('apply',args=[self.job.pk]),
                       reverse('select',args=[application.pk]),reverse('assignment',args=[assignment.pk]),
                       reverse('assignment_action',args=[assignment.pk]),reverse('job_close',args=[self.job.pk]),
                       reverse('withdraw',args=[application.pk])]
         for url in private_urls:
             with self.subTest(url=url):
-                response=self.client.get(url) if url in [reverse('workspace'),reverse('profile'),reverse('job_create'),reverse('job_edit',args=[self.job.pk]),reverse('assignment',args=[assignment.pk])] else self.client.post(url)
+                response=self.client.get(url) if url in [reverse('workspace'),reverse('profile'),reverse('jobs'),reverse('job_detail',args=[self.job.pk]),reverse('job_create'),reverse('job_edit',args=[self.job.pk]),reverse('assignment',args=[assignment.pk])] else self.client.post(url)
                 self.assertEqual(response.status_code,302)
                 self.assertTrue(response.url.startswith(reverse('login')+'?next='))
     def test_csrf_and_logout_invalidate_session(self):
@@ -533,6 +587,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(self.client.get(reverse('wallet')).status_code,403)
 
     def test_registration_requires_terms(self):
+        self.grant_invitation('terms@example.test')
         data={'display_name':'Terms Test','email':'terms@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!'}
         response=self.client.post(reverse('register'),data)
         self.assertEqual(response.status_code,200);self.assertContains(response,'This field is required')

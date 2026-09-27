@@ -8,6 +8,7 @@ __pycache__/
 private-mail/
 private-demo-credentials.txt
 staticfiles/
+private-backups/
 
 .local/
 .runtime-venv/

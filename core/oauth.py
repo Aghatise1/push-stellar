@@ -1,5 +1,10 @@
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.core.exceptions import ImmediateHttpResponse
+from django.contrib import messages
+from django.shortcuts import redirect
 import sys
+
+from .invitations import consume_invitation, current_invitation
 
 
 class PushSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -20,6 +25,11 @@ class PushSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def pre_social_login(self, request, sociallogin):
         super().pre_social_login(request, sociallogin)
+        if not sociallogin.is_existing:
+            email=(sociallogin.user.email or sociallogin.account.extra_data.get('email','')).strip().lower()
+            if current_invitation(request,email) is None:
+                messages.error(request,'That Google account does not match an active Push invitation. Join the waitlist or use the approved email address.')
+                raise ImmediateHttpResponse(redirect('invite_redeem'))
         if sociallogin.is_existing and self.provider_verified_email(sociallogin):
             type(sociallogin.user).objects.filter(pk=sociallogin.user.pk,email_verified=False).update(email_verified=True)
             sociallogin.user.email_verified = True
@@ -30,6 +40,7 @@ class PushSocialAccountAdapter(DefaultSocialAccountAdapter):
         if not user.display_name:
             user.display_name = (user.email.split('@')[0] or 'Push member')[:80]
         user.save(update_fields=['display_name','email_verified'])
+        consume_invitation(request,user)
         return user
 
     def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):

@@ -19,13 +19,14 @@ from django.db import connection, transaction, IntegrityError
 from django.db.models import Q, F, Sum, Max
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification
-from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation
+from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
+from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
 TERMS_VERSION='2026-09-25.1'
 
@@ -128,7 +129,10 @@ def send_registration_verification(pending):
 
 
 def home(request):
-    return render(request,'home.html',{'jobs':Job.objects.filter(status='open',moderation_status='approved')[:3]})
+    # The public landing page may show illustrative briefs, but never exposes
+    # live tester jobs. Real opportunities belong to the invite-only product.
+    sample_jobs = Job.objects.filter(status='open', moderation_status='approved', demo=True)[:3]
+    return render(request,'home.html',{'jobs':sample_jobs})
 
 
 def product(request):
@@ -162,13 +166,67 @@ def help_center(request):
     return render(request,'help.html')
 
 
+def waitlist(request):
+    if request.user.is_authenticated:
+        return redirect('workspace')
+    form=WaitlistForm(request.POST or None)
+    if request.method == 'POST' and limited(request,'waitlist',5):
+        return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+    if request.method == 'POST' and form.is_valid():
+        values=form.cleaned_data
+        with transaction.atomic():
+            application,_=WaitlistApplication.objects.update_or_create(
+                email=values['email'],
+                defaults={
+                    'name':values['name'],'role':values['role'],'skills':values['skills'],
+                    'intended_use':values['intended_use'],'reason':values['reason'],
+                    'accepted_testing_terms':True,'status':'pending','reviewed_by':None,'reviewed_at':None,
+                },
+            )
+            # A new application starts a fresh review. Any earlier unused code
+            # must stop working rather than silently bypass that review.
+            Invitation.objects.filter(
+                application=application,used_at__isnull=True,revoked_at__isnull=True,
+            ).update(revoked_at=timezone.now())
+        return render(request,'waitlist_received.html',{'application':application})
+    return render(request,'waitlist.html',{'form':form})
+
+
+def invite_redeem(request):
+    if request.user.is_authenticated:
+        return redirect('workspace')
+    initial={'code':request.GET.get('code','')}
+    form=InvitationCodeForm(request.POST or None,initial=initial)
+    if request.method == 'POST' and limited(request,'invite',8):
+        return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+    if request.method == 'POST' and form.is_valid():
+        invitation=Invitation.objects.filter(
+            code_hash=hash_invitation_code(form.cleaned_data['code']),used_at__isnull=True,
+            revoked_at__isnull=True,expires_at__gt=timezone.now(),
+        ).first()
+        if invitation is None:
+            form.add_error('code','That invitation is invalid, expired, revoked or already used.')
+        else:
+            remember_invitation(request,invitation)
+            messages.success(request,f'Invitation accepted for {invitation.email}. Create your account using that email.')
+            return redirect('register')
+    return render(request,'invite.html',{'form':form})
+
+
 def register(request):
     if request.user.is_authenticated: return redirect('workspace')
+    invitation=current_invitation(request)
+    if invitation is None:
+        messages.info(request,'Push account creation is invite-only. Enter your invitation code first.')
+        return redirect('invite_redeem')
     if request.method == 'POST' and limited(request,'register',6):
         return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
     form = Registration(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         email=form.cleaned_data['email']
+        if invitation.email.casefold() != email.casefold():
+            form.add_error('email',f'Use the approved email address: {invitation.email}')
+            return render(request,'registration/register.html',{'form':form,'invitation':invitation})
         pending,_=PendingRegistration.objects.update_or_create(
             email=email,
             defaults={
@@ -186,7 +244,7 @@ def register(request):
             messages.error(request,'Your details are saved temporarily, but the code could not be delivered. Check email delivery settings and resend.')
         else: messages.success(request,'Enter the six-digit code from your email to create the account.')
         return redirect('verify_registration')
-    return render(request,'registration/register.html',{'form':form})
+    return render(request,'registration/register.html',{'form':form,'invitation':invitation})
 
 
 def pending_registration(request):
@@ -228,6 +286,12 @@ def verify_registration(request):
                               password=pending.password_hash,email_verified=True,terms_version=pending.terms_version,
                               terms_accepted_at=timezone.now())
                     user.save()
+                    invitation=current_invitation(request,user.email,for_update=True)
+                    if invitation is None:
+                        user.delete()
+                        form.add_error('code','Your invitation expired before account activation. Request a new invitation.')
+                        return render(request,'registration/verify_registration.html',{'form':form,'pending':pending})
+                    consume_invitation(request,user,invitation)
                     pending.delete()
                     request.session.pop('pending_registration_id',None)
                     login(request,user,backend='django.contrib.auth.backends.ModelBackend')
@@ -556,6 +620,7 @@ def resume_download(request,pk):
 
 
 @never_cache
+@verified
 def jobs(request):
     qs = Job.objects.filter(status='open',moderation_status='approved').select_related('owner')
     q = request.GET.get('q','').strip()[:120]
@@ -619,6 +684,7 @@ def job_edit(request,pk):
     return render(request,'job_form.html',{'form':form,'editing':True,'job':job})
 
 
+@verified
 def job_detail(request,pk):
     job = get_object_or_404(Job.objects.select_related('owner'),pk=pk)
     is_owner = request.user.is_authenticated and job.owner_id == request.user.pk
@@ -822,12 +888,51 @@ def moderation(request):
     if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
+    waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
     return render(request,'moderation.html',{
-        'disputes':disputes,'flagged_jobs':flagged,
+        'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
-                   'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0},
+                   'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
+                   'waitlist':WaitlistApplication.objects.filter(status='pending').count()},
     })
+
+
+@login_required
+@require_POST
+def review_waitlist(request,pk):
+    if not request.user.is_staff: return HttpResponseForbidden('Moderator access required.')
+    application=get_object_or_404(WaitlistApplication,pk=pk)
+    decision=request.POST.get('decision')
+    if decision not in {'approve','reject'}:
+        return HttpResponseBadRequest('Choose approve or reject.')
+    with transaction.atomic():
+        application=WaitlistApplication.objects.select_for_update().get(pk=application.pk)
+        application.status='approved' if decision == 'approve' else 'rejected'
+        application.reviewed_by=request.user
+        application.reviewed_at=timezone.now()
+        application.save(update_fields=['status','reviewed_by','reviewed_at'])
+        Invitation.objects.filter(application=application,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
+        code='PUSH-'+secrets.token_hex(4).upper()+'-'+secrets.token_hex(4).upper() if decision == 'approve' else ''
+        if code:
+            Invitation.objects.create(
+                application=application,email=application.email,code_hash=hash_invitation_code(code),
+                created_by=request.user,expires_at=timezone.now()+timedelta(days=7),
+            )
+    if decision == 'approve':
+        try:
+            send_mail(
+                'Your Push testing invitation',
+                f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+                settings.DEFAULT_FROM_EMAIL,[application.email],fail_silently=False,
+            )
+        except Exception:
+            messages.warning(request,f'Approved, but email delivery failed. Give this code to {application.email} securely: {code}')
+        else:
+            messages.success(request,f'Approved and sent a one-time invitation to {application.email}.')
+    else:
+        messages.success(request,f'{application.email} was not approved for this testing round.')
+    return redirect('moderation')
 
 
 @login_required

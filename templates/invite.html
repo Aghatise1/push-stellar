@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Use your Push invitation{% endblock %}
+{% block content %}
+<section class="auth-panel">
+  <p class="eyebrow">Invite-only access</p>
+  <h1>Enter your invitation.</h1>
+  <p class="lead">Use the one-time code sent to your approved email address. You will then create your account with that same address.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include 'fields.html' %}
+    <button class="button full" type="submit">Continue to account creation</button>
+  </form>
+  <p class="form-assurance">No invitation yet? <a href="{% url 'waitlist' %}">Join the waitlist</a>. Already registered? <a href="{% url 'login' %}">Sign in</a>.</p>
+</section>
+{% endblock %}

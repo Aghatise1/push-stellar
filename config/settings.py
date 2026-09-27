@@ -78,7 +78,8 @@ if database_url:
 else:
     if PRODUCTION:
         raise ImproperlyConfigured('Production requires PUSH_DATABASE_URL for a managed PostgreSQL database.')
-    DATABASES = {'default':{'ENGINE':'django.db.backends.sqlite3','NAME':BASE_DIR/'db.sqlite3','OPTIONS':{'timeout':20}}}
+    sqlite_path = os.environ.get('PUSH_SQLITE_PATH','').strip()
+    DATABASES = {'default':{'ENGINE':'django.db.backends.sqlite3','NAME':Path(sqlite_path) if sqlite_path else BASE_DIR/'db.sqlite3','OPTIONS':{'timeout':20}}}
 AUTH_USER_MODEL = 'core.User'
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend','allauth.account.auth_backends.AuthenticationBackend']
 AUTH_PASSWORD_VALIDATORS = [

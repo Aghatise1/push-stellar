@@ -17,8 +17,8 @@
   </div>
   <div class="intro-copy">
     <p class="lead">Push keeps the brief, the delivery and the payment trail in one place—so independent work does not depend on scattered messages and vague promises.</p>
-    <div class="actions"><a class="button" href="{% url 'jobs' %}">Find work</a><a class="button secondary" href="{% url 'job_create' %}">Post a job</a></div>
-    <p class="intro-meta">Built for Web3 teams and independent talent. No Push token. Stellar payments are currently testnet only.</p>
+    <div class="actions"><a class="button" href="{% url 'waitlist' %}">Join the testing waitlist</a><a class="button secondary" href="{% url 'login' %}">Tester sign in</a></div>
+    <p class="intro-meta">Invite-only testing for Web3 teams and independent talent. No Push token. Stellar payments are currently testnet only.</p>
   </div>
 </section>
 <section class="landing-film" data-reveal>
@@ -57,9 +57,9 @@
   </div>
 </section>
 <section id="opportunities" class="landing-anchor-section" data-reveal>
-  <div class="section-heading"><h2>Open briefs</h2><a href="{% url 'jobs' %}">View all opportunities</a></div>
+  <div class="section-heading"><h2>Tester opportunity board</h2><a href="{% url 'waitlist' %}">Request access</a></div>
   <div class="talent-collage" data-parallax aria-hidden="true"><img src="{% static 'images/independent-talent-collage.png' %}" alt=""></div>
-  <div class="job-list">{% for job in jobs %}{% include 'job_row.html' %}{% empty %}<div class="empty"><h3>The board is ready for its first brief.</h3><p>Create an account to post an opportunity.</p></div>{% endfor %}</div>
+  <div class="job-list">{% for job in jobs %}{% include 'job_row.html' %}{% empty %}<div class="empty"><h3>Real opportunities stay inside the private test.</h3><p>Join the waitlist to post jobs, apply and test the complete work record.</p><a href="{% url 'waitlist' %}">Join the testing waitlist</a></div>{% endfor %}</div>
 </section>
 <section class="principles" data-reveal data-stagger>
   <div><h3>Terms cannot quietly move</h3><p>A brief becomes read-only once the first application arrives, preserving what applicants considered.</p></div>

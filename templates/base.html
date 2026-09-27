@@ -49,13 +49,13 @@
     </nav>
     <div class="header-actions">
       <a class="header-signin" href="{% url 'login' %}">Sign in</a>
-      <a class="button small" href="{% url 'register' %}">Create account</a>
+      <a class="button small" href="{% url 'waitlist' %}">Join the waitlist</a>
     </div>
     <a class="mobile-signin" href="{% url 'login' %}">Sign in</a>
     <details class="compact-menu">
       <summary>Menu</summary>
       <nav aria-label="Compact navigation">
-        <a href="{% url 'home' %}#product">Product</a><a href="{% url 'home' %}#how-it-works">How it works</a><a href="{% url 'home' %}#opportunities">Opportunities</a><a href="{% url 'home' %}#investors">Investors</a><a href="{% url 'login' %}">Sign in</a><a class="compact-create" href="{% url 'register' %}">Create account</a>
+        <a href="{% url 'home' %}#product">Product</a><a href="{% url 'home' %}#how-it-works">How it works</a><a href="{% url 'home' %}#opportunities">Opportunities</a><a href="{% url 'home' %}#investors">Investors</a><a href="{% url 'login' %}">Sign in</a><a class="compact-create" href="{% url 'waitlist' %}">Join the waitlist</a>
       </nav>
     </details>
   </header>
