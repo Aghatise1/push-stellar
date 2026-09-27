@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
-from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication, StaffAccess
+from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication, StaffAccess, SupportTicket, TicketReply, DocumentationArticle
 from .access import has_staff_access
 from .stellar import valid_account_id
 
@@ -101,6 +101,29 @@ class StaffAccessForm(forms.Form):
         if not User.objects.filter(email__iexact=email,is_active=True).exists():
             raise forms.ValidationError('Create and verify this member account before granting staff access.')
         return email
+
+class SupportTicketForm(forms.ModelForm):
+    class Meta:
+        model=SupportTicket
+        fields=['subject','category','description']
+        widgets={'description':forms.Textarea(attrs={'rows':6,'placeholder':'Explain what happened, what you expected and any relevant job or transaction reference.'})}
+
+class TicketReplyForm(forms.ModelForm):
+    class Meta:
+        model=TicketReply
+        fields=['body']
+        widgets={'body':forms.Textarea(attrs={'rows':4,'placeholder':'Write a clear update or answer.'})}
+
+class StaffTicketUpdateForm(forms.Form):
+    status=forms.ChoiceField(choices=SupportTicket.STATUS_CHOICES)
+    priority=forms.ChoiceField(choices=SupportTicket.PRIORITY_CHOICES)
+    assign_to_me=forms.BooleanField(required=False,label='Assign this ticket to me')
+
+class DocumentationArticleForm(forms.ModelForm):
+    class Meta:
+        model=DocumentationArticle
+        fields=['slug','title','summary','body','audience','status']
+        widgets={'body':forms.Textarea(attrs={'rows':16})}
 
 class RecoveryForm(PasswordResetForm):
     def clean_email(self):

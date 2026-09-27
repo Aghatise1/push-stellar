@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% block title %}{{ article.title }} — Push Docs{% endblock %}{% block content %}
+<article class="legal-page docs-article"><a class="back-link" href="{% url 'documentation' %}">All documentation</a><span class="tag">{{ article.get_audience_display }}</span><h1>{{ article.title }}</h1><p class="lead">{{ article.summary }}</p><div class="docs-body">{{ article.body|linebreaks }}</div><small>Last updated {{ article.updated_at|date:'j M Y, H:i' }}</small></article>{% endblock %}

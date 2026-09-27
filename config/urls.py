@@ -13,6 +13,8 @@ urlpatterns = [
     path('privacy/',views.privacy,name='privacy'),
     path('terms/accept/',views.accept_terms,name='accept_terms'),
     path('help/',views.help_center,name='help'),
+    path('docs/',views.documentation,name='documentation'),
+    path('docs/<slug:slug>/',views.documentation_article,name='documentation_article'),
     path('waitlist/',views.waitlist,name='waitlist'),
     path('invite/',views.invite_redeem,name='invite_redeem'),
     path('register/',views.register,name='register'),
@@ -31,6 +33,8 @@ urlpatterns = [
     path('reset/complete/',auth_views.PasswordResetCompleteView.as_view(template_name='registration/reset_complete.html'),name='password_reset_complete'),
     path('workspace/',views.workspace,name='workspace'),
     path('analytics/',views.analytics,name='analytics'),
+    path('support/',views.support,name='support'),
+    path('support/<uuid:pk>/',views.support_ticket,name='support_ticket'),
     path('work/',views.work,name='work'),
     path('work/assigned/',views.assigned_work,name='assigned_work'),
     path('activity/status/',views.activity_status,name='activity_status'),
@@ -66,6 +70,14 @@ urlpatterns = [
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
     path('moderation/team/',views.staff_team,name='staff_team'),
     path('moderation/team/<int:pk>/access/',views.staff_access_update,name='staff_access_update'),
+    path('moderation/tickets/',views.operations_tickets,name='operations_tickets'),
+    path('moderation/tickets/<uuid:pk>/',views.operations_ticket,name='operations_ticket'),
+    path('moderation/users/',views.operations_users,name='operations_users'),
+    path('moderation/users/<int:pk>/',views.operations_user,name='operations_user'),
+    path('moderation/email/',views.operations_email,name='operations_email'),
+    path('moderation/payments/',views.operations_payments,name='operations_payments'),
+    path('moderation/docs/',views.operations_docs,name='operations_docs'),
+    path('moderation/docs/<int:pk>/',views.operations_docs,name='operations_docs_edit'),
 ]
 
 if settings.GOOGLE_AUTH_ENABLED:

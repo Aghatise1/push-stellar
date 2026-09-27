@@ -11,7 +11,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess
+from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, EmailDelivery, AuditEvent, DocumentationArticle
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
 
@@ -52,7 +52,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(health.status_code,200)
         self.assertEqual(health.json(),{'ok':True,'service':'push','network':'stellar-testnet'})
         self.assertEqual(health['Cache-Control'],'no-store')
-        for name in ['home','product','how_it_works','privacy','waitlist','invite_redeem','login','password_reset','password_reset_done','password_reset_complete']:
+        for name in ['home','product','how_it_works','privacy','documentation','waitlist','invite_redeem','login','password_reset','password_reset_done','password_reset_complete']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
         self.assertRedirects(self.client.get(reverse('jobs')),f"{reverse('login')}?next={reverse('jobs')}")
         self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
@@ -126,6 +126,40 @@ class WorkspaceTests(TestCase):
         response=self.client.get(reverse('analytics'))
         self.assertContains(response,'Work performance')
         self.assertContains(response,'No private data is sent to an external AI')
+    def test_support_ticket_moves_between_member_and_staff(self):
+        self.login_as(self.worker)
+        response=self.client.post(reverse('support'),{
+            'subject':'Wallet balance question','category':'payment','description':'My public testnet balance needs review.',
+        })
+        ticket=SupportTicket.objects.get(requester=self.worker)
+        self.assertRedirects(response,reverse('support_ticket',args=[ticket.pk]))
+        self.client.logout();self.grant_staff(self.owner,'support')
+        self.login_as(self.owner)
+        response=self.client.post(reverse('operations_ticket',args=[ticket.pk]),{
+            'reply-body':'We are checking the public address and network.','send_reply':'1',
+        })
+        self.assertRedirects(response,reverse('operations_ticket',args=[ticket.pk]))
+        ticket.refresh_from_db();self.assertEqual(ticket.status,'waiting_user');self.assertEqual(ticket.assigned_to,self.owner)
+        self.assertTrue(Notification.objects.filter(recipient=self.worker,kind='support').exists())
+        self.assertTrue(AuditEvent.objects.filter(action='support.staff_reply.created').exists())
+    def test_operations_panels_are_role_protected(self):
+        self.login_as(self.worker)
+        for name in ['operations_tickets','operations_users','operations_email','operations_payments','operations_docs']:
+            with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,404)
+        self.client.logout();self.grant_staff(self.owner,'admin');self.login_as(self.owner)
+        for name in ['operations_tickets','operations_users','operations_email','operations_payments','operations_docs']:
+            with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
+    def test_documentation_audience_and_email_delivery_log(self):
+        public=DocumentationArticle.objects.create(slug='public-test',title='Public test',summary='Summary',body='Body',audience='public',status='published')
+        staff=DocumentationArticle.objects.create(slug='staff-test',title='Staff test',summary='Summary',body='Body',audience='staff',status='published')
+        self.assertEqual(self.client.get(reverse('documentation_article',args=[public.slug])).status_code,200)
+        self.assertEqual(self.client.get(reverse('documentation_article',args=[staff.slug])).status_code,404)
+        self.grant_invitation('mail-log@example.test')
+        self.client.post(reverse('register'),{
+            'display_name':'Mail Log','email':'mail-log@example.test','password1':'Long-example-password-723!',
+            'password2':'Long-example-password-723!','accept_terms':'on',
+        })
+        self.assertTrue(EmailDelivery.objects.filter(recipient='mail-log@example.test',status='sent').exists())
     def test_invitation_is_email_bound_and_registration_is_closed_without_it(self):
         self.assertRedirects(self.client.get(reverse('register')),reverse('invite_redeem'))
         self.grant_invitation('approved@example.test')

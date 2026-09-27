@@ -13,7 +13,6 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, PasswordResetView
 from django.core import signing
-from django.core.mail import send_mail
 from django.utils.crypto import salted_hmac
 from django.db import connection, transaction, IntegrityError
 from django.db.models import Q, F, Sum, Max
@@ -23,9 +22,10 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess
-from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, EmailDelivery, AuditEvent, DocumentationArticle
+from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm
 from .access import has_staff_access, staff_only, staff_role
+from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
@@ -52,6 +52,13 @@ def privacy(request):
 
 def notify(recipient,kind,title,body,link=''):
     return Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
+
+
+def audit(actor,action,target,detail=None):
+    return AuditEvent.objects.create(
+        actor=actor,action=action,target_type=target.__class__.__name__,
+        target_id=str(getattr(target,'pk',''))[:80],detail=detail or {},
+    )
 
 
 def limited(request,scope,limit=12):
@@ -100,12 +107,10 @@ def make_verification_code(subject_id):
 
 
 def deliver_verification_code(email,code,opening='Your Push verification code is:'):
-    sent = send_mail(
-        'Your Push verification code',
-        f'{opening}\n\n{code}\n\nIt expires in 15 minutes. If you did not request this, ignore this email.',
-        settings.DEFAULT_FROM_EMAIL,
-        [email],
-        fail_silently=False,
+    sent = send_tracked_email(
+        category='verification',subject='Your Push verification code',
+        message=f'{opening}\n\n{code}\n\nIt expires in 15 minutes. If you did not request this, ignore this email.',
+        recipients=[email],
     )
     if sent != 1:
         raise RuntimeError('Verification email was not accepted by the email backend.')
@@ -190,6 +195,50 @@ def accept_terms(request):
 
 def help_center(request):
     return render(request,'help.html')
+
+
+def documentation(request):
+    articles=DocumentationArticle.objects.filter(status='published')
+    if not request.user.is_authenticated:
+        articles=articles.filter(audience='public')
+    elif not has_staff_access(request.user):
+        articles=articles.exclude(audience='staff')
+    return render(request,'documentation.html',{'articles':articles})
+
+
+def documentation_article(request,slug):
+    article=get_object_or_404(DocumentationArticle,slug=slug,status='published')
+    if article.audience == 'member' and not request.user.is_authenticated:
+        return redirect(f'{reverse("login")}?next={request.path}')
+    if article.audience == 'staff' and not has_staff_access(request.user):
+        raise Http404
+    return render(request,'documentation_article.html',{'article':article})
+
+
+@verified
+def support(request):
+    form=SupportTicketForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        ticket=form.save(commit=False);ticket.requester=request.user;ticket.save()
+        audit(request.user,'support.ticket.created',ticket,{'category':ticket.category})
+        messages.success(request,'Support ticket created. Updates will appear here and in Notifications.')
+        return redirect('support_ticket',pk=ticket.pk)
+    tickets=SupportTicket.objects.filter(requester=request.user)
+    return render(request,'support.html',{'form':form,'tickets':tickets})
+
+
+@verified
+def support_ticket(request,pk):
+    ticket=get_object_or_404(SupportTicket,pk=pk,requester=request.user)
+    form=TicketReplyForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        reply=form.save(commit=False);reply.ticket=ticket;reply.author=request.user;reply.save()
+        if ticket.status in {'waiting_user','resolved'}:
+            ticket.status='open';ticket.save(update_fields=['status','updated_at'])
+        audit(request.user,'support.reply.created',reply)
+        messages.success(request,'Your reply was added to the ticket.')
+        return redirect('support_ticket',pk=ticket.pk)
+    return render(request,'support_ticket.html',{'ticket':ticket,'form':form,'replies':ticket.replies.filter(internal=False).select_related('author')})
 
 
 def waitlist(request):
@@ -1004,8 +1053,99 @@ def moderation(request):
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
-                   'waitlist':WaitlistApplication.objects.filter(status='pending').count()},
+                   'waitlist':WaitlistApplication.objects.filter(status='pending').count(),
+                   'tickets':SupportTicket.objects.exclude(status__in=['resolved','closed']).count(),
+                   'email_failures':EmailDelivery.objects.filter(status='failed').count()},
+        'recent_audit':AuditEvent.objects.select_related('actor')[:12],
     })
+
+
+@staff_only()
+def operations_tickets(request):
+    tickets=SupportTicket.objects.select_related('requester','assigned_to')
+    status=request.GET.get('status','open')
+    if status != 'all':
+        tickets=tickets.filter(status=status)
+    return render(request,'operations_tickets.html',{'tickets':tickets,'selected_status':status})
+
+
+@staff_only()
+def operations_ticket(request,pk):
+    ticket=get_object_or_404(SupportTicket.objects.select_related('requester','assigned_to'),pk=pk)
+    reply_form=TicketReplyForm(request.POST or None,prefix='reply')
+    update_form=StaffTicketUpdateForm(request.POST or None,prefix='ticket',initial={'status':ticket.status,'priority':ticket.priority})
+    if request.method == 'POST':
+        if 'send_reply' in request.POST and reply_form.is_valid():
+            reply=reply_form.save(commit=False);reply.ticket=ticket;reply.author=request.user;reply.save()
+            ticket.status='waiting_user';ticket.assigned_to=request.user;ticket.save(update_fields=['status','assigned_to','updated_at'])
+            notify(ticket.requester,'support','Support replied',f'Push support replied to “{ticket.subject}”.',reverse('support_ticket',args=[ticket.pk]))
+            audit(request.user,'support.staff_reply.created',reply)
+            messages.success(request,'Reply sent and the ticket is waiting for the member.')
+            return redirect('operations_ticket',pk=ticket.pk)
+        if 'update_ticket' in request.POST and update_form.is_valid():
+            ticket.status=update_form.cleaned_data['status'];ticket.priority=update_form.cleaned_data['priority']
+            if update_form.cleaned_data['assign_to_me']: ticket.assigned_to=request.user
+            ticket.save(update_fields=['status','priority','assigned_to','updated_at'])
+            audit(request.user,'support.ticket.updated',ticket,{'status':ticket.status,'priority':ticket.priority})
+            messages.success(request,'Ticket controls updated.')
+            return redirect('operations_ticket',pk=ticket.pk)
+    return render(request,'operations_ticket.html',{
+        'ticket':ticket,'reply_form':reply_form,'update_form':update_form,
+        'replies':ticket.replies.select_related('author'),
+    })
+
+
+@staff_only('owner','admin','moderator','support')
+def operations_users(request):
+    users=User.objects.all().order_by('-date_joined')
+    query=request.GET.get('q','').strip()
+    if query:
+        users=users.filter(Q(email__icontains=query)|Q(display_name__icontains=query))
+    return render(request,'operations_users.html',{'users':users[:100],'query':query})
+
+
+@staff_only('owner','admin','moderator','support')
+def operations_user(request,pk):
+    target=get_object_or_404(User,pk=pk)
+    assignments=Assignment.objects.filter(Q(worker=target)|Q(job__owner=target)).select_related('job','worker')[:20]
+    return render(request,'operations_user.html',{
+        'target':target,'assignments':assignments,'sanction_form':SanctionForm(prefix='sanction'),
+        'active_sanctions':target.sanctions.filter(active=True).select_related('created_by'),
+        'tickets':target.support_tickets.all()[:10],
+    })
+
+
+@staff_only()
+def operations_email(request):
+    deliveries=EmailDelivery.objects.all()[:100]
+    return render(request,'operations_email.html',{
+        'deliveries':deliveries,
+        'email_configured':settings.EMAIL_DELIVERY_CONFIGURED,
+        'email_backend':settings.EMAIL_BACKEND.rsplit('.',1)[-1],
+        'sent_count':EmailDelivery.objects.filter(status='sent').count(),
+        'failed_count':EmailDelivery.objects.filter(status='failed').count(),
+    })
+
+
+@staff_only()
+def operations_payments(request):
+    return render(request,'operations_payments.html',{
+        'payments':Payment.objects.select_related('assignment__job','assignment__worker').order_by('-created_at')[:100],
+        'disputes':Dispute.objects.select_related('assignment__job','opened_by').order_by('status','-created_at')[:100],
+        'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
+    })
+
+
+@staff_only('owner','admin')
+def operations_docs(request,pk=None):
+    article=get_object_or_404(DocumentationArticle,pk=pk) if pk else None
+    form=DocumentationArticleForm(request.POST or None,instance=article)
+    if request.method == 'POST' and form.is_valid():
+        article=form.save(commit=False);article.updated_by=request.user;article.save()
+        audit(request.user,'documentation.saved',article,{'status':article.status,'audience':article.audience})
+        messages.success(request,'Documentation article saved.')
+        return redirect('operations_docs_edit',pk=article.pk)
+    return render(request,'operations_docs.html',{'form':form,'article':article,'articles':DocumentationArticle.objects.all()})
 
 
 @staff_only('owner','admin','moderator')
@@ -1026,10 +1166,10 @@ def review_waitlist(request,pk):
     if decision == 'approve':
         remember_new_invitation(request,invitation,code)
         try:
-            send_mail(
-                'Your Push testing invitation',
-                f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
-                settings.DEFAULT_FROM_EMAIL,[application.email],fail_silently=False,
+            send_tracked_email(
+                category='invitation',subject='Your Push testing invitation',
+                message=f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+                recipients=[application.email],
             )
         except Exception:
             messages.warning(request,f'Approved, but email delivery failed. Give this code to {application.email} securely: {code}')
@@ -1037,6 +1177,7 @@ def review_waitlist(request,pk):
             messages.success(request,f'Approved and sent a one-time invitation to {application.email}.')
     else:
         messages.success(request,f'{application.email} was not approved for this testing round.')
+    audit(request.user,'waitlist.reviewed',application,{'decision':decision})
     return redirect('moderation')
 
 
@@ -1062,15 +1203,16 @@ def create_staff_invitation(request):
         invitation,code=issue_invitation(application,request.user)
     remember_new_invitation(request,invitation,code)
     try:
-        send_mail(
-            'Your Push testing invitation',
-            f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
-            settings.DEFAULT_FROM_EMAIL,[application.email],fail_silently=False,
+        send_tracked_email(
+            category='invitation',subject='Your Push testing invitation',
+            message=f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+            recipients=[application.email],
         )
     except Exception:
         messages.warning(request,'The code was created, but email delivery failed. Copy it from the secure one-time panel below.')
     else:
         messages.success(request,f'Invitation created and emailed to {application.email}.')
+    audit(request.user,'invitation.created',invitation,{'email':application.email})
     return redirect('moderation')
 
 
@@ -1078,6 +1220,7 @@ def create_staff_invitation(request):
 @require_POST
 def revoke_invitation(request,pk):
     updated=Invitation.objects.filter(pk=pk,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
+    if updated: audit(request.user,'invitation.revoked',Invitation(pk=pk))
     messages.success(request,'Invitation revoked.' if updated else 'That invitation was already used or revoked.')
     return redirect('moderation')
 
@@ -1103,6 +1246,7 @@ def moderate_dispute(request,pk):
             item.save(update_fields=['status','client_response_due'])
             Event.objects.create(assignment=item,actor=request.user,kind=f'Dispute: {resolution}',note=dispute.decision_note[:500])
         messages.success(request,'Dispute decision recorded. Any payment shown remains a simulation.')
+        audit(request.user,'dispute.resolved',dispute,{'resolution':resolution,'split_percent':split})
         return redirect('moderate_dispute',pk=dispute.pk)
     return render(request,'moderate_dispute.html',{'dispute':dispute,'form':form,'sanction_form':sanction_form})
 
@@ -1115,6 +1259,7 @@ def moderate_job(request,pk):
     if decision not in ['approved','removed']: return HttpResponseBadRequest('Choose approve or remove.')
     job.moderation_status=decision; job.save(update_fields=['moderation_status'])
     notify(job.owner,'moderation','Job review completed',f'{job.title} was {decision}.',f'/jobs/{job.pk}/')
+    audit(request.user,'listing.moderated',job,{'decision':decision})
     messages.success(request,'Listing moderation decision saved.')
     return redirect('moderation')
 
@@ -1126,8 +1271,9 @@ def sanction_account(request,pk):
     form=SanctionForm(request.POST,prefix='sanction')
     if not form.is_valid(): return HttpResponseBadRequest('Choose a sanction and give a reason.')
     sanction=form.save(commit=False); sanction.user=target; sanction.created_by=request.user; sanction.save()
+    audit(request.user,'account.sanctioned',target,{'kind':sanction.kind,'sanction_id':sanction.pk})
     messages.success(request,'Account action recorded with an audit trail.')
-    return redirect('moderation')
+    return redirect('operations_user',pk=target.pk)
 
 
 @staff_only('owner','admin')
@@ -1149,6 +1295,7 @@ def staff_team(request):
             if not target.is_staff:
                 target.is_staff=True;target.save(update_fields=['is_staff'])
             messages.success(request,f'{target.email} now has approved {access.get_role_display().lower()} access.')
+            audit(request.user,'staff.access.granted',access,{'role':access.role,'user_id':target.pk})
             return redirect('staff_team')
     team=StaffAccess.objects.select_related('user','approved_by').order_by('role','user__email')
     return render(request,'staff_team.html',{'form':form,'team':team})
@@ -1169,6 +1316,7 @@ def staff_access_update(request,pk):
     if decision == 'approved':
         access.approved_by=request.user;access.approved_at=timezone.now()
     access.save(update_fields=['status','approved_by','approved_at','updated_at'])
+    audit(request.user,'staff.access.updated',access,{'status':decision,'user_id':access.user_id})
     messages.success(request,f'Operations access for {access.user.email} is now {access.get_status_display().lower()}.')
     return redirect('staff_team')
 

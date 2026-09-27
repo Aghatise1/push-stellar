@@ -213,3 +213,65 @@ class RateBucket(models.Model):
     key = models.CharField(max_length=64,unique=True)
     count = models.PositiveIntegerField(default=0)
     expires = models.DateTimeField()
+
+class SupportTicket(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    CATEGORY_CHOICES=[('account','Account access'),('work','Job or agreement'),('payment','Payment or wallet'),('safety','Safety or abuse'),('other','Other')]
+    STATUS_CHOICES=[('open','Open'),('in_progress','In progress'),('waiting_user','Waiting for user'),('resolved','Resolved'),('closed','Closed')]
+    PRIORITY_CHOICES=[('low','Low'),('normal','Normal'),('high','High'),('urgent','Urgent')]
+    requester=models.ForeignKey(User,on_delete=models.PROTECT,related_name='support_tickets')
+    subject=models.CharField(max_length=140)
+    category=models.CharField(max_length=20,choices=CATEGORY_CHOICES)
+    description=models.TextField(max_length=4000)
+    status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='open')
+    priority=models.CharField(max_length=20,choices=PRIORITY_CHOICES,default='normal')
+    assigned_to=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='assigned_support_tickets')
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering=['-updated_at']
+
+class TicketReply(models.Model):
+    ticket=models.ForeignKey(SupportTicket,on_delete=models.CASCADE,related_name='replies')
+    author=models.ForeignKey(User,on_delete=models.PROTECT)
+    body=models.TextField(max_length=4000)
+    internal=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['created_at']
+
+class EmailDelivery(models.Model):
+    STATUS_CHOICES=[('sent','Sent'),('failed','Failed')]
+    recipient=models.EmailField()
+    category=models.CharField(max_length=40)
+    subject=models.CharField(max_length=180)
+    status=models.CharField(max_length=12,choices=STATUS_CHOICES)
+    error_type=models.CharField(max_length=120,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-created_at']
+
+class AuditEvent(models.Model):
+    actor=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='operations_audit_events')
+    action=models.CharField(max_length=80)
+    target_type=models.CharField(max_length=60)
+    target_id=models.CharField(max_length=80,blank=True)
+    detail=models.JSONField(default=dict,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-created_at']
+
+class DocumentationArticle(models.Model):
+    AUDIENCE_CHOICES=[('public','Public'),('member','Members'),('staff','Staff')]
+    STATUS_CHOICES=[('draft','Draft'),('published','Published')]
+    slug=models.SlugField(max_length=100,unique=True)
+    title=models.CharField(max_length=140)
+    summary=models.CharField(max_length=300)
+    body=models.TextField(max_length=12000)
+    audience=models.CharField(max_length=12,choices=AUDIENCE_CHOICES,default='public')
+    status=models.CharField(max_length=12,choices=STATUS_CHOICES,default='draft')
+    updated_by=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='updated_documentation')
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering=['title']
