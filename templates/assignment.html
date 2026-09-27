@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ item.job.title }} workroom — Push{% endblock %}
 {% block content %}
-<a class="back-link" href="{% url 'workspace' %}">Back to workspace</a>
+<a class="back-link" href="{% url 'assigned_work' %}">Back to jobs I’m doing</a>
 <div class="page-heading"><div><span class="tag">{{ item.get_status_display }}</span><h1>{{ item.job.title }}</h1><p class="lead">{{ item.job.project }} · {{ item.worker.display_name }}</p></div><div class="large-budget">${{ item.budget }}<small>Protected work record</small></div></div>
 <div class="notice">This record protects the brief, conversation, delivery and decisions. Testnet assets have no value; simulated routes move no money.</div>
 <div class="record-strip"><div><span>Agreement</span><strong>Locked at selection</strong></div><div><span>Revisions</span><strong>{{ item.revisions_used }} / {{ item.job.revision_limit }} used</strong></div><div><span>Client review</span><strong>{% if item.client_response_due %}Due {{ item.client_response_due|date:'j M, H:i' }}{% else %}Begins after delivery{% endif %}</strong></div></div>

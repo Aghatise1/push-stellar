@@ -9,9 +9,9 @@
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260925-5">
-  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260926-3">{% endif %}
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260927-4">{% endif %}
 </head>
-<body class="{% if user.is_authenticated %}app-mode{% else %}site-mode{% endif %}">
+<body class="{% if user.is_authenticated %}app-mode{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
   {% if user.is_authenticated %}
   <aside class="sidebar" aria-label="Workspace navigation">
@@ -19,10 +19,11 @@
     <p class="brand-caption">The work record</p>
     <nav aria-label="Workspace">
       <a {% if request.resolver_match.url_name == 'workspace' %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Overview</span></a>
-      <a {% if request.resolver_match.url_name == 'work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM9 7V4h6v3"/></svg><span>My work</span></a>
+      <a {% if request.resolver_match.url_name == 'work' %}aria-current="page"{% endif %} href="{% url 'work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM9 7V4h6v3"/></svg><span>Work hub</span><b data-live-count="work"{% if not work_attention_count %} hidden{% endif %}>{{ work_attention_count }}</b></a>
+      <a {% if request.resolver_match.url_name == 'assigned_work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'assigned_work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 3h8v4H8zM8 11l2 2 5-5"/></svg><span>Jobs I’m doing</span><b data-live-count="assigned"{% if not assigned_active_count %} hidden{% endif %}>{{ assigned_active_count }}</b></a>
       <a {% if request.resolver_match.url_name == 'jobs' or request.resolver_match.url_name == 'job_detail' %}aria-current="page"{% endif %} href="{% url 'jobs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM9 7V4h6v3"/></svg><span>Find work</span></a>
-      <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span>{% if conversation_count %}<b>{{ conversation_count }}</b>{% endif %}</a>
-      <a class="notification-link{% if unread_notification_count %} has-unread{% endif %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Notifications</span>{% if unread_notification_count %}<b>{{ unread_notification_count }}</b>{% endif %}</a>
+      <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span><b data-live-count="messages"{% if not conversation_count %} hidden{% endif %}>{{ conversation_count }}</b></a>
+      <a class="notification-link{% if unread_notification_count %} has-unread{% endif %}" {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Notifications</span><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
       <a {% if request.resolver_match.url_name == 'wallet' %}aria-current="page"{% endif %} href="{% url 'wallet' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15v12H4zM15 12h4v3h-4z"/></svg><span>Wallet</span></a>
       <a {% if request.resolver_match.url_name == 'payments' %}aria-current="page"{% endif %} href="{% url 'payments' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v12H5zM5 10h14M8 15h3"/></svg><span>Payments</span></a>
       <a href="{% url 'job_create' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Post a job</span></a>
@@ -64,7 +65,7 @@
     <header class="topbar">
       <span class="app-location">{% block app_location %}Overview{% endblock %}</span>
       <span class="network-status"><i></i> Stellar testnet</span>
-      <a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg>{% if unread_notification_count %}<b>{{ unread_notification_count }}</b>{% endif %}</a>
+      <a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
       {% if user.stellar_address %}<a class="top-wallet-link" href="{% url 'wallet' %}">{{ user.stellar_address|slice:':6' }}…{{ user.stellar_address|slice:'-4:' }}</a>{% else %}<button class="top-wallet-link" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">Connect wallet</button>{% endif %}
     </header>
     {% endif %}
@@ -78,9 +79,9 @@
   {% if user.is_authenticated %}
   <nav class="mobile-dock" aria-label="Signed-in navigation">
     <a {% if request.resolver_match.url_name == 'workspace' %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Home</span></a>
-    <a {% if request.resolver_match.url_name == 'work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM9 7V4h6v3"/></svg><span>Work</span></a>
-    <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span>{% if conversation_count %}<b>{{ conversation_count }}</b>{% endif %}</a>
-    <a {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Alerts</span>{% if unread_notification_count %}<b>{{ unread_notification_count }}</b>{% endif %}</a>
+    <a {% if request.resolver_match.url_name == 'assigned_work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'assigned_work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 3h8v4H8zM8 11l2 2 5-5"/></svg><span>My jobs</span><b data-live-count="assigned"{% if not assigned_active_count %} hidden{% endif %}>{{ assigned_active_count }}</b></a>
+    <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span><b data-live-count="messages"{% if not conversation_count %} hidden{% endif %}>{{ conversation_count }}</b></a>
+    <a {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Alerts</span><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'wallet' or request.resolver_match.url_name == 'payments' %}aria-current="page"{% endif %} href="{% url 'wallet' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15v12H4zM15 12h4v3h-4z"/></svg><span>Wallet</span></a>
     <a {% if request.resolver_match.url_name == 'profile' %}aria-current="page"{% endif %} href="{% url 'profile' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Profile</span></a>
   </nav>
@@ -89,6 +90,8 @@
   <script src="{% static 'app-motion.js' %}?v=20260924-3" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
   <script src="{% static 'wallet-connect.js' %}?v=20260924-3" defer></script>
+  <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>
+  <script src="{% static 'activity-status.js' %}?v=20260927-1" defer></script>
   {% endif %}
   <script src="{% static 'menu-behavior.js' %}?v=20260924-2" defer></script>
   <script src="{% static 'share-link.js' %}?v=20260927-5" defer></script>

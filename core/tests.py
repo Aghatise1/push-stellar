@@ -540,3 +540,28 @@ class WorkspaceTests(TestCase):
         item=self.make_assignment('funded');self.login_as(self.worker)
         response=self.client.get(reverse('work'));self.assertContains(response,'Assigned to me');self.assertContains(response,item.job.title)
         self.login_as(self.owner);response=self.client.get(reverse('work'));self.assertContains(response,'People I hired');self.assertContains(response,item.worker.display_name)
+
+    def test_assigned_work_page_highlights_worker_actions(self):
+        waiting=self.make_assignment('awaiting_acceptance')
+        second_job=Job.objects.create(owner=self.owner,project='Second project',title='Deliver the final export',description='Brief',deliverables='Export',category='Video Editing',budget=250,deadline=timezone.localdate()+timedelta(days=7),moderation_status='approved')
+        ready=Assignment.objects.create(job=second_job,worker=self.worker,scope='Export',budget=250,status='funded')
+        self.login_as(self.worker)
+        response=self.client.get(reverse('assigned_work'))
+        self.assertContains(response,'Jobs I’m doing')
+        self.assertContains(response,'Review and accept')
+        self.assertContains(response,'Submit work')
+        self.assertContains(response,reverse('assignment',args=[waiting.pk]))
+        self.assertContains(response,reverse('assignment',args=[ready.pk]))
+
+    def test_activity_status_reports_unread_and_work_counts(self):
+        item=self.make_assignment('awaiting_acceptance')
+        Notification.objects.create(recipient=self.worker,kind='selection',title='You were selected',body='Open the agreement.',link=reverse('assignment',args=[item.pk]))
+        self.login_as(self.worker)
+        response=self.client.get(reverse('activity_status'))
+        self.assertEqual(response.status_code,200)
+        self.assertIn('no-store',response['Cache-Control'])
+        payload=response.json()
+        self.assertEqual(payload['assigned'],1)
+        self.assertEqual(payload['work_attention'],1)
+        self.assertEqual(payload['notifications'],1)
+        self.assertEqual(payload['latest']['title'],'You were selected')

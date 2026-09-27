@@ -27,6 +27,8 @@ urlpatterns = [
     path('reset/complete/',auth_views.PasswordResetCompleteView.as_view(template_name='registration/reset_complete.html'),name='password_reset_complete'),
     path('workspace/',views.workspace,name='workspace'),
     path('work/',views.work,name='work'),
+    path('work/assigned/',views.assigned_work,name='assigned_work'),
+    path('activity/status/',views.activity_status,name='activity_status'),
     path('notifications/',views.notifications,name='notifications'),
     path('notifications/read-all/',views.notifications_read_all,name='notifications_read_all'),
     path('notifications/<int:pk>/read/',views.notification_read,name='notification_read'),

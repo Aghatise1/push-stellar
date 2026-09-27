@@ -358,6 +358,43 @@ def work(request):
 
 
 @verified
+def assigned_work(request):
+    records=(Assignment.objects.filter(worker=request.user)
+        .select_related('job','job__owner')
+        .order_by('-created_at'))
+    needs_action=records.filter(status__in=['awaiting_acceptance','funded'])
+    in_progress=records.exclude(status__in=['awaiting_acceptance','funded','paid','cancelled'])
+    finished=records.filter(status__in=['paid','cancelled'])
+    return render(request,'assigned_work.html',{
+        'needs_action':needs_action,
+        'in_progress':in_progress,
+        'finished':finished,
+        'assigned_total':records.count(),
+    })
+
+
+@login_required
+@require_GET
+def activity_status(request):
+    unread=Notification.objects.filter(recipient=request.user,read_at__isnull=True)
+    active_assigned=Assignment.objects.filter(worker=request.user).exclude(status__in=['paid','cancelled'])
+    worker_actions=active_assigned.filter(status__in=['awaiting_acceptance','funded']).count()
+    client_actions=Assignment.objects.filter(
+        job__owner=request.user,status__in=['awaiting_funding','submitted']
+    ).count()
+    latest=unread.order_by('-created_at').first()
+    response=JsonResponse({
+        'notifications':unread.count(),
+        'messages':unread.filter(kind='message').count(),
+        'assigned':active_assigned.count(),
+        'work_attention':worker_actions+client_actions,
+        'latest':({'id':latest.pk,'title':latest.title,'link':latest.link} if latest else None),
+    })
+    response['Cache-Control']='no-store'
+    return response
+
+
+@verified
 def notifications(request):
     records=Notification.objects.filter(recipient=request.user)
     return render(request,'notifications.html',{'notifications':records[:100]})
