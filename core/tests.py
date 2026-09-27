@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
 from django.test import TestCase, Client, override_settings
@@ -234,6 +235,17 @@ class WorkspaceTests(TestCase):
         self.assertEqual(response.status_code,200)
         self.assertTrue(response.context['request_uri'].startswith('web+stellar:pay?'))
         self.assertEqual(Payment.objects.count(),0)
+
+    @patch('core.views.account_balances')
+    def test_wallet_displays_live_testnet_balances(self, balances):
+        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+        self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
+        balances.return_value={'xlm':Decimal('9999.5000000'),'usdc':Decimal('25.0000000'),'has_usdc_trustline':True}
+        self.login_as(self.worker)
+        response=self.client.get(reverse('wallet'))
+        self.assertContains(response,'9999.50 XLM')
+        self.assertContains(response,'25.00 USDC')
+        balances.assert_called_once_with(address)
     def test_freighter_connect_accepts_only_valid_testnet_public_address(self):
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
         url=reverse('wallet_connect')

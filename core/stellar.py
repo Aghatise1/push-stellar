@@ -59,6 +59,33 @@ def _get_json(url):
         raise StellarVerificationError('Stellar testnet is temporarily unavailable. Try verification again shortly.') from exc
 
 
+def account_balances(address):
+    """Return the connected account's native XLM and configured test USDC balances."""
+    base = settings.STELLAR_TESTNET_HORIZON.rstrip('/')
+    try:
+        account = _get_json(f'{base}/accounts/{address}')
+    except StellarVerificationError as exc:
+        if 'transaction was not found' in str(exc):
+            raise StellarVerificationError('This account has not been funded on Stellar testnet yet.') from exc
+        raise
+
+    result = {'xlm': Decimal('0'), 'usdc': Decimal('0'), 'has_usdc_trustline': False}
+    for balance in account.get('balances', []):
+        try:
+            amount = Decimal(str(balance.get('balance', '0')))
+        except InvalidOperation:
+            continue
+        if balance.get('asset_type') == 'native':
+            result['xlm'] = amount
+        elif (
+            balance.get('asset_code') == 'USDC'
+            and balance.get('asset_issuer') == settings.STELLAR_TESTNET_USDC_ISSUER
+        ):
+            result['usdc'] = amount
+            result['has_usdc_trustline'] = True
+    return result
+
+
 def verify_payment(*, transaction_hash, destination, amount, memo):
     transaction_hash = transaction_hash.lower()
     base = settings.STELLAR_TESTNET_HORIZON.rstrip('/')

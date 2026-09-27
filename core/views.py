@@ -25,7 +25,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification
 from .forms import Registration, LoginForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm
-from .stellar import StellarVerificationError, assignment_memo, payment_uri, verify_payment, valid_account_id
+from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
 
 TERMS_VERSION='2026-09-25.1'
 
@@ -421,10 +421,19 @@ def notifications_read_all(request):
 @verified
 def wallet(request):
     request_uri=None
+    balances=None
+    balance_error=''
+    if request.user.stellar_address:
+        try:
+            balances=account_balances(request.user.stellar_address)
+        except StellarVerificationError as exc:
+            balance_error=str(exc)
     form=WalletRequestForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         request_uri=payment_uri(destination=form.cleaned_data['destination'],amount=form.cleaned_data['amount'],memo=form.cleaned_data['memo'] or 'Push test payment')
-    return render(request,'wallet.html',{'form':form,'request_uri':request_uri})
+    return render(request,'wallet.html',{
+        'form':form,'request_uri':request_uri,'balances':balances,'balance_error':balance_error,
+    })
 
 
 @verified
