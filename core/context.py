@@ -8,7 +8,8 @@ STAFF_PORTAL_ROUTES = {
     'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team',
     'operations_tickets', 'operations_ticket', 'operations_users',
     'operations_user', 'operations_email', 'operations_payments',
-    'operations_docs', 'operations_docs_edit',
+    'operations_docs', 'operations_docs_edit', 'documentation',
+    'documentation_article', 'help', 'operations_analytics', 'lift_sanction',
 }
 
 def app_context(request):
@@ -40,4 +41,5 @@ def app_context(request):
             'assigned_active_count':assigned_active_count,
             'work_attention_count':work_attention_count,
             'staff_portal_role':portal_role,
+            'staff_is_owner':portal_role == 'owner',
             'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES)}

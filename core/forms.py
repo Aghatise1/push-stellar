@@ -91,7 +91,7 @@ class StaffLoginForm(LoginForm):
     def confirm_login_allowed(self,user):
         super().confirm_login_allowed(user)
         if not has_staff_access(user):
-            raise forms.ValidationError('This account has not been approved for the Push operations team.',code='staff_access')
+            raise forms.ValidationError('🚫 This account has not been approved for the Push operations team.',code='staff_access')
 
 class StaffAccessForm(forms.Form):
     email=forms.EmailField(label='Existing Push account email')

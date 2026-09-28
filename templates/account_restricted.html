@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}Account restricted — Push{% endblock %}
+{% block content %}
+<section class="error-page"><p class="eyebrow">Account review</p><h1>Account access is restricted.</h1><p><strong>{{ sanction.get_kind_display }}:</strong> {{ sanction.reason }}</p><p>You can ask the Push support team to review this decision. Include any relevant job or ticket reference.</p><div class="actions"><a class="button" href="{% url 'support' %}">Request a review</a></div></section>
+{% endblock %}

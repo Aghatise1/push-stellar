@@ -1,7 +1,7 @@
 from functools import wraps
 
 from django.conf import settings
-from django.http import Http404
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -45,8 +45,7 @@ def staff_only(*roles):
                 query=urlencode({'next':request.get_full_path()})
                 return redirect(f'{reverse("staff_login")}?{query}')
             if not has_staff_access(request.user,set(roles) if roles else None):
-                # Do not advertise the operations surface to ordinary accounts.
-                raise Http404
+                raise PermissionDenied('Approved Push staff access is required.')
             return view(request,*args,**kwargs)
         return wrapped
     return decorator

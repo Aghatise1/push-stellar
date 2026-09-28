@@ -261,3 +261,21 @@ body.app-mode{--app-muted:#4f5952;--app-line:#cbd1cb}
 .workspace-return>span{margin-right:auto;color:var(--ink);font-size:.8rem;font-weight:650}
 .workspace-return .button{min-height:2.75rem;display:inline-flex;align-items:center;justify-content:center;text-align:center}
 @media(max-width:480px){.workspace-return>span{flex-basis:100%}.workspace-return .button{flex:1;font-size:.75rem;padding:.7rem}.app-mode .wallet-actions a{flex-direction:column;gap:.45rem;font-size:.75rem;min-height:4rem}}
+
+/* Staff reporting uses native, readable charts without remote scripts. */
+.app-mode .role-insight-link{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:0 0 1.25rem;padding:1.25rem 1.5rem;border:1px solid var(--line-strong);border-radius:1rem;background:var(--forest);color:#fff;text-decoration:none}
+.app-mode .role-insight-link span{color:#dcebe2;font-size:.78rem}.app-mode .role-insight-link strong{font-size:1.2rem;line-height:1.2}
+.app-mode .insight-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin:0 0 1.25rem}
+.app-mode .insight-stats article{min-width:0;padding:1.2rem;border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode .insight-stats span,.app-mode .insight-stats strong{display:block}.app-mode .insight-stats span{color:var(--muted);font-size:.75rem;line-height:1.35}.app-mode .insight-stats strong{margin-top:.45rem;color:var(--ink);font-size:clamp(1.65rem,3vw,2.5rem);font-variant-numeric:tabular-nums}
+.app-mode .insight-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(16rem,1fr);gap:1rem;margin-bottom:1.25rem}
+.app-mode .insight-trends,.app-mode .insight-breakdown,.app-mode .insight-finance{min-width:0;padding:1.5rem;border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}
+.app-mode .insight-trends h2,.app-mode .insight-breakdown h2,.app-mode .insight-finance h2{margin:0 0 1rem;color:var(--ink)}
+.app-mode .insight-series{margin-top:1.5rem}.app-mode .insight-series h3{font-size:1rem;margin:0 0:.75rem}.app-mode .insight-bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.55rem}
+.app-mode .insight-bars label{display:flex;justify-content:space-between;gap:.2rem;color:var(--muted);font-size:.68rem}.app-mode .insight-bars label span{color:var(--ink);font-weight:700}
+.app-mode .insight-bars progress{display:block;width:100%;height:7rem;writing-mode:vertical-rl;direction:rtl;accent-color:var(--forest)}
+.app-mode .insight-breakdown{text-align:center}.app-mode .insight-donut{display:block;width:min(12rem,80%);height:auto;margin:1.5rem auto .6rem;fill:none;stroke-width:3.5}
+.app-mode .donut-track{stroke:var(--paper-deep)}.app-mode .donut-value{stroke:var(--forest)}.app-mode .insight-breakdown>strong{display:block;font-size:2rem}.app-mode .insight-breakdown p,.app-mode .insight-finance p,.app-mode .insight-caption{color:var(--muted);font-size:.85rem}
+.app-mode .insight-finance .insight-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1rem}
+@media(max-width:900px){.app-mode .insight-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.app-mode .insight-layout{grid-template-columns:1fr}}
+@media(max-width:550px){.app-mode .role-insight-link{align-items:flex-start;flex-direction:column}.app-mode .insight-stats,.app-mode .insight-finance .insight-stats{grid-template-columns:1fr}.app-mode .insight-trends,.app-mode .insight-breakdown,.app-mode .insight-finance{padding:1rem}.app-mode .insight-bars{gap:.35rem}.app-mode .insight-bars label{flex-direction:column;align-items:center}.app-mode .insight-bars progress{height:5.5rem}}

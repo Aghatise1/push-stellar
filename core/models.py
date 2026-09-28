@@ -166,6 +166,9 @@ class AccountSanction(models.Model):
     active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User,on_delete=models.PROTECT,related_name='issued_sanctions')
     created_at = models.DateTimeField(auto_now_add=True)
+    lifted_by = models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='lifted_sanctions')
+    lifted_at = models.DateTimeField(null=True,blank=True)
+    lift_reason = models.TextField(max_length=1000,blank=True)
 
 class Notification(models.Model):
     recipient = models.ForeignKey(User,on_delete=models.CASCADE,related_name='notifications')
@@ -239,6 +242,13 @@ class TicketReply(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['created_at']
+
+class TicketFeedback(models.Model):
+    ticket=models.OneToOneField(SupportTicket,on_delete=models.CASCADE,related_name='feedback')
+    author=models.ForeignKey(User,on_delete=models.PROTECT)
+    rating=models.PositiveSmallIntegerField(choices=[(n,str(n)) for n in range(1,6)])
+    comment=models.CharField(max_length=500,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
 
 class EmailDelivery(models.Model):
     STATUS_CHOICES=[('sent','Sent'),('failed','Failed')]

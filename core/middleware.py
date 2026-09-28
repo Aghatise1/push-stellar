@@ -8,3 +8,31 @@ class AppSecurityMiddleware:
         if request.user.is_authenticated or request.path.startswith(('/login/','/reset/','/verify/','/password-reset/')):
             response['Cache-Control'] = 'no-store, private'
         return response
+
+
+class StaffWorkspaceBoundaryMiddleware:
+    """Keep approved non-owner staff accounts in Operations, even with direct URLs."""
+    MEMBER_ROUTES = {
+        'workspace','analytics','support','support_ticket','work','assigned_work',
+        'activity_status','support_feedback','notifications','notifications_read_all','notification_read',
+        'inbox','conversation','wallet','payments','wallet_connect','profile',
+        'jobs','job_detail','public_profile','profile_image','resume_download',
+        'job_create','job_edit','job_close','apply','select','withdraw',
+        'assignment','assignment_message','assignment_action',
+    }
+
+    def __init__(self,get_response):
+        self.get_response=get_response
+
+    def __call__(self,request):
+        return self.get_response(request)
+
+    def process_view(self,request,view_func,view_args,view_kwargs):
+        if not request.user.is_authenticated:
+            return None
+        from django.shortcuts import redirect
+        from .access import staff_role
+        name=getattr(request.resolver_match,'url_name',None)
+        if name in self.MEMBER_ROUTES and staff_role(request.user) in {'admin','moderator','support'}:
+            return redirect('staff_dashboard')
+        return None

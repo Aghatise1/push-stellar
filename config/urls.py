@@ -3,6 +3,8 @@ from django.urls import include, path
 from django.contrib.auth import views as auth_views
 from core import views
 
+handler403 = 'core.views.staff_permission_denied'
+
 urlpatterns = [
     path('healthz/',views.health,name='health'),
     path('',views.home,name='home'),
@@ -41,6 +43,8 @@ urlpatterns = [
     path('analytics/',views.analytics,name='analytics'),
     path('support/',views.support,name='support'),
     path('support/<uuid:pk>/',views.support_ticket,name='support_ticket'),
+    path('support/<uuid:pk>/feedback/',views.support_feedback,name='support_feedback'),
+    path('operations/insights/',views.operations_analytics,name='operations_analytics'),
     path('work/',views.work,name='work'),
     path('work/assigned/',views.assigned_work,name='assigned_work'),
     path('activity/status/',views.activity_status,name='activity_status'),
@@ -74,6 +78,7 @@ urlpatterns = [
     path('moderation/invitations/create/',views.create_staff_invitation,name='create_staff_invitation'),
     path('moderation/invitations/<uuid:pk>/revoke/',views.revoke_invitation,name='revoke_invitation'),
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
+    path('moderation/accounts/<int:pk>/sanctions/<int:sanction_pk>/lift/',views.lift_sanction,name='lift_sanction'),
     path('moderation/team/',views.staff_team,name='staff_team'),
     path('moderation/team/<int:pk>/access/',views.staff_access_update,name='staff_access_update'),
     path('moderation/tickets/',views.operations_tickets,name='operations_tickets'),

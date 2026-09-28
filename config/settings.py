@@ -46,7 +46,7 @@ MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'django.contrib.s
               'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware',
               'django.contrib.auth.middleware.AuthenticationMiddleware', 'allauth.account.middleware.AccountMiddleware',
               'django.contrib.messages.middleware.MessageMiddleware',
-              'django.middleware.clickjacking.XFrameOptionsMiddleware', 'core.middleware.AppSecurityMiddleware']
+              'django.middleware.clickjacking.XFrameOptionsMiddleware', 'core.middleware.StaffWorkspaceBoundaryMiddleware', 'core.middleware.AppSecurityMiddleware']
 ROOT_URLCONF = 'config.urls'
 TEMPLATES = [{'BACKEND':'django.template.backends.django.DjangoTemplates', 'DIRS':[BASE_DIR/'templates'],
               'APP_DIRS':True, 'OPTIONS':{'context_processors':['django.template.context_processors.request',

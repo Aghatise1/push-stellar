@@ -21,7 +21,7 @@
   <div><span>Open disputes</span><strong>{{ metrics.open_disputes }}</strong></div>
   <div><span>Jobs</span><strong>{{ metrics.jobs }}</strong></div>
   <div><span>Assignments</span><strong>{{ metrics.assignments }}</strong></div>
-  <div><span>Recorded value</span><strong>${{ metrics.recorded_value }}</strong></div>
+  {% if staff_role == 'owner' or staff_role == 'admin' %}<div><span>Recorded payment value</span><strong>${{ metrics.recorded_value }}</strong></div>{% endif %}
 </div>
 {% endif %}
 

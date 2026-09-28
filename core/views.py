@@ -15,14 +15,15 @@ from django.contrib.auth.views import LoginView, PasswordResetView
 from django.core import signing
 from django.utils.crypto import salted_hmac
 from django.db import connection, transaction, IntegrityError
-from django.db.models import Q, F, Sum, Max
+from django.db.models import Q, F, Sum, Max, Count, Avg
+from django.db.models.functions import TruncDate
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, EmailDelivery, AuditEvent, DocumentationArticle
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm
 from .access import has_staff_access, staff_only, staff_role
 from .mailer import send_tracked_email
@@ -30,6 +31,10 @@ from .stellar import StellarVerificationError, account_balances, assignment_memo
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
 TERMS_VERSION='2026-09-25.1'
+
+
+def staff_permission_denied(request,exception=None):
+    return render(request,'403.html',status=403)
 
 
 @require_GET
@@ -85,7 +90,7 @@ def verified(view):
             return redirect('accept_terms')
         sanction = request.user.sanctions.filter(active=True,kind__in=['suspension','ban']).order_by('-created_at').first()
         if sanction:
-            return HttpResponse(f'Account access is restricted: {sanction.reason}',status=403)
+            return render(request,'account_restricted.html',{'sanction':sanction},status=403)
         if request.method == 'POST' and limited(request,'writes',90):
             return HttpResponse('Too many requests. Please try again in 15 minutes.',status=429)
         return view(request,*args,**kwargs)
@@ -203,6 +208,8 @@ def documentation(request):
         articles=articles.filter(audience='public')
     elif not has_staff_access(request.user):
         articles=articles.exclude(audience='staff')
+    else:
+        articles=articles.filter(audience__in=['staff','public']).order_by('-audience','title')
     return render(request,'documentation.html',{'articles':articles})
 
 
@@ -215,8 +222,10 @@ def documentation_article(request,slug):
     return render(request,'documentation_article.html',{'article':article})
 
 
-@verified
+@login_required
 def support(request):
+    if request.method == 'POST' and limited(request,'support-ticket',10):
+        return HttpResponse('Too many requests. Please try again later.',status=429)
     form=SupportTicketForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         ticket=form.save(commit=False);ticket.requester=request.user;ticket.save()
@@ -227,8 +236,10 @@ def support(request):
     return render(request,'support.html',{'form':form,'tickets':tickets})
 
 
-@verified
+@login_required
 def support_ticket(request,pk):
+    if request.method == 'POST' and limited(request,'support-reply',20):
+        return HttpResponse('Too many requests. Please try again later.',status=429)
     ticket=get_object_or_404(SupportTicket,pk=pk,requester=request.user)
     form=TicketReplyForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -239,6 +250,27 @@ def support_ticket(request,pk):
         messages.success(request,'Your reply was added to the ticket.')
         return redirect('support_ticket',pk=ticket.pk)
     return render(request,'support_ticket.html',{'ticket':ticket,'form':form,'replies':ticket.replies.filter(internal=False).select_related('author')})
+
+
+@verified
+@require_POST
+def support_feedback(request,pk):
+    ticket=get_object_or_404(SupportTicket,pk=pk,requester=request.user,status__in=['resolved','closed'])
+    try:
+        rating=int(request.POST.get('rating',''))
+    except (TypeError,ValueError):
+        rating=0
+    comment=request.POST.get('comment','').strip()
+    if rating not in range(1,6) or len(comment)>500:
+        return HttpResponseBadRequest('Choose a rating from 1 to 5 and keep the comment under 500 characters.')
+    feedback,created=TicketFeedback.objects.get_or_create(
+        ticket=ticket,defaults={'author':request.user,'rating':rating,'comment':comment}
+    )
+    if not created:
+        return HttpResponse('Feedback has already been recorded for this ticket.',status=409)
+    audit(request.user,'support.feedback.created',feedback,{'rating':rating})
+    messages.success(request,'Thank you. Your feedback was recorded.')
+    return redirect('support_ticket',pk=ticket.pk)
 
 
 def waitlist(request):
@@ -412,7 +444,7 @@ class StaffSignIn(LoginView):
     def dispatch(self,request,*args,**kwargs):
         if request.user.is_authenticated:
             if has_staff_access(request.user): return redirect('staff_entry')
-            raise Http404
+            return render(request,'403.html',status=403)
         if request.method == 'POST' and limited(request,'staff-login',8):
             return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
         return super().dispatch(request,*args,**kwargs)
@@ -423,7 +455,10 @@ class StaffSignIn(LoginView):
 @staff_only()
 def staff_entry(request):
     """Let an authenticated staff member choose their current work context."""
-    return render(request,'staff_entry.html',{'staff_role':staff_role(request.user)})
+    role=staff_role(request.user)
+    if role != 'owner':
+        return redirect('staff_dashboard')
+    return render(request,'staff_entry.html',{'staff_role':role})
 
 
 @staff_only()
@@ -462,6 +497,7 @@ def _role_dashboard(request,role):
         'staff_portal_role':role,
         'metrics':metrics,
         'recent_audit':AuditEvent.objects.select_related('actor')[:10] if role in {'owner','admin'} else [],
+        'insight_url':reverse('operations_analytics'),
     }
     if role == 'owner':
         shared.update({
@@ -514,7 +550,7 @@ def _role_dashboard(request,role):
             'cards':[
                 ('Inbox','Open tickets','Assign and respond to member requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Appeals','Account access cases','Review open account-access requests and their history.',reverse('operations_tickets')+'?status=all',metrics['account_tickets']),
-                ('Accounts','Member lookup','Find verified account details relevant to support.',reverse('operations_users'),metrics['users']),
+                ('Accounts','Member lookup','Find account details relevant to a support case.',reverse('operations_users'),'→'),
                 ('Waiting','Member responses','Track cases waiting for more information.',reverse('operations_tickets')+'?status=waiting_user',metrics['waiting_user']),
                 ('Guidance','Support documentation','Read current account and support procedures.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
             ],
@@ -540,6 +576,63 @@ def moderator_dashboard(request):
 @staff_only('owner','support')
 def support_dashboard(request):
     return _role_dashboard(request,'support')
+
+
+@staff_only('owner','admin','moderator','support')
+def operations_analytics(request):
+    role=staff_role(request.user)
+    today=timezone.localdate()
+    first_day=today-timedelta(days=6)
+    if role in {'owner','admin'}:
+        sources=[('New accounts',User.objects.filter(date_joined__date__gte=first_day),'date_joined'),
+                 ('Jobs posted',Job.objects.filter(created_at__date__gte=first_day),'created_at')]
+        stats=[('Total members',User.objects.count()),
+               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
+               ('Open jobs',Job.objects.filter(status='open',moderation_status='approved').count()),
+               ('Open disputes',Dispute.objects.exclude(status='resolved').count())]
+        status_title='Account state'
+        first_label='Verified email'
+        first_count=User.objects.filter(email_verified=True).count()
+        total=User.objects.count()
+    elif role == 'moderator':
+        sources=[('New disputes',Dispute.objects.filter(created_at__date__gte=first_day),'created_at'),
+                 ('Jobs sent for review',Job.objects.filter(created_at__date__gte=first_day,moderation_status='review'),'created_at')]
+        stats=[('Open disputes',Dispute.objects.exclude(status='resolved').count()),
+               ('Listings awaiting review',Job.objects.filter(moderation_status='review').count()),
+               ('Pending tester reviews',WaitlistApplication.objects.filter(status='pending').count()),
+               ('Resolved disputes',Dispute.objects.filter(status='resolved').count())]
+        status_title='Dispute decisions'
+        first_label='Resolved'
+        first_count=stats[3][1]
+        total=Dispute.objects.count()
+    else:
+        sources=[('New tickets',SupportTicket.objects.filter(created_at__date__gte=first_day),'created_at'),
+                 ('Tickets resolved',SupportTicket.objects.filter(updated_at__date__gte=first_day,status='resolved'),'updated_at')]
+        stats=[('Open tickets',SupportTicket.objects.filter(status='open').count()),
+               ('Urgent unresolved',SupportTicket.objects.filter(priority='urgent').exclude(status__in=['resolved','closed']).count()),
+               ('Unassigned tickets',SupportTicket.objects.filter(assigned_to__isnull=True).exclude(status__in=['resolved','closed']).count()),
+               ('Waiting for member',SupportTicket.objects.filter(status='waiting_user').count())]
+        status_title='Support feedback'
+        first_label='Rated 4 or 5'
+        first_count=TicketFeedback.objects.filter(rating__gte=4).count()
+        total=TicketFeedback.objects.count()
+    series=[]
+    for label,query,field in sources:
+        rows=query.annotate(day=TruncDate(field)).values('day').annotate(count=Count('pk'))
+        counts={row['day']:row['count'] for row in rows}
+        points=[{'day':first_day+timedelta(days=i),'count':counts.get(first_day+timedelta(days=i),0)} for i in range(7)]
+        series.append({'label':label,'points':points,'maximum':max(1,*(point['count'] for point in points))})
+    percent=round(first_count*100/total) if total else 0
+    finance=None
+    if role in {'owner','admin'}:
+        finance={'verified_testnet':Payment.objects.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0,
+                 'simulated':Payment.objects.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0,
+                 'platform_revenue':0}
+    return render(request,'operations_analytics.html',{
+        'role':role,'stats':stats,'series':series,'status_title':status_title,
+        'first_label':first_label,'first_count':first_count,'total':total,
+        'percent':percent,'remainder':100-percent,'finance':finance,
+    })
 
 
 @never_cache
@@ -1223,7 +1316,9 @@ def operations_users(request):
     query=request.GET.get('q','').strip()
     if query:
         users=users.filter(Q(email__icontains=query)|Q(display_name__icontains=query))
-    return render(request,'operations_users.html',{'users':users[:100],'query':query})
+    elif staff_role(request.user) == 'support':
+        users=users.none()
+    return render(request,'operations_users.html',{'users':users[:100],'query':query,'support_lookup':staff_role(request.user)=='support'})
 
 
 @staff_only('owner','admin','moderator','support')
@@ -1233,6 +1328,8 @@ def operations_user(request,pk):
     return render(request,'operations_user.html',{
         'target':target,'assignments':assignments,'sanction_form':SanctionForm(prefix='sanction'),
         'active_sanctions':target.sanctions.filter(active=True).select_related('created_by'),
+        'past_sanctions':target.sanctions.filter(active=False).select_related('created_by','lifted_by')[:20],
+        'can_restrict_target':not (target == request.user or target.is_superuser or StaffAccess.objects.filter(user=target).exists()),
         'tickets':target.support_tickets.all()[:10],
     })
 
@@ -1251,10 +1348,15 @@ def operations_email(request):
 
 @staff_only('owner','admin','moderator')
 def operations_payments(request):
+    role=staff_role(request.user)
+    payments=Payment.objects.select_related('assignment__job','assignment__worker')
+    if role == 'moderator':
+        payments=payments.filter(assignment__dispute__isnull=False)
     return render(request,'operations_payments.html',{
-        'payments':Payment.objects.select_related('assignment__job','assignment__worker').order_by('-created_at')[:100],
+        'payments':payments.order_by('-created_at')[:100],
         'disputes':Dispute.objects.select_related('assignment__job','opened_by').order_by('status','-created_at')[:100],
         'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
+        'can_see_finance':role in {'owner','admin'},
     })
 
 
@@ -1390,11 +1492,37 @@ def moderate_job(request,pk):
 @require_POST
 def sanction_account(request,pk):
     target=get_object_or_404(User,pk=pk)
+    if target == request.user or target.is_superuser or StaffAccess.objects.filter(user=target).exists():
+        return HttpResponseForbidden('Staff accounts require separate owner review.')
     form=SanctionForm(request.POST,prefix='sanction')
     if not form.is_valid(): return HttpResponseBadRequest('Choose a sanction and give a reason.')
     sanction=form.save(commit=False); sanction.user=target; sanction.created_by=request.user; sanction.save()
     audit(request.user,'account.sanctioned',target,{'kind':sanction.kind,'sanction_id':sanction.pk})
     messages.success(request,'Account action recorded with an audit trail.')
+    return redirect('operations_user',pk=target.pk)
+
+
+@staff_only('owner','admin')
+@require_POST
+def lift_sanction(request,pk,sanction_pk):
+    target=get_object_or_404(User,pk=pk)
+    reason=request.POST.get('reason','').strip()
+    if len(reason) < 10 or len(reason) > 1000:
+        return HttpResponseBadRequest('Explain the reversal in 10 to 1,000 characters.')
+    if target == request.user or target.is_superuser or StaffAccess.objects.filter(user=target).exists():
+        return HttpResponseForbidden('Staff accounts require separate owner review.')
+    with transaction.atomic():
+        sanction=get_object_or_404(AccountSanction.objects.select_for_update(),pk=sanction_pk,user=target)
+        if not sanction.active:
+            return HttpResponse('This restriction was already lifted.',status=409)
+        sanction.active=False
+        sanction.lifted_by=request.user
+        sanction.lifted_at=timezone.now()
+        sanction.lift_reason=reason
+        sanction.save(update_fields=['active','lifted_by','lifted_at','lift_reason'])
+        audit(request.user,'account.sanction.lifted',sanction,{'user_id':target.pk,'reason':reason})
+        notify(target,'account','Account restriction lifted','An administrator reviewed and lifted an account restriction.',reverse('support'))
+    messages.success(request,'Restriction lifted and recorded in the audit trail.')
     return redirect('operations_user',pk=target.pk)
 
 
