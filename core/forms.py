@@ -126,6 +126,17 @@ class DocumentationArticleForm(forms.ModelForm):
         widgets={'body':forms.Textarea(attrs={'rows':16})}
 
 class RecoveryForm(PasswordResetForm):
+    def send_mail(self,subject_template_name,email_template_name,context,from_email,to_email,html_email_template_name=None):
+        from django.template.loader import render_to_string
+        from .mailer import send_tracked_email
+        subject=''.join(render_to_string(subject_template_name,context).splitlines())
+        try:
+            send_tracked_email(category='password_recovery',subject=subject,
+                               message=render_to_string(email_template_name,context),recipients=[to_email])
+        except Exception:
+            # Record failure for Operations, but never disclose account existence.
+            pass
+
     def clean_email(self):
         return self.cleaned_data['email'].strip().lower()
 

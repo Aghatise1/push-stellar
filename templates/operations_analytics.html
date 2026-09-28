@@ -2,12 +2,7 @@
 {% block title %}Operations insights — Push{% endblock %}
 {% block app_location %}Operations · Insights{% endblock %}
 {% block content %}
-<div class="page-heading"><div><h1>{{ role|title }} insights.</h1><p class="lead">Live account and case totals, followed by the last seven days. These figures come from Push's own records.</p></div><a class="button secondary" href="{% url 'staff_dashboard' %}">Back to command centre</a></div>
-<section class="insight-stats" aria-label="Current operations measures">{% for label,value in stats %}<article><span>{{ label }}</span><strong>{{ value }}</strong></article>{% endfor %}</section>
-<section class="insight-layout">
-  <div class="insight-trends"><h2>Last seven days</h2>{% for group in series %}<div class="insight-series"><h3>{{ group.label }}</h3><div class="insight-bars">{% for point in group.points %}<div><label for="trend-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">{{ point.day|date:'D' }} <span>{{ point.count }}</span></label><progress id="trend-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" value="{{ point.count }}" max="{{ group.maximum }}">{{ point.count }}</progress></div>{% endfor %}</div></div>{% endfor %}</div>
-  <aside class="insight-breakdown"><h2>{{ status_title }}</h2><svg class="insight-donut" viewBox="0 0 36 36" role="img" aria-label="{{ first_count }} of {{ total }}: {{ first_label }}"><circle class="donut-track" cx="18" cy="18" r="15.9155"/><circle class="donut-value" cx="18" cy="18" r="15.9155" stroke-dasharray="{{ percent }} {{ remainder }}" transform="rotate(-90 18 18)"/></svg><strong>{{ percent }}%</strong><p>{{ first_label }} · {{ first_count }} of {{ total }}</p>{% if not total %}<p>No completed records to measure yet.</p>{% endif %}</aside>
-</section>
-{% if finance %}<section class="insight-finance"><h2>Settlement overview</h2><p>These are job payment records. Push has no platform fee or collected revenue in this preview.</p><div class="insight-stats"><article><span>Verified Stellar testnet value</span><strong>${{ finance.verified_testnet }}</strong></article><article><span>Simulated payment value</span><strong>${{ finance.simulated }}</strong></article><article><span>Collected platform revenue</span><strong>${{ finance.platform_revenue }}</strong></article></div><a class="button secondary" href="{% url 'operations_payments' %}">Review payment evidence</a></section>{% endif %}
-{% if role == 'support' %}<p class="insight-caption">Satisfaction is shown only after members rate a resolved ticket. A small response count should be read cautiously.</p>{% endif %}
+<div class="ops-heading"><div><span>{{ role|title }} operations</span><h1>Performance overview</h1><p>Understand member activity, completed work and what needs your attention.</p></div><a class="button secondary" href="{{ dashboard_url }}">Command centre</a></div>
+{% if owner_dashboard_preview %}<p class="notice">Viewing {{ role }} reports as Owner. Your owner permissions have not changed.</p>{% endif %}
+{% include 'operations_report.html' %}
 {% endblock %}

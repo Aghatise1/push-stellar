@@ -32,6 +32,14 @@ class StaffAccess(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class AccountActivity(models.Model):
+    """One signed-in activity record per account/day; no browsing history or IPs."""
+    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='activity_days')
+    day = models.DateField(db_index=True)
+    last_seen = models.DateTimeField(db_index=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user','day'],name='one_activity_per_account_day')]
+
 class EmailVerificationCode(models.Model):
     user = models.OneToOneField(User,on_delete=models.CASCADE,related_name='verification_code')
     code_hash = models.CharField(max_length=64)

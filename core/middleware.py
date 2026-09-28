@@ -1,3 +1,29 @@
+class AccountActivityMiddleware:
+    """Count successful signed-in page use, at most once a minute per session."""
+    def __init__(self,get_response):
+        self.get_response=get_response
+
+    def __call__(self,request):
+        response=self.get_response(request)
+        if (request.user.is_authenticated and response.status_code < 400 and
+                response.get('Content-Type','').startswith('text/html') and
+                request.path != '/activity/status/'):
+            from django.utils import timezone
+            from django.db import DatabaseError
+            from .models import AccountActivity
+            now=timezone.now()
+            stamp=request.session.get('activity_recorded_at',0)
+            if now.timestamp()-stamp >= 60:
+                try:
+                    AccountActivity.objects.update_or_create(user=request.user,day=timezone.localdate(now),defaults={'last_seen':now})
+                except DatabaseError:
+                    import logging
+                    logging.getLogger(__name__).warning('Account activity could not be recorded.')
+                else:
+                    request.session['activity_recorded_at']=now.timestamp()
+        return response
+
+
 class AppSecurityMiddleware:
     def __init__(self,get_response):
         self.get_response = get_response

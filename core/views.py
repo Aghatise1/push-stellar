@@ -25,6 +25,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm
+from .reporting import report_data
 from .access import has_staff_access, staff_only, staff_role
 from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
@@ -442,7 +443,10 @@ class SignIn(LoginView):
     redirect_authenticated_user = True
     def dispatch(self,request,*args,**kwargs):
         if request.method == 'POST' and limited(request,'login'):
-            return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+            form=self.authentication_form(request,data={})
+            form.is_valid()
+            form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
+            return render(request,self.template_name,{'form':form},status=429)
         return super().dispatch(request,*args,**kwargs)
 
 
@@ -455,7 +459,10 @@ class StaffSignIn(LoginView):
             if has_staff_access(request.user): return redirect('staff_entry')
             return render(request,'403.html',status=403)
         if request.method == 'POST' and limited(request,'staff-login',8):
-            return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+            form=self.authentication_form(request,data={})
+            form.is_valid()
+            form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
+            return render(request,self.template_name,{'form':form},status=429)
         return super().dispatch(request,*args,**kwargs)
     def get_success_url(self):
         return reverse('staff_entry')
@@ -506,7 +513,8 @@ def _role_dashboard(request,role):
         'staff_portal_role':role,
         'metrics':metrics,
         'recent_audit':AuditEvent.objects.select_related('actor')[:10] if role in {'owner','admin'} else [],
-        'insight_url':reverse('operations_analytics'),
+        'insight_url':reverse('operations_analytics')+'?view='+role,
+        'report':report_data(role,report_days(request)),
     }
     if role == 'owner':
         shared.update({
@@ -591,65 +599,24 @@ def support_dashboard(request):
     return _role_dashboard(request,'support')
 
 
+def report_days(request):
+    value=request.GET.get('days','30')
+    return int(value) if value in {'7','30','90'} else 30
+
+
 @staff_only('owner','admin','moderator','support')
 def operations_analytics(request):
-    role=staff_role(request.user)
-    today=timezone.localdate()
-    first_day=today-timedelta(days=6)
-    if role in {'owner','admin'}:
-        sources=[('New accounts',User.objects.filter(date_joined__date__gte=first_day),'date_joined'),
-                 ('Jobs posted',Job.objects.filter(created_at__date__gte=first_day),'created_at')]
-        stats=[('Total members',User.objects.count()),
-               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
-               ('Assignments created',Assignment.objects.count()),
-               ('Open jobs',Job.objects.filter(status='open',moderation_status='approved').count()),
-               ('Open disputes',Dispute.objects.exclude(status='resolved').count())]
-        status_title='Account state'
-        first_label='Verified email'
-        first_count=User.objects.filter(email_verified=True).count()
-        total=User.objects.count()
-    elif role == 'moderator':
-        sources=[('New disputes',Dispute.objects.filter(created_at__date__gte=first_day),'created_at'),
-                 ('Jobs sent for review',Job.objects.filter(created_at__date__gte=first_day,moderation_status='review'),'created_at')]
-        stats=[('Total members',User.objects.count()),
-               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
-               ('Open disputes',Dispute.objects.exclude(status='resolved').count()),
-               ('Listings awaiting review',Job.objects.filter(moderation_status='review').count()),
-               ('Pending tester reviews',WaitlistApplication.objects.filter(status='pending').count()),
-               ('Resolved disputes',Dispute.objects.filter(status='resolved').count())]
-        status_title='Dispute decisions'
-        first_label='Resolved'
-        first_count=Dispute.objects.filter(status='resolved').count()
-        total=Dispute.objects.count()
-    else:
-        sources=[('New tickets',SupportTicket.objects.filter(created_at__date__gte=first_day),'created_at'),
-                 ('Tickets resolved',SupportTicket.objects.filter(updated_at__date__gte=first_day,status='resolved'),'updated_at')]
-        stats=[('Total members',User.objects.count()),
-               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
-               ('Open tickets',SupportTicket.objects.filter(status='open').count()),
-               ('Urgent unresolved',SupportTicket.objects.filter(priority='urgent').exclude(status__in=['resolved','closed']).count()),
-               ('Unassigned tickets',SupportTicket.objects.filter(assigned_to__isnull=True).exclude(status__in=['resolved','closed']).count()),
-               ('Waiting for member',SupportTicket.objects.filter(status='waiting_user').count())]
-        status_title='Support feedback'
-        first_label='Rated 4 or 5'
-        first_count=TicketFeedback.objects.filter(rating__gte=4).count()
-        total=TicketFeedback.objects.count()
-    series=[]
-    for label,query,field in sources:
-        rows=query.annotate(day=TruncDate(field)).values('day').annotate(count=Count('pk'))
-        counts={row['day']:row['count'] for row in rows}
-        points=[{'day':first_day+timedelta(days=i),'count':counts.get(first_day+timedelta(days=i),0)} for i in range(7)]
-        series.append({'label':label,'points':points,'maximum':max(1,*(point['count'] for point in points))})
-    percent=round(first_count*100/total) if total else 0
-    finance=None
-    if role in {'owner','admin'}:
-        finance={'verified_testnet':Payment.objects.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0,
-                 'simulated':Payment.objects.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0,
-                 'platform_revenue':0}
+    actual_role=staff_role(request.user)
+    role=request.GET.get('view',actual_role)
+    if role not in {'owner','admin','moderator','support'}:
+        role=actual_role
+    if actual_role != 'owner' and role != actual_role:
+        return render(request,'403.html',status=403)
     return render(request,'operations_analytics.html',{
-        'role':role,'stats':stats,'series':series,'status_title':status_title,
-        'first_label':first_label,'first_count':first_count,'total':total,
-        'percent':percent,'remainder':100-percent,'finance':finance,
+        'role':role,'staff_portal_role':role,
+        'owner_dashboard_preview':actual_role == 'owner' and role != 'owner',
+        'dashboard_url':reverse({'owner':'owner_dashboard','admin':'admin_dashboard','moderator':'moderator_dashboard','support':'support_dashboard'}[role]),
+        'report':report_data(role,report_days(request)),
     })
 
 
@@ -675,7 +642,9 @@ class Recovery(PasswordResetView):
     success_url = reverse_lazy('password_reset_done')
     def dispatch(self,request,*args,**kwargs):
         if request.method == 'POST' and limited(request,'recovery',5):
-            return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+            form=self.form_class(request.POST)
+            form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
+            return render(request,self.template_name,{'form':form},status=429)
         return super().dispatch(request,*args,**kwargs)
 
 

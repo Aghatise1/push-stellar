@@ -204,3 +204,20 @@ Keyboard focus uses a .1875rem outline with a .25rem offset; the rail substitute
 - Don't replace open records with layers of decorative cards.
 - Don't use colour alone to convey status.
 - Don't imply mainnet settlement, custody, invented activity or production readiness.
+
+
+## Operations reporting (28 September 2026)
+
+Staff dashboards use a compact reporting layout: four count cards, a wide daily
+trend chart and a narrow actionable queue, period comparisons, then engagement
+and settlement detail. Owner switching is a collapsed control, not a giant card.
+Keep the existing forest/paper identity; the supplied reference informs density
+and hierarchy, not its purple palette. Surfaces are white with clear borders;
+the primary chart uses forest #172a22, light green #a9cfb6 and a dashed cream
+comparison line. Labels and dates must accompany every count. No decorative
+verification doughnut, fake revenue, fabricated activity or percentage without
+a denominator. Exact daily figures remain available as an accessible table.
+
+Use 7/30/90-day controls, 44px targets, responsive two-column count cards and
+single-column phone charts. Motion is limited to a 180ms entrance and button
+feedback; respect reduced motion. Reporting must work without JavaScript.

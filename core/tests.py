@@ -15,7 +15,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
+from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
 from .email_backend import BrevoEmailBackend
@@ -37,6 +37,62 @@ class WorkspaceTests(TestCase):
     def action(self,item,action,**data):
         if action == 'accept': data.setdefault('accept_terms','on')
         return self.client.post(reverse('assignment_action',args=[item.pk]),{'action':action,**data})
+    def test_activity_counts_members_once_and_excludes_polling_and_staff(self):
+        self.grant_staff(self.owner,'owner')
+        self.login_as(self.worker)
+        self.client.get(reverse('activity_status'))
+        self.assertFalse(AccountActivity.objects.filter(user=self.worker).exists())
+        self.client.get(reverse('account_settings'))
+        self.client.get(reverse('account_settings'))
+        self.assertEqual(AccountActivity.objects.filter(user=self.worker).count(),1)
+        self.client.logout();self.login_as(self.owner)
+        response=self.client.get(reverse('owner_dashboard'))
+        report=response.context['report']
+        self.assertEqual(report['member_total'],2)
+        self.assertEqual(report['active_period'],1)
+        self.assertEqual(report['common'][2]['value'],1)
+        self.assertEqual(report['common'][3]['value'],1)
+
+    def test_reporting_period_and_completion_dates_are_truthful(self):
+        item=self.make_assignment('paid')
+        payment=Payment.objects.create(assignment=item,amount=400,method='usdc')
+        Payment.objects.filter(pk=payment.pk).update(created_at=timezone.now()-timedelta(days=10))
+        self.grant_staff(self.owner,'admin');self.login_as(self.owner)
+        short=self.client.get(reverse('operations_analytics')+'?days=7').context['report']
+        month=self.client.get(reverse('operations_analytics')+'?days=30').context['report']
+        self.assertEqual(short['series'][1]['total'],0)
+        self.assertEqual(month['series'][1]['total'],1)
+        self.assertEqual(month['finance']['simulated'],400)
+        self.assertEqual(month['finance']['verified_testnet'],0)
+        self.assertEqual(len(short['rows']),7)
+        self.assertEqual(self.client.get(reverse('operations_analytics')+'?days=999999').context['report']['days'],30)
+
+    def test_owner_report_preview_keeps_role_and_support_cannot_escalate(self):
+        self.grant_staff(self.owner,'owner');self.login_as(self.owner)
+        response=self.client.get(reverse('operations_analytics')+'?view=support&days=7')
+        self.assertEqual(response.context['role'],'support')
+        self.assertNotContains(response,'Collected platform revenue')
+        self.assertContains(response,'amp;view=support')
+        self.client.logout();self.grant_staff(self.worker,'support');self.login_as(self.worker)
+        self.assertEqual(self.client.get(reverse('operations_analytics')+'?view=owner').status_code,403)
+        self.assertContains(self.client.get(reverse('operations_analytics')),'No ratings yet')
+
+    def test_recovery_failure_is_logged_without_disclosing_account(self):
+        with patch('core.mailer.send_mail',side_effect=TimeoutError):
+            response=self.client.post(reverse('password_reset'),{'email':self.worker.email})
+        self.assertEqual(response.status_code,302)
+        self.assertTrue(EmailDelivery.objects.filter(category='password_recovery',status='failed',recipient=self.worker.email).exists())
+        absent=self.client.post(reverse('password_reset'),{'email':'absent@example.test'})
+        self.assertEqual(absent.status_code,response.status_code)
+        self.assertEqual(absent.url,response.url)
+
+    def test_auth_throttles_render_the_form_instead_of_plain_text(self):
+        with patch('core.views.limited',return_value=True):
+            for name in ['login','staff_login','password_reset']:
+                response=self.client.post(reverse(name),{'email':self.worker.email,'username':self.worker.email,'password':'wrong'})
+                self.assertContains(response,'Too many attempts',status_code=429)
+                self.assertContains(response,'<form',status_code=429)
+
     def grant_staff(self,user,role='moderator'):
         user.is_staff=True;user.save(update_fields=['is_staff'])
         return StaffAccess.objects.update_or_create(user=user,defaults={'role':role,'status':'approved','approved_at':timezone.now()})[0]

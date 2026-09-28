@@ -6,9 +6,9 @@
   {% if can_switch_staff_dashboard %}{% include 'staff_workspace_switcher.html' %}{% endif %}
   <header class="role-dashboard-hero" data-role-reveal>
     <div><span class="tag">{{ role|title }} workspace</span><h1 id="role-dashboard-title">{{ dashboard_title }}.</h1><p class="lead">{{ dashboard_lead }}</p></div>
-    <div class="role-identity"><span class="role-security"><i aria-hidden="true"></i>Protected staff session</span><strong>{{ request.user.email }}</strong><small>{{ dashboard_note }}</small>{% if can_switch_staff_dashboard %}<a href="{% url 'staff_entry' %}">Switch between member and operations workspaces →</a>{% endif %}</div>
   </header>
-  <a class="role-insight-link" href="{{ insight_url }}"><span>Operations insights</span><strong>{% if role == 'owner' or role == 'admin' %}Users, work and settlement records{% elif role == 'moderator' %}Disputes and review queues{% else %}Tickets and member feedback{% endif %}</strong><span>View reports →</span></a>
+  {% include 'operations_report.html' %}
+  <h2 class="ops-tools-title">Workspace tools</h2>
   <div class="role-command-grid">
     {% for label,title,copy,url,count in cards %}
     <a href="{{ url }}" data-role-card><div><span>{{ label }}</span><strong>{{ title }}</strong><p>{{ copy }}</p></div><b>{{ count }}</b><i>Open →</i></a>
