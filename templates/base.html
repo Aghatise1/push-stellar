@@ -10,7 +10,7 @@
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260928-3">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-4">{% endif %}
-{% if staff_portal_active %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
+{% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
@@ -83,9 +83,8 @@
     <header class="topbar">
       <span class="app-location">{% block app_location %}Overview{% endblock %}</span>
       <span class="network-status"><i></i> {% if staff_portal_active %}Protected operations{% else %}Stellar testnet{% endif %}</span>
-      {% if not staff_portal_active or staff_is_owner %}<a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>{% endif %}
-      {% if staff_portal_active and staff_is_owner %}<a class="top-wallet-link" href="{% url 'staff_entry' %}">Switch workspace</a>{% elif staff_portal_active %}<span class="network-status">{{ staff_portal_role|title }} access</span>{% elif user.stellar_address %}<a class="top-wallet-link" href="{% url 'wallet' %}">{{ user.stellar_address|slice:':6' }}…{{ user.stellar_address|slice:'-4:' }}</a>{% else %}<button class="top-wallet-link" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">Connect wallet</button>{% endif %}
-      <a class="top-settings-link" href="{% url 'account_settings' %}">Settings</a>
+      {% if not staff_portal_active %}<a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>{% endif %}
+      {% if staff_portal_active %}{% elif user.stellar_address %}<a class="top-wallet-link" href="{% url 'wallet' %}">{{ user.stellar_address|slice:':6' }}…{{ user.stellar_address|slice:'-4:' }}</a>{% else %}<button class="top-wallet-link" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">Connect wallet</button>{% endif %}
     </header>
     {% endif %}
     <main id="main">
@@ -118,8 +117,9 @@
     <a {% if request.resolver_match.url_name == 'account_settings' %}aria-current="page"{% endif %} href="{% url 'account_settings' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg><span>Settings</span></a>
     {% if staff_is_owner %}<a href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h13M12 5l7 7-7 7"/></svg><span>App</span></a>{% endif %}
     {% endif %}
+    {% if staff_portal_role != 'support' %}<a {% if request.resolver_match.url_name == 'account_settings' %}aria-current="page"{% endif %} href="{% url 'account_settings' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Account</span></a>{% endif %}
     {% else %}
-    <a {% if request.resolver_match.url_name == 'workspace' %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Home</span></a>
+    <a {% if request.resolver_match.url_name == 'workspace'  %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Home</span></a>
     <a {% if request.resolver_match.url_name == 'assigned_work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'assigned_work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 3h8v4H8zM8 11l2 2 5-5"/></svg><span>My jobs</span><b data-live-count="assigned"{% if not assigned_active_count %} hidden{% endif %}>{{ assigned_active_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span><b data-live-count="messages"{% if not conversation_count %} hidden{% endif %}>{{ conversation_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Alerts</span><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>

@@ -302,3 +302,15 @@ body.app-mode{--app-muted:#4f5952;--app-line:#cbd1cb}
 .top-settings-link{margin-left:.25rem;color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:.25rem;white-space:nowrap}
 @media(max-width:900px){.app-mode .insight-layout{grid-template-columns:1fr}.app-mode .insight-stats article,.app-mode .insight-stats article:first-child{grid-column:span 3}}
 @media(max-width:600px){.app-mode .insight-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.app-mode .insight-stats article,.app-mode .insight-stats article:first-child{grid-column:span 1}.app-mode .insight-stats article:first-child{grid-column:1/-1}.app-mode .insight-finance .insight-stats{grid-template-columns:1fr}.app-mode .insight-finance .insight-stats article{grid-column:1/-1}.settings-layout{grid-template-columns:1fr}.settings-signout{grid-column:1}.app-mode .insight-bars{gap:.35rem}.app-mode .insight-bars label{flex-direction:column;align-items:center}.top-settings-link{font-size:.65rem}}
+
+/* Shared paper-and-forest shell: account controls stay beside the profile. */
+body.app-mode{--app-bg:var(--paper);--app-surface:var(--sheet);--app-line:var(--line);background:var(--paper)}
+.app-mode .topbar{background:var(--sheet);justify-content:flex-start;gap:1rem}
+.app-mode .topbar .network-status{margin-left:0}
+.app-mode .topbar .top-wallet-link,.app-mode .topbar>:last-child{margin-left:0!important}
+.app-mode .topbar .app-location{margin-right:1rem}
+.app-mode .workspace-picker{margin:0 0 2rem;padding:1.4rem;background:var(--sheet);border:1px solid var(--line-strong);border-radius:1rem}
+.workspace-picker h2{font-size:1.4rem;margin:0 0 .5rem}.workspace-picker p{font-size:.9rem}.workspace-picker .actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem}
+.workspace-picker .button[aria-current]{background:var(--forest);border-color:var(--forest);color:var(--sheet)}
+.app-mode .role-dashboard-hero h1{font-size:clamp(2.4rem,4.5vw,4rem)}
+@media(max-width:760px){.staff-mobile-dock{grid-template-columns:repeat(auto-fit,minmax(44px,1fr))!important}.app-mode .role-insight-link{flex-wrap:wrap}.app-mode .workspace-picker{padding:1rem}.workspace-picker .actions .button{flex:1 1 130px;text-align:center;justify-content:center}}

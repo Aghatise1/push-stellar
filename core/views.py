@@ -514,7 +514,6 @@ def _role_dashboard(request,role):
         'metrics':metrics,
         'recent_audit':AuditEvent.objects.select_related('actor')[:10] if role in {'owner','admin'} else [],
         'insight_url':reverse('operations_analytics')+'?view='+role,
-        'report':report_data(role,report_days(request)),
     }
     if role == 'owner':
         shared.update({

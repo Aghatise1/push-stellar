@@ -47,6 +47,10 @@ class WorkspaceTests(TestCase):
         self.assertEqual(AccountActivity.objects.filter(user=self.worker).count(),1)
         self.client.logout();self.login_as(self.owner)
         response=self.client.get(reverse('owner_dashboard'))
+        self.assertNotContains(response,'ops-board')
+        self.assertContains(response,'Choose a workspace')
+        self.assertNotContains(response,'top-settings-link')
+        response=self.client.get(reverse('operations_analytics'))
         report=response.context['report']
         self.assertEqual(report['member_total'],2)
         self.assertEqual(report['active_period'],1)

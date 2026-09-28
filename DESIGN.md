@@ -208,11 +208,11 @@ Keyboard focus uses a .1875rem outline with a .25rem offset; the rail substitute
 
 ## Operations reporting (28 September 2026)
 
-Staff dashboards use a compact reporting layout: four count cards, a wide daily
+The dedicated Insights page uses a compact reporting layout: four count cards, a wide daily
 trend chart and a narrow actionable queue, period comparisons, then engagement
-and settlement detail. Owner switching is a collapsed control, not a giant card.
+and settlement detail. The command centre retains its original action cards and an always-visible owner workspace selector. Reports belong only in Insights.
 Keep the existing forest/paper identity; the supplied reference informs density
-and hierarchy, not its purple palette. Surfaces are white with clear borders;
+and hierarchy, not its purple palette. The shared shell uses warm paper #f3f0e8, sheet #fbfaf6 and forest accents. Settings stays in the profile area; member toolbar controls are grouped on the left. Report cards have clear borders;
 the primary chart uses forest #172a22, light green #a9cfb6 and a dashed cream
 comparison line. Labels and dates must accompany every count. No decorative
 verification doughnut, fake revenue, fabricated activity or percentage without

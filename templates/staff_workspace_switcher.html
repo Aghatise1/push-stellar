@@ -1,5 +1,5 @@
-<details class="owner-view-picker" aria-label="Owner workspace switcher">
-  <summary>Owner controls · Switch workspace</summary>
+<section class="guidance-panel workspace-picker" aria-label="Owner workspace switcher">
+  <h2>Choose a workspace</h2>
   <p>One account, five views. View each staff dashboard or open your own member workspace.</p>
   <nav class="actions" aria-label="Dashboard views">
     <a class="button secondary small" href="{% url 'owner_dashboard' %}" {% if role == 'owner' %}aria-current="page"{% endif %}>Owner</a>
@@ -9,4 +9,4 @@
     <a class="button secondary small" href="{% url 'workspace' %}">Open member workspace</a>
   </nav>
   {% if owner_dashboard_preview %}<p class="notice"><strong>Viewing the {{ role }} dashboard as Owner.</strong> Your account and owner permissions have not changed. Opening a tool uses your owner access.</p>{% endif %}
-</details>
+</section>
