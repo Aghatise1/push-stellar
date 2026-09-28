@@ -31,8 +31,13 @@ class Command(BaseCommand):
         require(not settings.DEBUG, 'Django production mode is enabled.', 'PUSH_ENV must be production.')
         require(settings.DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql',
                 'PostgreSQL is configured.', 'Production must use PostgreSQL.')
-        require(settings.EMAIL_DELIVERY_CONFIGURED, 'Email delivery is configured.',
+        require(settings.EMAIL_DELIVERY_CONFIGURED, 'Email transport credentials are configured.',
                 'A protected HTTPS mail API or SMTP transport and a non-local sender are required.')
+        if settings.RENDER_EXTERNAL_HOSTNAME and settings.EMAIL_SMTP_CONFIGURED and not settings.EMAIL_API_CONFIGURED:
+            self.stdout.write(self.style.WARNING(
+                'WARNING  SMTP credentials are present, but Render Free blocks ports 25, 465 and 587. '
+                'Configure PUSH_BREVO_API_KEY and a verified sender before expecting email delivery.'
+            ))
         require(settings.GOOGLE_AUTH_ENABLED, 'Google OAuth is configured.',
                 'Google OAuth client ID and client secret are required.')
         require(settings.PUSH_ORIGIN.startswith('https://'), 'The public origin uses HTTPS.',
