@@ -55,6 +55,11 @@ def health(request):
 def privacy(request):
     return render(request,'privacy.html')
 
+
+@login_required
+def account_settings(request):
+    return render(request,'account_settings.html',{'settings_staff':staff_role(request.user) is not None})
+
 def notify(recipient,kind,title,body,link=''):
     return Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
 
@@ -305,7 +310,8 @@ def invite_redeem(request):
     initial={'code':request.GET.get('code','')}
     form=InvitationCodeForm(request.POST or None,initial=initial)
     if request.method == 'POST' and limited(request,'invite',8):
-        return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+        form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
+        return render(request,'invite.html',{'form':form},status=429)
     if request.method == 'POST' and form.is_valid():
         invitation=Invitation.objects.filter(
             code_hash=hash_invitation_code(form.cleaned_data['code']),used_at__isnull=True,
@@ -331,7 +337,9 @@ def register(request):
         messages.info(request,'Push account creation is invite-only. Enter your invitation code first.')
         return redirect('invite_redeem')
     if request.method == 'POST' and limited(request,'register',6):
-        return HttpResponse('Too many attempts. Please try again in 15 minutes.',status=429)
+        form=Registration(request.POST)
+        form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
+        return render(request,'registration/register.html',{'form':form,'invitation':invitation},status=429)
     form = Registration(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         email=form.cleaned_data['email']
@@ -420,7 +428,8 @@ def resend_registration(request):
     pending=pending_registration(request)
     if pending is None: return redirect('register')
     if limited(request,'registration-resend',3):
-        return HttpResponse('Please wait before requesting another code.',status=429)
+        messages.error(request,'Too many code requests. Please try again in 15 minutes.')
+        return redirect('verify_registration')
     try: send_registration_verification(pending)
     except Exception: messages.error(request,'We could not send a new code. Check the protected email delivery settings.')
     else: messages.success(request,'A new six-digit code has been sent.')
@@ -509,6 +518,7 @@ def _role_dashboard(request,role):
                 ('Accounts','Users and restrictions','Inspect accounts and apply documented restrictions.',reverse('operations_users'),metrics['restrictions']),
                 ('Support','Tickets and appeals','Review account, work, safety and payment requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Trust','Moderation queues','Review waitlist applications, listings and disputes.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
+                ('Invitations','Tester codes','Create and copy one-time tester invitations.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Settlement','Payments and disputes','Inspect testnet evidence and recorded decisions.',reverse('operations_payments'),metrics['disputes']),
                 ('Delivery','Email health','Review delivery metadata and configuration health.',reverse('operations_email'),metrics['email_failures']),
                 ('Knowledge','Documentation','Publish and maintain product guidance.',reverse('operations_docs'),DocumentationArticle.objects.count()),
@@ -524,6 +534,7 @@ def _role_dashboard(request,role):
                 ('Accounts','Account operations','Inspect members and record authorised restrictions.',reverse('operations_users'),metrics['restrictions']),
                 ('Support','Tickets and appeals','Assign, answer and close member requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Trust','Moderation queues','Review access, listings and disputed work.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
+                ('Invitations','Tester codes','Create and copy one-time tester invitations.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Settlement','Payment records','Inspect recorded settlements and disputes.',reverse('operations_payments'),metrics['disputes']),
                 ('Delivery','Email health','Monitor verification and invitation delivery.',reverse('operations_email'),metrics['email_failures']),
                 ('Knowledge','Documentation','Update member and staff guidance.',reverse('operations_docs'),DocumentationArticle.objects.count()),
@@ -538,6 +549,7 @@ def _role_dashboard(request,role):
                 ('Review','Listing queue','Approve or remove listings held for human review.',reverse('moderation'),metrics['flagged']),
                 ('Disputes','Resolution queue','Assess agreements, messages and submitted evidence.',reverse('operations_payments'),metrics['disputes']),
                 ('Access','Tester waitlist','Review applications and issue controlled invitations.',reverse('moderation'),metrics['waitlist']),
+                ('Invitations','Tester codes','Create and copy one-time tester invitations.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Accounts','Member context','Inspect limited account context needed for a case.',reverse('operations_users'),metrics['users']),
                 ('Guidance','Staff documentation','Read the current moderation and safety guidance.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
             ],
@@ -551,6 +563,7 @@ def _role_dashboard(request,role):
                 ('Inbox','Open tickets','Assign and respond to member requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Appeals','Account access cases','Review open account-access requests and their history.',reverse('operations_tickets')+'?status=all',metrics['account_tickets']),
                 ('Accounts','Member lookup','Find account details relevant to a support case.',reverse('operations_users'),'→'),
+                ('Invitations','Tester codes','Invite a tester and copy their one-time code.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Waiting','Member responses','Track cases waiting for more information.',reverse('operations_tickets')+'?status=waiting_user',metrics['waiting_user']),
                 ('Guidance','Support documentation','Read current account and support procedures.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
             ],
@@ -588,6 +601,7 @@ def operations_analytics(request):
                  ('Jobs posted',Job.objects.filter(created_at__date__gte=first_day),'created_at')]
         stats=[('Total members',User.objects.count()),
                ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
+               ('Assignments created',Assignment.objects.count()),
                ('Open jobs',Job.objects.filter(status='open',moderation_status='approved').count()),
                ('Open disputes',Dispute.objects.exclude(status='resolved').count())]
         status_title='Account state'
@@ -597,18 +611,22 @@ def operations_analytics(request):
     elif role == 'moderator':
         sources=[('New disputes',Dispute.objects.filter(created_at__date__gte=first_day),'created_at'),
                  ('Jobs sent for review',Job.objects.filter(created_at__date__gte=first_day,moderation_status='review'),'created_at')]
-        stats=[('Open disputes',Dispute.objects.exclude(status='resolved').count()),
+        stats=[('Total members',User.objects.count()),
+               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
+               ('Open disputes',Dispute.objects.exclude(status='resolved').count()),
                ('Listings awaiting review',Job.objects.filter(moderation_status='review').count()),
                ('Pending tester reviews',WaitlistApplication.objects.filter(status='pending').count()),
                ('Resolved disputes',Dispute.objects.filter(status='resolved').count())]
         status_title='Dispute decisions'
         first_label='Resolved'
-        first_count=stats[3][1]
+        first_count=Dispute.objects.filter(status='resolved').count()
         total=Dispute.objects.count()
     else:
         sources=[('New tickets',SupportTicket.objects.filter(created_at__date__gte=first_day),'created_at'),
                  ('Tickets resolved',SupportTicket.objects.filter(updated_at__date__gte=first_day,status='resolved'),'updated_at')]
-        stats=[('Open tickets',SupportTicket.objects.filter(status='open').count()),
+        stats=[('Total members',User.objects.count()),
+               ('Signed in during the last 24 hours',User.objects.filter(last_login__gte=timezone.now()-timedelta(hours=24)).count()),
+               ('Open tickets',SupportTicket.objects.filter(status='open').count()),
                ('Urgent unresolved',SupportTicket.objects.filter(priority='urgent').exclude(status__in=['resolved','closed']).count()),
                ('Unassigned tickets',SupportTicket.objects.filter(assigned_to__isnull=True).exclude(status__in=['resolved','closed']).count()),
                ('Waiting for member',SupportTicket.objects.filter(status='waiting_user').count())]
@@ -1258,11 +1276,8 @@ def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
     waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
-    invitations=Invitation.objects.select_related('application','created_by','used_by')[:100]
     return render(request,'moderation.html',{
         'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
-        'invitations':invitations,'invitation_form':StaffInvitationForm(),
-        'new_invitation':request.session.pop('push_new_invitation',None),
         'moderation_now':timezone.now(),'staff_role':staff_role(request.user),
         'can_moderate':staff_role(request.user) in {'owner','admin','moderator'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
@@ -1272,6 +1287,16 @@ def moderation(request):
                    'tickets':SupportTicket.objects.exclude(status__in=['resolved','closed']).count(),
                    'email_failures':EmailDelivery.objects.filter(status='failed').count()},
         'recent_audit':AuditEvent.objects.select_related('actor')[:12],
+    })
+
+
+@staff_only('owner','admin','moderator','support')
+def staff_invitations(request):
+    return render(request,'staff_invitations.html',{
+        'invitations':Invitation.objects.select_related('application','created_by')[:100],
+        'invitation_form':StaffInvitationForm(),
+        'new_invitation':request.session.pop('push_new_invitation',None),
+        'moderation_now':timezone.now(),
     })
 
 
@@ -1316,17 +1341,21 @@ def operations_users(request):
     query=request.GET.get('q','').strip()
     if query:
         users=users.filter(Q(email__icontains=query)|Q(display_name__icontains=query))
-    elif staff_role(request.user) == 'support':
-        users=users.none()
-    return render(request,'operations_users.html',{'users':users[:100],'query':query,'support_lookup':staff_role(request.user)=='support'})
+    return render(request,'operations_users.html',{'users':users[:100],'query':query,'member_count':User.objects.count()})
 
 
 @staff_only('owner','admin','moderator','support')
 def operations_user(request,pk):
     target=get_object_or_404(User,pk=pk)
     assignments=Assignment.objects.filter(Q(worker=target)|Q(job__owner=target)).select_related('job','worker')[:20]
+    worker_payments=Payment.objects.filter(assignment__worker=target)
+    verified_testnet=worker_payments.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0
+    simulated_value=worker_payments.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0
     return render(request,'operations_user.html',{
         'target':target,'assignments':assignments,'sanction_form':SanctionForm(prefix='sanction'),
+        'completed_work_count':Assignment.objects.filter(worker=target,status='paid').count(),
+        'active_work_count':Assignment.objects.filter(worker=target).exclude(status__in=['paid','cancelled']).count(),
+        'verified_testnet':verified_testnet,'simulated_value':simulated_value,
         'active_sanctions':target.sanctions.filter(active=True).select_related('created_by'),
         'past_sanctions':target.sanctions.filter(active=False).select_related('created_by','lifted_by')[:20],
         'can_restrict_target':not (target == request.user or target.is_superuser or StaffAccess.objects.filter(user=target).exists()),
@@ -1341,6 +1370,7 @@ def operations_email(request):
         'deliveries':deliveries,
         'email_configured':settings.EMAIL_DELIVERY_CONFIGURED,
         'email_backend':settings.EMAIL_BACKEND.rsplit('.',1)[-1],
+        'smtp_blocked_on_free_render':settings.PRODUCTION and not settings.EMAIL_API_CONFIGURED,
         'sent_count':EmailDelivery.objects.filter(status='sent').count(),
         'failed_count':EmailDelivery.objects.filter(status='failed').count(),
     })
@@ -1396,30 +1426,33 @@ def review_waitlist(request,pk):
                 recipients=[application.email],
             )
         except Exception:
-            messages.warning(request,f'Approved, but email delivery failed. Give this code to {application.email} securely: {code}')
+            messages.warning(request,'Approved, but email delivery failed. Copy the one-time code from Tester invitations and share it securely.')
         else:
             messages.success(request,f'Approved and sent a one-time invitation to {application.email}.')
     else:
         messages.success(request,f'{application.email} was not approved for this testing round.')
     audit(request.user,'waitlist.reviewed',application,{'decision':decision})
-    return redirect('moderation')
+    return redirect('staff_invitations') if decision == 'approve' else redirect('moderation')
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','moderator','support')
 @require_POST
 def create_staff_invitation(request):
+    if limited(request,f'staff-invite:{request.user.pk}',30):
+        messages.error(request,'Too many invitations were created recently. Try again in 15 minutes.')
+        return redirect('staff_invitations')
     form=StaffInvitationForm(request.POST)
     if not form.is_valid():
         detail=' '.join(str(error) for errors in form.errors.values() for error in errors)
         messages.error(request,f'The invitation was not created. {detail}')
-        return redirect('moderation')
+        return redirect('staff_invitations')
     with transaction.atomic():
         application,_=WaitlistApplication.objects.update_or_create(
             email=form.cleaned_data['email'],
             defaults={
                 'name':form.cleaned_data['name'],'role':form.cleaned_data['role'] or 'Invited tester',
                 'skills':'','intended_use':'Direct invitation from the Push testing team.',
-                'reason':'Invited directly by an authorised Push founder or moderator.',
+                'reason':'Invited directly by an authorised Push team member.',
                 'accepted_testing_terms':False,'status':'approved','reviewed_by':request.user,
                 'reviewed_at':timezone.now(),
             },
@@ -1437,16 +1470,16 @@ def create_staff_invitation(request):
     else:
         messages.success(request,f'Invitation created and emailed to {application.email}.')
     audit(request.user,'invitation.created',invitation,{'email':application.email})
-    return redirect('moderation')
+    return redirect('staff_invitations')
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','moderator','support')
 @require_POST
 def revoke_invitation(request,pk):
     updated=Invitation.objects.filter(pk=pk,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
     if updated: audit(request.user,'invitation.revoked',Invitation(pk=pk))
     messages.success(request,'Invitation revoked.' if updated else 'That invitation was already used or revoked.')
-    return redirect('moderation')
+    return redirect('staff_invitations')
 
 
 @staff_only('owner','admin','moderator')

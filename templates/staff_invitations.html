@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Tester invitations — Push{% endblock %}
+{% block app_location %}Operations · Invitations{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="tag">Approved staff only</span><h1>Tester invitations.</h1><p class="lead">Create, copy, reissue and revoke one-time codes tied to a tester's email.</p></div></div>
+<section class="invitation-desk" aria-labelledby="invitation-desk-title">
+  <div class="section-heading"><div><h2 id="invitation-desk-title">Create a code</h2><p>Invite a tester by email or copy the code to share it yourself.</p></div><span>Codes expire after 7 days</span></div>
+  {% if new_invitation %}
+  <div class="invitation-reveal" role="status">
+    <div><span>Copy this code now</span><strong>{{ new_invitation.email }}</strong><p>This full code is shown once. It expires {{ new_invitation.expires }}.</p></div>
+    <div class="invitation-copy">
+      <input id="new-invitation-code" value="{{ new_invitation.code }}" readonly aria-label="New invitation code">
+      <button class="button" type="button" data-copy-target="#new-invitation-code" data-copied-label="Code copied">Copy invitation code</button>
+    </div>
+  </div>
+  {% endif %}
+  <div class="invitation-create">
+    <div><h3>Invite a tester directly</h3><p>Use this when a staff member already knows the tester. The code only works with the email entered here.</p></div>
+    <form method="post" action="{% url 'create_staff_invitation' %}">
+      {% csrf_token %}
+      {% include 'fields.html' with form=invitation_form %}
+      <button class="button full" type="submit">Create and email invitation</button>
+    </form>
+  </div>
+  <div class="section-heading"><div><h3>Invitation activity</h3><p>Readable codes are never stored. Reissue a code if the tester loses it.</p></div></div>
+  <div class="invitation-list">
+    {% for invitation in invitations %}
+    <article class="invitation-row">
+      <div>
+        {% if invitation.used_at %}<span class="status-bubble approved">Used</span>
+        {% elif invitation.revoked_at %}<span class="status-bubble removed">Revoked</span>
+        {% elif invitation.expires_at <= moderation_now %}<span class="status-bubble review">Expired</span>
+        {% else %}<span class="status-bubble open">Active</span>{% endif %}
+        <strong>{{ invitation.email }}</strong>
+        <small>Created {{ invitation.created_at|date:'j M Y, H:i' }} by {{ invitation.created_by.display_name }} · expires {{ invitation.expires_at|date:'j M Y, H:i' }}</small>
+      </div>
+      <div class="invitation-actions">
+        {% if not invitation.used_at %}<form method="post" action="{% url 'create_staff_invitation' %}">{% csrf_token %}<input type="hidden" name="name" value="{{ invitation.application.name }}"><input type="hidden" name="email" value="{{ invitation.email }}"><input type="hidden" name="role" value="{{ invitation.application.role }}"><button class="button secondary small" type="submit">Reissue code</button></form>{% endif %}
+        {% if not invitation.used_at and not invitation.revoked_at and invitation.expires_at > moderation_now %}<form method="post" action="{% url 'revoke_invitation' invitation.pk %}">{% csrf_token %}<button class="link-button danger-link" type="submit">Revoke</button></form>{% endif %}
+      </div>
+    </article>
+    {% empty %}<div class="record-empty"><strong>No invitations created yet.</strong><span>Approve a waitlist application or invite a known tester above.</span></div>{% endfor %}
+  </div>
+</section>
+
+{% endblock %}

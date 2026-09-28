@@ -112,11 +112,16 @@ EMAIL_HOST = os.environ.get('PUSH_EMAIL_HOST','')
 EMAIL_HOST_USER = os.environ.get('PUSH_EMAIL_USER','')
 EMAIL_HOST_PASSWORD = os.environ.get('PUSH_EMAIL_PASSWORD','')
 EMAIL_PORT = int(os.environ.get('PUSH_EMAIL_PORT','587'))
+EMAIL_TIMEOUT = 10
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = os.environ.get('PUSH_EMAIL_FROM','Push <noreply@localhost>')
-EMAIL_DELIVERY_CONFIGURED = bool(EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD and 'localhost' not in DEFAULT_FROM_EMAIL)
-EMAIL_BACKEND = ('django.core.mail.backends.smtp.EmailBackend' if EMAIL_DELIVERY_CONFIGURED
-                 else 'django.core.mail.backends.filebased.EmailBackend')
+PUSH_BREVO_API_KEY = os.environ.get('PUSH_BREVO_API_KEY','')
+EMAIL_API_CONFIGURED = bool(PUSH_BREVO_API_KEY and 'localhost' not in DEFAULT_FROM_EMAIL)
+EMAIL_SMTP_CONFIGURED = bool(EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD and 'localhost' not in DEFAULT_FROM_EMAIL)
+EMAIL_DELIVERY_CONFIGURED = EMAIL_API_CONFIGURED or EMAIL_SMTP_CONFIGURED
+EMAIL_BACKEND = ('core.email_backend.BrevoEmailBackend' if EMAIL_API_CONFIGURED else
+                 'django.core.mail.backends.smtp.EmailBackend' if EMAIL_SMTP_CONFIGURED else
+                 'django.core.mail.backends.filebased.EmailBackend')
 default_origin = f'https://{RENDER_EXTERNAL_HOSTNAME}' if PRODUCTION and RENDER_EXTERNAL_HOSTNAME else 'http://127.0.0.1:8765'
 PUSH_ORIGIN = os.environ.get('PUSH_ORIGIN',default_origin).rstrip('/')
 # django-allauth normally infers the OAuth callback scheme from the incoming
@@ -124,7 +129,7 @@ PUSH_ORIGIN = os.environ.get('PUSH_ORIGIN',default_origin).rstrip('/')
 # use the public origin's scheme for every absolute authentication URL.
 ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https' if PUSH_ORIGIN.startswith('https://') else 'http'
 if PRODUCTION and (not EMAIL_DELIVERY_CONFIGURED or not PUSH_ORIGIN.startswith('https://')):
-    raise ImproperlyConfigured('Production requires SMTP, a verified sender and an HTTPS PUSH_ORIGIN.')
+    raise ImproperlyConfigured('Production requires an email transport, a verified sender and an HTTPS PUSH_ORIGIN.')
 if PRODUCTION:
     parsed_origin = urlparse(PUSH_ORIGIN)
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:

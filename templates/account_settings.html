@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Account settings — Push{% endblock %}
+{% block app_location %}Account settings{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Account settings.</h1><p class="lead">Manage how you sign in, check your account status and end this session.</p></div><form method="post" action="{% url 'logout' %}" class="settings-header-logout">{% csrf_token %}<button class="button secondary" type="submit">Sign out of Push</button></form></div>
+<div class="settings-layout">
+  <section class="settings-panel"><h2>Sign-in and security</h2><p><strong>{{ user.email }}</strong></p><p>{% if user.email_verified %}Email verified{% else %}Email verification needed{% endif %} · {% if settings_staff %}Approved {{ staff_portal_role|title }} account{% else %}Member account{% endif %}</p>{% if user.has_usable_password %}<a class="button secondary" href="{% url 'password_change' %}">Change password</a>{% else %}<p>This account signs in with Google. To add a password, use email account recovery.</p><a class="button secondary" href="{% url 'password_reset' %}">Set a password by email</a>{% endif %}{% if not user.email_verified %}<a class="button secondary" href="{% url 'verify_email' %}">Verify email</a>{% endif %}</section>
+  <section class="settings-panel"><h2>Profile and preferences</h2><p>Update your name, public details, profile picture and résumé.</p>{% if not settings_staff or staff_is_owner %}<a class="button secondary" href="{% url 'profile' %}">Edit profile</a>{% else %}<p>Staff profile changes are managed by an administrator.</p>{% endif %}</section>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 import re
+import json
 from io import StringIO
 from decimal import Decimal
 from datetime import timedelta
@@ -7,6 +8,7 @@ from django.test import TestCase, Client, override_settings
 from django.conf import settings
 from django.urls import reverse
 from django.core import mail, signing
+from django.core.mail import EmailMessage
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.tokens import default_token_generator
@@ -16,6 +18,7 @@ from django.utils import timezone
 from .models import User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
+from .email_backend import BrevoEmailBackend
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class WorkspaceTests(TestCase):
@@ -75,7 +78,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(application.status,'pending')
         self.grant_staff(self.owner);self.login_as(self.owner)
         response=self.client.post(reverse('review_waitlist',args=[application.pk]),{'decision':'approve'})
-        self.assertRedirects(response,reverse('moderation'))
+        self.assertRedirects(response,reverse('staff_invitations'))
         application.refresh_from_db();self.assertEqual(application.status,'approved')
         invitation=application.invitations.get();self.assertIsNone(invitation.used_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn('Invitation code:',mail.outbox[0].body)
@@ -97,7 +100,7 @@ class WorkspaceTests(TestCase):
         invitation=Invitation.objects.get(email='friend@example.test')
         self.assertIsNone(invitation.revoked_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn(code,mail.outbox[0].body)
-        self.assertNotContains(self.client.get(reverse('moderation')),code)
+        self.assertNotContains(self.client.get(reverse('staff_invitations')),code)
         self.client.post(reverse('revoke_invitation',args=[invitation.pk]))
         invitation.refresh_from_db();self.assertIsNotNone(invitation.revoked_at)
         self.client.logout()
@@ -105,12 +108,58 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'invalid, expired, revoked or already used')
     def test_non_staff_cannot_manage_invitations(self):
         self.login_as(self.worker)
+        self.assertEqual(self.client.get(reverse('staff_invitations')).status_code,403)
         self.assertEqual(self.client.post(reverse('create_staff_invitation'),{
             'name':'No Access','email':'blocked@example.test','role':'Tester',
         }).status_code,403)
         application=WaitlistApplication.objects.create(name='Tester',email='invite@example.test',role='Tester',intended_use='Test',reason='Test',accepted_testing_terms=True)
         invitation=Invitation.objects.create(application=application,email=application.email,code_hash=hash_invitation_code('PUSH-AAAABBBB-CCCCDDDD'),created_by=self.owner,expires_at=timezone.now()+timedelta(days=7))
         self.assertEqual(self.client.post(reverse('revoke_invitation',args=[invitation.pk])).status_code,403)
+
+    def test_support_can_issue_and_copy_invitation_without_moderation_access(self):
+        self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        self.assertEqual(self.client.get(reverse('moderation')).status_code,403)
+        response=self.client.post(reverse('create_staff_invitation'),{
+            'name':'Support Tester','email':'support-tester@example.test','role':'QA',
+        },follow=True)
+        self.assertRedirects(response,reverse('staff_invitations'))
+        self.assertContains(response,'Copy invitation code')
+        self.assertContains(self.client.get(reverse('operations_users')),'registered accounts')
+
+    def test_invitation_rate_limit_stays_on_styled_page(self):
+        for _ in range(8):
+            self.client.post(reverse('invite_redeem'),{'code':'PUSH-NOTVALID-TESTCODE'})
+        response=self.client.post(reverse('invite_redeem'),{'code':'PUSH-NOTVALID-TESTCODE'})
+        self.assertEqual(response.status_code,429)
+        self.assertContains(response,'Create your tester account',status_code=429)
+        self.assertContains(response,'Too many attempts',status_code=429)
+
+    def test_staff_settings_and_sign_out_are_accessible(self):
+        self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        settings_page=self.client.get(reverse('account_settings'))
+        self.assertContains(settings_page,'Sign out of Push')
+        self.assertContains(settings_page,'Change password')
+        self.assertEqual(self.client.get(reverse('password_change')).status_code,200)
+        self.assertRedirects(self.client.post(reverse('logout')),reverse('home'),fetch_redirect_response=False)
+
+    @override_settings(PUSH_BREVO_API_KEY='test-api-key')
+    def test_https_email_backend_submits_verified_sender_without_smtp(self):
+        class Accepted:
+            status=201
+            def __enter__(self): return self
+            def __exit__(self,*_): return False
+        captured={}
+        def accept(request,timeout):
+            captured['url']=request.full_url
+            captured['payload']=json.loads(request.data)
+            captured['timeout']=timeout
+            return Accepted()
+        with patch('core.email_backend.urlopen',side_effect=accept):
+            count=BrevoEmailBackend().send_messages([EmailMessage('Verify','Code','Push <sender@example.test>',['tester@example.test'])])
+        self.assertEqual(count,1)
+        self.assertEqual(captured['url'],'https://api.brevo.com/v3/smtp/email')
+        self.assertEqual(captured['payload']['sender']['email'],'sender@example.test')
+        self.assertEqual(captured['payload']['to'],[{'email':'tester@example.test'}])
     def test_staff_portal_uses_approved_role_and_separate_login(self):
         self.assertRedirects(self.client.get(reverse('moderation')),f'{reverse("staff_login")}?next={reverse("moderation")}')
         self.login_as(self.worker)
@@ -250,7 +299,7 @@ class WorkspaceTests(TestCase):
         self.client.logout();self.grant_staff(self.owner,'support');self.login_as(self.owner)
         support=self.client.get(reverse('operations_analytics'))
         self.assertContains(support,'Support feedback')
-        self.assertNotContains(support,'Total members')
+        self.assertContains(support,'Total members')
         self.assertContains(self.client.get(reverse('documentation')),'staff-mobile-dock')
         self.assertRedirects(self.client.get(reverse('wallet')),reverse('staff_dashboard'),fetch_redirect_response=False)
 

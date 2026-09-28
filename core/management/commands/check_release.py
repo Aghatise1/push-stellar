@@ -31,8 +31,8 @@ class Command(BaseCommand):
         require(not settings.DEBUG, 'Django production mode is enabled.', 'PUSH_ENV must be production.')
         require(settings.DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql',
                 'PostgreSQL is configured.', 'Production must use PostgreSQL.')
-        require(settings.EMAIL_DELIVERY_CONFIGURED, 'SMTP delivery is configured.',
-                'Protected SMTP settings and a non-local sender are required.')
+        require(settings.EMAIL_DELIVERY_CONFIGURED, 'Email delivery is configured.',
+                'A protected HTTPS mail API or SMTP transport and a non-local sender are required.')
         require(settings.GOOGLE_AUTH_ENABLED, 'Google OAuth is configured.',
                 'Google OAuth client ID and client secret are required.')
         require(settings.PUSH_ORIGIN.startswith('https://'), 'The public origin uses HTTPS.',

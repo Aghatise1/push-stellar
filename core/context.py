@@ -4,12 +4,13 @@ from .access import staff_role
 
 STAFF_PORTAL_ROUTES = {
     'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
-    'moderator_dashboard', 'support_dashboard', 'moderation',
+    'moderator_dashboard', 'support_dashboard', 'moderation', 'staff_invitations',
     'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team',
     'operations_tickets', 'operations_ticket', 'operations_users',
     'operations_user', 'operations_email', 'operations_payments',
     'operations_docs', 'operations_docs_edit', 'documentation',
     'documentation_article', 'help', 'operations_analytics', 'lift_sanction',
+    'account_settings', 'password_change', 'password_change_done',
 }
 
 def app_context(request):

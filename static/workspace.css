@@ -286,6 +286,7 @@ body.site-mode{background:
 /* Staff invitation controls retain the paper system with stronger hierarchy. */
 .moderation-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
 .invitation-desk{padding:clamp(1.25rem,3vw,2rem);border:1px solid var(--line-strong);border-radius:1rem;background:rgba(255,255,255,.62)}
+.invite-retry{margin-top:1rem}.invite-retry .errorlist{margin:0;padding:0;list-style:none;color:inherit;background:transparent;border:0}
 .invitation-desk>.section-heading:first-child{margin-top:0}
 .invitation-desk .section-heading p{margin:.35rem 0 0;color:var(--muted);font-size:.8rem}
 .invitation-reveal{display:grid;grid-template-columns:minmax(0,1fr) minmax(19rem,.8fr);gap:1.5rem;align-items:end;margin:1.25rem 0;padding:1.35rem;border-radius:.85rem;background:var(--forest);color:#fff;box-shadow:0 .55rem 1.4rem rgba(18,32,25,.14)}

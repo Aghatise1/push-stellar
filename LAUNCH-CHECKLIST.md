@@ -39,7 +39,7 @@ Do not send private keys, seed phrases, card numbers or API secrets in chat. Whe
 - [ ] Build separate payment adapters with authenticated, replay-resistant webhooks, reconciliation and verified settlement. Never mark a real payment successful because the browser says so.
 - [ ] Test duplicate, delayed and out-of-order notifications, failed payouts, refunds, chargebacks and network failures in provider sandboxes.
 - [ ] Define dispute resolution and an audited support interface. Preview disputes currently remain frozen.
-- [ ] Set up verified sending domain, production email and delivery monitoring. Test link expiry, recovery delivery and failure handling.
+- [ ] Set up a verified email sender and HTTPS email API on Render Free (see `EMAIL-SETUP.md`), then test real invitation, verification and recovery delivery.
 - [ ] Provision production hosting, TLS, restricted hosts, secret storage, static serving, trusted proxy configuration and deployment rollback.
 - [ ] Replace local SQLite with the chosen production database; retest concurrency and permissions against it. Current tests do not prove distributed concurrency behaviour.
 - [ ] Configure edge/distributed request limits and monitoring. Current database/IP throttling is for the local foundation and can group users behind the same proxy.

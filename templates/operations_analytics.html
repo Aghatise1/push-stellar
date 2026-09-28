@@ -2,7 +2,7 @@
 {% block title %}Operations insights — Push{% endblock %}
 {% block app_location %}Operations · Insights{% endblock %}
 {% block content %}
-<div class="page-heading"><div><span class="tag">{{ role|title }} insights</span><h1>What needs attention.</h1><p class="lead">A seven-day view drawn from Push's own records. Counts update when the page opens.</p></div><a class="button secondary" href="{% url 'staff_dashboard' %}">Back to command centre</a></div>
+<div class="page-heading"><div><h1>{{ role|title }} insights.</h1><p class="lead">Live account and case totals, followed by the last seven days. These figures come from Push's own records.</p></div><a class="button secondary" href="{% url 'staff_dashboard' %}">Back to command centre</a></div>
 <section class="insight-stats" aria-label="Current operations measures">{% for label,value in stats %}<article><span>{{ label }}</span><strong>{{ value }}</strong></article>{% endfor %}</section>
 <section class="insight-layout">
   <div class="insight-trends"><h2>Last seven days</h2>{% for group in series %}<div class="insight-series"><h3>{{ group.label }}</h3><div class="insight-bars">{% for point in group.points %}<div><label for="trend-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">{{ point.day|date:'D' }} <span>{{ point.count }}</span></label><progress id="trend-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" value="{{ point.count }}" max="{{ group.maximum }}">{{ point.count }}</progress></div>{% endfor %}</div></div>{% endfor %}</div>

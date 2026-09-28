@@ -29,6 +29,8 @@ services:
         sync: false
       - key: PUSH_EMAIL_FROM
         sync: false
+      - key: PUSH_BREVO_API_KEY
+        sync: false
       - key: STELLAR_TESTNET_HORIZON
         value: https://horizon-testnet.stellar.org
       - key: STELLAR_TESTNET_USDC_ISSUER

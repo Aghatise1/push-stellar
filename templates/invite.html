@@ -6,8 +6,9 @@
   <p class="lead">First, enter the one-time code sent to your approved email address. Next, you will create the account using that same address.</p>
   <form method="post" novalidate>
     {% csrf_token %}
-    {% include 'fields.html' %}
+    {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
     <button class="button full" type="submit">Verify code and create account</button>
+    {% if form.non_field_errors %}<div class="notice error invite-retry" role="alert">{{ form.non_field_errors }}</div>{% endif %}
   </form>
   <div class="invite-help"><strong>Do you need an invitation?</strong><p>Apply to the testing group. Approved applicants receive a code tied to their email.</p><a class="button secondary full" href="{% url 'waitlist' %}">Join as a tester</a></div>
   <p class="form-assurance">Already registered? <a href="{% url 'login' %}">Sign in to your existing account</a>.</p>

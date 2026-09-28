@@ -87,6 +87,6 @@ On this computer the existing prepared Python also lives at `../../work/push-ven
 
 Never upload `.local-key`, `.env`, `db.sqlite3`, database journals, `private-mail`, or any environment folder. `.gitignore` excludes them, but a manual ZIP may still include them. Do not serve this project directory as static files: only the `static` directory contains public assets.
 
-`PUSH_ENV=production` disables debug output, requires a long signing key, SMTP and an HTTPS site origin, and enables secure cookies and HTTPS protections. Those switches alone do not make deployment complete. Production needs configured TLS/proxy trust, static-file serving, a production database, backups, operational monitoring and payment integration. See `LAUNCH-CHECKLIST.md`.
+`PUSH_ENV=production` disables debug output, requires a long signing key, an email transport and an HTTPS site origin, and enables secure cookies and HTTPS protections. Render Free blocks outbound SMTP ports, so use the HTTPS email API described in `EMAIL-SETUP.md` for that service. Those switches alone do not make deployment complete. Production needs configured TLS/proxy trust, static-file serving, a production database, backups, operational monitoring and payment integration. See `LAUNCH-CHECKLIST.md`.
 
 No system can honestly promise zero bugs or immunity to attack. This is a tested foundation with explicit release gates, not a completed independent security audit.
