@@ -2,6 +2,15 @@ from django.conf import settings
 from .models import Assignment, Notification
 from .access import staff_role
 
+STAFF_PORTAL_ROUTES = {
+    'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
+    'moderator_dashboard', 'support_dashboard', 'moderation',
+    'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team',
+    'operations_tickets', 'operations_ticket', 'operations_users',
+    'operations_user', 'operations_email', 'operations_payments',
+    'operations_docs', 'operations_docs_edit',
+}
+
 def app_context(request):
     conversation_count = 0
     unread_notification_count = 0
@@ -20,6 +29,8 @@ def app_context(request):
             job__owner=request.user,status__in=['awaiting_funding','submitted']
         ).count()
         work_attention_count = worker_actions + client_actions
+    resolved_name = getattr(getattr(request, 'resolver_match', None), 'url_name', None)
+    portal_role = staff_role(request.user)
     return {'payment_notice':'Preview · Stellar testnet and simulated payments only.',
             'local_email': not settings.EMAIL_DELIVERY_CONFIGURED,
             'google_auth_enabled': settings.GOOGLE_AUTH_ENABLED,
@@ -28,4 +39,5 @@ def app_context(request):
             'notification_preview':notification_preview,
             'assigned_active_count':assigned_active_count,
             'work_attention_count':work_attention_count,
-            'staff_portal_role':staff_role(request.user)}
+            'staff_portal_role':portal_role,
+            'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES)}

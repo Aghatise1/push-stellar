@@ -119,6 +119,10 @@ EMAIL_BACKEND = ('django.core.mail.backends.smtp.EmailBackend' if EMAIL_DELIVERY
                  else 'django.core.mail.backends.filebased.EmailBackend')
 default_origin = f'https://{RENDER_EXTERNAL_HOSTNAME}' if PRODUCTION and RENDER_EXTERNAL_HOSTNAME else 'http://127.0.0.1:8765'
 PUSH_ORIGIN = os.environ.get('PUSH_ORIGIN',default_origin).rstrip('/')
+# django-allauth normally infers the OAuth callback scheme from the incoming
+# request. Render terminates TLS before forwarding the request, so explicitly
+# use the public origin's scheme for every absolute authentication URL.
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https' if PUSH_ORIGIN.startswith('https://') else 'http'
 if PRODUCTION and (not EMAIL_DELIVERY_CONFIGURED or not PUSH_ORIGIN.startswith('https://')):
     raise ImproperlyConfigured('Production requires SMTP, a verified sender and an HTTPS PUSH_ORIGIN.')
 if PRODUCTION:

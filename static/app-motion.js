@@ -27,6 +27,26 @@
       clearProps: 'transform,opacity'
     });
 
+    var roleDashboard = document.querySelector('[data-role-dashboard]');
+    if (roleDashboard) {
+      gsap.from('[data-role-reveal]', {
+        opacity: 0,
+        y: 10,
+        duration: 0.24,
+        ease: 'power3.out',
+        clearProps: 'transform,opacity'
+      });
+      gsap.from('[data-role-card]', {
+        opacity: 0,
+        y: 12,
+        duration: 0.26,
+        stagger: 0.045,
+        delay: 0.05,
+        ease: 'power3.out',
+        clearProps: 'transform,opacity'
+      });
+    }
+
     if (window.ScrollTrigger) {
       gsap.registerPlugin(window.ScrollTrigger);
       gsap.utils.toArray('.scroll-reveal').forEach(function (section) {

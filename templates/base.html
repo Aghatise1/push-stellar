@@ -8,16 +8,26 @@
   <meta name="description" content="{% block meta_description %}Push keeps the brief, delivery and payment record together for independent work.{% endblock %}">
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260927-10">
-  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260927-4">{% endif %}
+  <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260928-1">
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-1">{% endif %}
 </head>
-<body class="{% if user.is_authenticated %}app-mode{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
+<body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
   {% if user.is_authenticated %}
-  <aside class="sidebar" aria-label="Workspace navigation">
-    <a class="brand" href="{% url 'workspace' %}" aria-label="Push workspace"><img src="{% static 'images/push-logo.png' %}" alt="">push</a>
-    <p class="brand-caption">The work record</p>
+  <aside class="sidebar{% if staff_portal_active %} staff-sidebar{% endif %}" aria-label="{% if staff_portal_active %}Operations{% else %}Workspace{% endif %} navigation">
+    <a class="brand" href="{% if staff_portal_active %}{% url 'staff_dashboard' %}{% else %}{% url 'workspace' %}{% endif %}" aria-label="Push {% if staff_portal_active %}operations{% else %}workspace{% endif %}"><img src="{% static 'images/push-logo.png' %}" alt="">push</a>
+    <p class="brand-caption">{% if staff_portal_active %}{{ staff_portal_role|title }} operations{% else %}The work record{% endif %}</p>
     <nav aria-label="Workspace">
+      {% if staff_portal_active %}
+      <a {% if request.resolver_match.url_name == 'owner_dashboard' or request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'moderator_dashboard' or request.resolver_match.url_name == 'support_dashboard' %}aria-current="page"{% endif %} href="{% url 'staff_dashboard' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Command centre</span></a>
+      {% if staff_portal_role == 'owner' or staff_portal_role == 'admin' %}<a {% if request.resolver_match.url_name == 'staff_team' %}aria-current="page"{% endif %} href="{% url 'staff_team' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.5-4 2-6 5-6s4.5 2 5 6M14 15c3 0 5 1.5 6 5"/></svg><span>Team access</span></a>{% endif %}
+      {% if staff_portal_role == 'owner' or staff_portal_role == 'admin' or staff_portal_role == 'support' %}<a {% if request.resolver_match.url_name == 'operations_tickets' or request.resolver_match.url_name == 'operations_ticket' %}aria-current="page"{% endif %} href="{% url 'operations_tickets' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"/></svg><span>Support cases</span></a>{% endif %}
+      {% if staff_portal_role != 'support' %}<a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'moderate_dispute' or request.resolver_match.url_name == 'moderate_job' or request.resolver_match.url_name == 'review_waitlist' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Trust desk</span></a>{% endif %}
+      <a {% if request.resolver_match.url_name == 'operations_users' or request.resolver_match.url_name == 'operations_user' %}aria-current="page"{% endif %} href="{% url 'operations_users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Member accounts</span></a>
+      {% if staff_portal_role != 'support' %}<a {% if request.resolver_match.url_name == 'operations_payments' %}aria-current="page"{% endif %} href="{% url 'operations_payments' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v12H5zM5 10h14M8 15h3"/></svg><span>Settlement records</span></a>{% endif %}
+      {% if staff_portal_role == 'owner' or staff_portal_role == 'admin' %}<a {% if request.resolver_match.url_name == 'operations_email' %}aria-current="page"{% endif %} href="{% url 'operations_email' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 7 9-7"/></svg><span>Email delivery</span></a><a {% if request.resolver_match.url_name == 'operations_docs' or request.resolver_match.url_name == 'operations_docs_edit' %}aria-current="page"{% endif %} href="{% url 'operations_docs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v5h5M8 12h8M8 16h8"/></svg><span>Knowledge base</span></a>{% endif %}
+      <a href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h13M12 5l7 7-7 7"/></svg><span>Open member app</span></a>
+      {% else %}
       <a {% if request.resolver_match.url_name == 'workspace' %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Overview</span></a>
       <a {% if request.resolver_match.url_name == 'work' %}aria-current="page"{% endif %} href="{% url 'work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM9 7V4h6v3"/></svg><span>Work hub</span><b data-live-count="work"{% if not work_attention_count %} hidden{% endif %}>{{ work_attention_count }}</b></a>
       <a {% if request.resolver_match.url_name == 'assigned_work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'assigned_work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 3h8v4H8zM8 11l2 2 5-5"/></svg><span>Jobs I’m doing</span><b data-live-count="assigned"{% if not assigned_active_count %} hidden{% endif %}>{{ assigned_active_count }}</b></a>
@@ -30,6 +40,7 @@
       <a {% if request.resolver_match.url_name == 'support' or request.resolver_match.url_name == 'support_ticket' %}aria-current="page"{% endif %} href="{% url 'support' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"/></svg><span>Support</span></a>
       <a href="{% url 'job_create' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Post a job</span></a>
       {% if staff_portal_role %}<a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'moderate_dispute' or request.resolver_match.url_name == 'staff_team' or request.resolver_match.url_name == 'owner_dashboard' or request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'moderator_dashboard' or request.resolver_match.url_name == 'support_dashboard' %}aria-current="page"{% endif %} href="{% url 'staff_dashboard' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Operations</span></a>{% endif %}
+      {% endif %}
     </nav>
     <div class="account-box">
       {% if user.profile_image %}<img class="avatar avatar-image" src="{% url 'profile_image' user.pk %}" alt="">{% else %}<span class="avatar">{{ user.display_name|first|upper }}</span>{% endif %}
@@ -67,9 +78,9 @@
     {% if user.is_authenticated %}
     <header class="topbar">
       <span class="app-location">{% block app_location %}Overview{% endblock %}</span>
-      <span class="network-status"><i></i> Stellar testnet</span>
+      <span class="network-status"><i></i> {% if staff_portal_active %}Protected operations{% else %}Stellar testnet{% endif %}</span>
       <a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
-      {% if user.stellar_address %}<a class="top-wallet-link" href="{% url 'wallet' %}">{{ user.stellar_address|slice:':6' }}…{{ user.stellar_address|slice:'-4:' }}</a>{% else %}<button class="top-wallet-link" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">Connect wallet</button>{% endif %}
+      {% if staff_portal_active %}<a class="top-wallet-link" href="{% url 'staff_entry' %}">Switch workspace</a>{% elif user.stellar_address %}<a class="top-wallet-link" href="{% url 'wallet' %}">{{ user.stellar_address|slice:':6' }}…{{ user.stellar_address|slice:'-4:' }}</a>{% else %}<button class="top-wallet-link" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">Connect wallet</button>{% endif %}
     </header>
     {% endif %}
     <main id="main">
@@ -80,17 +91,37 @@
     {% if not user.is_authenticated %}<footer><span>© {% now "Y" %} Push · Scope, delivery and settlement in one record.</span><span><a href="{% url 'home' %}">Home</a> · <a href="{% url 'product' %}">Product</a> · <a href="{% url 'how_it_works' %}">Rules</a> · <a href="{% url 'documentation' %}">Docs</a> · <a href="{% url 'help' %}">Help</a> · <a href="{% url 'terms' %}">Terms</a> · <a href="{% url 'privacy' %}">Privacy</a> · <a href="{% url 'investors' %}">Investors</a> · <a href="mailto:aghatiseehioghae644@gmail.com">Email</a> · <a href="https://x.com/push__io" target="_blank" rel="noopener noreferrer">X · @push__io</a> · {{ payment_notice }}</span></footer>{% endif %}
   </div>
   {% if user.is_authenticated %}
-  <nav class="mobile-dock" aria-label="Signed-in navigation">
+  <nav class="mobile-dock{% if staff_portal_active %} staff-mobile-dock{% endif %}" aria-label="{% if staff_portal_active %}Operations{% else %}Signed-in{% endif %} navigation">
+    {% if staff_portal_active %}
+    <a {% if request.resolver_match.url_name == 'owner_dashboard' or request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'moderator_dashboard' or request.resolver_match.url_name == 'support_dashboard' %}aria-current="page"{% endif %} href="{% url 'staff_dashboard' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Control</span></a>
+    {% if staff_portal_role == 'owner' or staff_portal_role == 'admin' %}
+    <a {% if request.resolver_match.url_name == 'staff_team' %}aria-current="page"{% endif %} href="{% url 'staff_team' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.5-4 2-6 5-6s4.5 2 5 6M14 15c3 0 5 1.5 6 5"/></svg><span>Team</span></a>
+    <a {% if request.resolver_match.url_name == 'operations_tickets' or request.resolver_match.url_name == 'operations_ticket' %}aria-current="page"{% endif %} href="{% url 'operations_tickets' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"/></svg><span>Cases</span></a>
+    <a {% if request.resolver_match.url_name == 'operations_users' or request.resolver_match.url_name == 'operations_user' %}aria-current="page"{% endif %} href="{% url 'operations_users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Accounts</span></a>
+    <a {% if request.resolver_match.url_name == 'moderation' or request.resolver_match.url_name == 'operations_payments' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Trust</span></a>
+    {% elif staff_portal_role == 'moderator' %}
+    <a {% if request.resolver_match.url_name == 'moderation' %}aria-current="page"{% endif %} href="{% url 'moderation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3 8 8 10 5-2 8-5 8-10V7zM9 12l2 2 4-5"/></svg><span>Review</span></a>
+    <a {% if request.resolver_match.url_name == 'operations_payments' or request.resolver_match.url_name == 'moderate_dispute' %}aria-current="page"{% endif %} href="{% url 'operations_payments' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14v12H5zM5 10h14M8 15h3"/></svg><span>Disputes</span></a>
+    <a {% if request.resolver_match.url_name == 'operations_users' or request.resolver_match.url_name == 'operations_user' %}aria-current="page"{% endif %} href="{% url 'operations_users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Members</span></a>
+    <a href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h13M12 5l7 7-7 7"/></svg><span>App</span></a>
+    {% else %}
+    <a {% if request.resolver_match.url_name == 'operations_tickets' or request.resolver_match.url_name == 'operations_ticket' %}aria-current="page"{% endif %} href="{% url 'operations_tickets' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"/></svg><span>Tickets</span></a>
+    <a {% if request.resolver_match.url_name == 'operations_users' or request.resolver_match.url_name == 'operations_user' %}aria-current="page"{% endif %} href="{% url 'operations_users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Members</span></a>
+    <a href="{% url 'documentation' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v5h5M8 12h8M8 16h8"/></svg><span>Guide</span></a>
+    <a href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h13M12 5l7 7-7 7"/></svg><span>App</span></a>
+    {% endif %}
+    {% else %}
     <a {% if request.resolver_match.url_name == 'workspace' %}aria-current="page"{% endif %} href="{% url 'workspace' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Home</span></a>
     <a {% if request.resolver_match.url_name == 'assigned_work' or request.resolver_match.url_name == 'assignment' %}aria-current="page"{% endif %} href="{% url 'assigned_work' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 3h8v4H8zM8 11l2 2 5-5"/></svg><span>My jobs</span><b data-live-count="assigned"{% if not assigned_active_count %} hidden{% endif %}>{{ assigned_active_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'inbox' or request.resolver_match.url_name == 'conversation' %}aria-current="page"{% endif %} href="{% url 'inbox' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg><span>Messages</span><b data-live-count="messages"{% if not conversation_count %} hidden{% endif %}>{{ conversation_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'notifications' %}aria-current="page"{% endif %} href="{% url 'notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><span>Alerts</span><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>
     <a {% if request.resolver_match.url_name == 'wallet' or request.resolver_match.url_name == 'payments' %}aria-current="page"{% endif %} href="{% url 'wallet' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h15v12H4zM15 12h4v3h-4z"/></svg><span>Wallet</span></a>
     <a {% if request.resolver_match.url_name == 'profile' %}aria-current="page"{% endif %} href="{% url 'profile' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg><span>Profile</span></a>
+    {% endif %}
   </nav>
   <script src="{% static 'vendor/gsap.min.js' %}" defer></script>
   <script src="{% static 'vendor/ScrollTrigger.min.js' %}" defer></script>
-  <script src="{% static 'app-motion.js' %}?v=20260924-3" defer></script>
+  <script src="{% static 'app-motion.js' %}?v=20260928-1" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
   <script src="{% static 'wallet-connect.js' %}?v=20260924-3" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>

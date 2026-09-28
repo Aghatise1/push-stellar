@@ -133,6 +133,17 @@ class WorkspaceTests(TestCase):
         response=self.client.get(reverse('staff_login'))
         self.assertContains(response,'Choose a Google account')
         self.assertContains(response,'staff%2Fentry',html=False)
+
+    @override_settings(ACCOUNT_DEFAULT_HTTP_PROTOCOL='https')
+    def test_google_oauth_uses_https_callback_behind_render(self):
+        if not settings.GOOGLE_AUTH_ENABLED:
+            self.skipTest('Google authentication is not configured in this environment.')
+        response=self.client.get(reverse('google_login'))
+        self.assertEqual(response.status_code,302)
+        self.assertIn(
+            'redirect_uri=https%3A%2F%2Ftestserver%2Faccounts%2Fgoogle%2Flogin%2Fcallback%2F',
+            response['Location'],
+        )
     def test_analytics_is_private_and_uses_existing_records(self):
         self.assertRedirects(self.client.get(reverse('analytics')),f'{reverse("login")}?next={reverse("analytics")}')
         self.login_as(self.worker)
@@ -190,6 +201,15 @@ class WorkspaceTests(TestCase):
                 for other_role,other_route,_ in cases:
                     if other_role != role:
                         self.assertEqual(self.client.get(reverse(other_route)).status_code,404)
+
+    def test_operations_pages_use_a_staff_specific_mobile_dock(self):
+        self.grant_staff(self.owner,'admin');self.login_as(self.owner)
+        response=self.client.get(reverse('admin_dashboard'))
+        self.assertContains(response,'staff-mobile-dock')
+        self.assertContains(response,'>Control<',html=False)
+        self.assertContains(response,'>Team<',html=False)
+        self.assertContains(response,'>Cases<',html=False)
+        self.assertNotContains(response,'>My jobs<',html=False)
 
     @override_settings(PUSH_BOOTSTRAP_OWNER_EMAILS={'worker@example.test'})
     def test_verified_environment_owner_is_bootstrapped_once(self):

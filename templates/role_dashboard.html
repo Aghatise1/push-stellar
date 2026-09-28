@@ -2,16 +2,16 @@
 {% block title %}{{ dashboard_title }} — Push Operations{% endblock %}
 {% block app_location %}{{ role|title }} operations{% endblock %}
 {% block content %}
-<section class="role-dashboard role-{{ role }}" aria-labelledby="role-dashboard-title">
-  <header class="role-dashboard-hero">
+<section class="role-dashboard role-{{ role }}" aria-labelledby="role-dashboard-title" data-role-dashboard>
+  <header class="role-dashboard-hero" data-role-reveal>
     <div><span class="tag">{{ role|title }} workspace</span><h1 id="role-dashboard-title">{{ dashboard_title }}.</h1><p class="lead">{{ dashboard_lead }}</p></div>
-    <div class="role-identity"><span>Signed in securely as</span><strong>{{ request.user.email }}</strong><small>{{ dashboard_note }}</small></div>
+    <div class="role-identity"><span class="role-security"><i aria-hidden="true"></i>Protected staff session</span><strong>{{ request.user.email }}</strong><small>{{ dashboard_note }}</small><a href="{% url 'staff_entry' %}">Switch between member and operations workspaces →</a></div>
   </header>
   <div class="role-command-grid">
     {% for label,title,copy,url,count in cards %}
-    <a href="{{ url }}"><div><span>{{ label }}</span><strong>{{ title }}</strong><p>{{ copy }}</p></div><b>{{ count }}</b><i>Open →</i></a>
+    <a href="{{ url }}" data-role-card><div><span>{{ label }}</span><strong>{{ title }}</strong><p>{{ copy }}</p></div><b>{{ count }}</b><i>Open →</i></a>
     {% endfor %}
   </div>
-  {% if recent_audit %}<section class="role-activity"><div class="section-heading"><div><h2>Recent controlled actions</h2><p>The latest security-sensitive operations recorded by Push.</p></div></div><div class="audit-list">{% for event in recent_audit %}<div><strong>{{ event.action }}</strong><span>{{ event.actor.display_name|default:'System' }} · {{ event.target_type }} {{ event.target_id }} · {{ event.created_at|date:'j M, H:i' }}</span></div>{% empty %}<p class="empty">No operations activity recorded yet.</p>{% endfor %}</div></section>{% endif %}
+  {% if recent_audit %}<section class="role-activity" data-role-reveal><div class="section-heading"><div><h2>Recent controlled actions</h2><p>The latest security-sensitive operations recorded by Push.</p></div></div><div class="audit-list">{% for event in recent_audit %}<div><strong>{{ event.action }}</strong><span>{{ event.actor.display_name|default:'System' }} · {{ event.target_type }} {{ event.target_id }} · {{ event.created_at|date:'j M, H:i' }}</span></div>{% empty %}<p class="empty">No operations activity recorded yet.</p>{% endfor %}</div></section>{% endif %}
 </section>
 {% endblock %}
