@@ -199,8 +199,22 @@ class WorkspaceTests(TestCase):
                 self.assertRedirects(self.client.get(reverse('staff_dashboard')),reverse(route))
                 self.assertContains(self.client.get(reverse(route)),heading)
                 for other_role,other_route,_ in cases:
-                    if other_role != role:
+                    if other_role != role and role != 'owner':
                         self.assertEqual(self.client.get(reverse(other_route)).status_code,404)
+
+    def test_owner_can_view_all_dashboards_without_changing_role(self):
+        self.grant_staff(self.owner,'owner');self.login_as(self.owner)
+        for role in ['owner','admin','moderator','support']:
+            with self.subTest(role=role):
+                response=self.client.get(reverse(role+'_dashboard'))
+                self.assertContains(response,'Owner workspace switcher')
+                self.assertEqual(response.context['staff_portal_role'],role)
+                if role != 'owner':
+                    self.assertContains(response,'Your account and owner permissions have not changed')
+        self.assertEqual(StaffAccess.objects.get(user=self.owner).role,'owner')
+        self.client.logout();self.grant_staff(self.worker,'support');self.login_as(self.worker)
+        self.assertNotContains(self.client.get(reverse('support_dashboard')),'Owner workspace switcher')
+        self.assertEqual(self.client.get(reverse('owner_dashboard')+'?role=owner').status_code,404)
 
     def test_operations_pages_use_a_staff_specific_mobile_dock(self):
         self.grant_staff(self.owner,'admin');self.login_as(self.owner)

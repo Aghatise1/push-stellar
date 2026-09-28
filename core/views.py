@@ -457,6 +457,9 @@ def _role_dashboard(request,role):
     }
     shared={
         'role':role,
+        'can_switch_staff_dashboard':staff_role(request.user) == 'owner',
+        'owner_dashboard_preview':staff_role(request.user) == 'owner' and role != 'owner',
+        'staff_portal_role':role,
         'metrics':metrics,
         'recent_audit':AuditEvent.objects.select_related('actor')[:10] if role in {'owner','admin'} else [],
     }
@@ -524,17 +527,17 @@ def owner_dashboard(request):
     return _role_dashboard(request,'owner')
 
 
-@staff_only('admin')
+@staff_only('owner','admin')
 def admin_dashboard(request):
     return _role_dashboard(request,'admin')
 
 
-@staff_only('moderator')
+@staff_only('owner','moderator')
 def moderator_dashboard(request):
     return _role_dashboard(request,'moderator')
 
 
-@staff_only('support')
+@staff_only('owner','support')
 def support_dashboard(request):
     return _role_dashboard(request,'support')
 

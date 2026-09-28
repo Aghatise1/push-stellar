@@ -3,6 +3,7 @@
 {% block app_location %}{{ role|title }} operations{% endblock %}
 {% block content %}
 <section class="role-dashboard role-{{ role }}" aria-labelledby="role-dashboard-title" data-role-dashboard>
+  {% if can_switch_staff_dashboard %}{% include 'staff_workspace_switcher.html' %}{% endif %}
   <header class="role-dashboard-hero" data-role-reveal>
     <div><span class="tag">{{ role|title }} workspace</span><h1 id="role-dashboard-title">{{ dashboard_title }}.</h1><p class="lead">{{ dashboard_lead }}</p></div>
     <div class="role-identity"><span class="role-security"><i aria-hidden="true"></i>Protected staff session</span><strong>{{ request.user.email }}</strong><small>{{ dashboard_note }}</small><a href="{% url 'staff_entry' %}">Switch between member and operations workspaces →</a></div>

@@ -26,5 +26,6 @@
     <p>Wrong Google identity?</p>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="button secondary" type="submit">Sign out and choose another account</button></form>
   </div>
+  {% if staff_role == 'owner' %}{% include 'staff_workspace_switcher.html' %}{% endif %}
 </section>
 {% endblock %}
