@@ -9,7 +9,7 @@
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260928-3">
-  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-4">{% endif %}
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-5">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>

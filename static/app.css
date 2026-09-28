@@ -314,3 +314,10 @@ body.app-mode{--app-bg:var(--paper);--app-surface:var(--sheet);--app-line:var(--
 .workspace-picker .button[aria-current]{background:var(--forest);border-color:var(--forest);color:var(--sheet)}
 .app-mode .role-dashboard-hero h1{font-size:clamp(2.4rem,4.5vw,4rem)}
 @media(max-width:760px){.staff-mobile-dock{grid-template-columns:repeat(auto-fit,minmax(44px,1fr))!important}.app-mode .role-insight-link{flex-wrap:wrap}.app-mode .workspace-picker{padding:1rem}.workspace-picker .actions .button{flex:1 1 130px;text-align:center;justify-content:center}}
+
+/* Member header: context left, wallet and notification actions right. */
+.app-mode .topbar .top-notification{margin-left:auto!important}
+.app-mode .ticket-status{display:inline-flex;align-items:center;gap:.55rem;min-height:44px;padding:.65rem 1rem;font-size:1rem;font-weight:800;line-height:1.25;border:2px solid currentColor;border-radius:.65rem;background:#e4f0e7;color:#174638;white-space:normal}
+.app-mode .ticket-status:before{content:"";width:.6rem;height:.6rem;border-radius:50%;background:currentColor;flex-shrink:0}
+.app-mode .ticket-status.waiting_user{background:#fff0c7;color:#704b08}.app-mode .ticket-status.in_progress{background:#e3edf7;color:#234e75}.app-mode .ticket-status.resolved{background:#dcebe0;color:#214f34}.app-mode .ticket-status.closed{background:#e8e3d8;color:#47433b}
+.app-mode .page-heading .ticket-status{font-size:1.15rem;margin-bottom:.7rem}

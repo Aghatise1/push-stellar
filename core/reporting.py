@@ -89,6 +89,13 @@ def report_data(role, days=30):
         group['area']=group['path']+' L752,224 L48,224 Z'
         group['total']=sum(group['values'])
     rows=[{'day':day,'first':series[0]['values'][i],'second':series[1]['values'][i]} for i,day in enumerate(dates)]
+    daily_activity=dict(activity.filter(day__gte=start,day__lte=today).values('day').annotate(count=Count('user_id',distinct=True)).values_list('day','count'))
+    joined=daily_counts(members,'date_joined',start,today)
+    registered=members.filter(date_joined__date__lt=start).count()
+    for row in rows:
+        registered+=joined.get(row['day'],0)
+        row['registered']=registered
+        row['active']=daily_activity.get(row['day'],0) if first_activity and row['day']>=first_activity else None
     finance=None
     if role in {'owner','admin'}:
         period_payments=payments.filter(created_at__date__gte=start,created_at__date__lte=today)

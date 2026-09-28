@@ -37,3 +37,5 @@
 .app-mode.staff-portal-mode main{padding-top:24px}.app-mode .role-dashboard-hero{display:block}.app-mode .role-dashboard-hero .tag{display:none}
 
 .ops-main-grid>section,.ops-bottom-grid>section{margin:0}.ops-board .ops-finance{margin-top:18px}
+
+.ops-crosshair{stroke:#fff;stroke-width:1;stroke-dasharray:4 4;pointer-events:none}.ops-inspector{margin:12px 0;padding:14px;border:1px solid #61766a;border-radius:8px;background:#21392d}.ops-inspector label{font-size:.85rem;color:#fff}.ops-inspector label span{font-weight:400;color:#c4d7cb}.ops-inspector input{width:100%;min-height:44px;accent-color:#a9cfb6}.ops-inspector output{display:block;font-size:.9rem;line-height:1.7;color:#fff}.ops-board .ops-inspector .ops-footnote{color:#c4d7cb}.ops-inspector[hidden]{display:none}

@@ -54,6 +54,9 @@ class WorkspaceTests(TestCase):
         report=response.context['report']
         self.assertEqual(report['member_total'],2)
         self.assertEqual(report['active_period'],1)
+        self.assertEqual(report['rows'][-1]['registered'],2)
+        self.assertEqual(report['rows'][-1]['active'],1)
+        self.assertIsNone(report['rows'][0]['active'])
         self.assertEqual(report['common'][2]['value'],1)
         self.assertEqual(report['common'][3]['value'],1)
 
