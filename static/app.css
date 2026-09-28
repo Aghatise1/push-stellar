@@ -246,3 +246,18 @@ body.app-mode{--app-muted:#4f5952;--app-line:#cbd1cb}
 
 .job-heading-actions{display:grid;gap:1rem;justify-items:end}.job-heading-actions .button{white-space:nowrap}.job-share-field{display:block;margin-top:1.25rem}.job-share-field input{margin-top:.4rem;font-size:.7rem;background:var(--paper-deep)}.avatar-image{object-fit:cover}.profile-media-summary{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;border:1px solid var(--line-strong);border-radius:.75rem;background:var(--paper-deep)}.profile-media-summary img,.public-profile-image{width:4.5rem;height:4.5rem;border-radius:.75rem;object-fit:cover;border:1px solid var(--line-strong)}.profile-media-summary .profile-avatar{margin:0}.profile-media-summary strong,.profile-media-summary small{display:block}.profile-media-summary small{margin-top:.2rem;color:var(--ink)}.public-profile-card{padding:clamp(1.5rem,4vw,3rem);border:1px solid var(--line-strong);border-radius:1rem;background:var(--sheet)}.profile-actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.5rem}.app-mode input[type=file]{padding:.55rem;background:var(--paper-deep)}
 @media(max-width:760px){.job-heading-actions{justify-items:start;margin-top:1rem}.profile-media-summary{align-items:flex-start}.public-profile-card{padding:1.25rem}}
+
+/* Dashboard containment and consistent action labels. */
+.dashboard-grid>*,.balance-copy,.message-preview-list{min-width:0}
+.app-mode .messages-panel .panel-empty{width:100%;min-width:0;box-sizing:border-box}
+.app-mode .messages-panel .panel-empty p{width:100%;max-width:32ch;min-width:0;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.55;margin:.4rem auto 0}
+.app-mode .wallet-actions{grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem}
+.app-mode .wallet-actions a{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:3.25rem;padding:.7rem .5rem;gap:.45rem;line-height:1.2;text-align:center}
+.app-mode .wallet-actions a span{display:block;line-height:1.2;white-space:nowrap}
+.app-mode .wallet-actions svg{display:block;flex:0 0 1rem;width:1rem;height:1rem;margin:0}
+.app-mode .metric-card.signal p,.app-mode .metric-card.signal>span{color:#e1ece5}
+.app-mode .metric-card.signal strong{color:#fff}
+.workspace-return{display:flex;align-items:center;flex-wrap:wrap;gap:.75rem;margin:0 0 1.25rem;padding:1rem;border:1px solid var(--line-strong);border-radius:.75rem;background:var(--sheet)}
+.workspace-return>span{margin-right:auto;color:var(--ink);font-size:.8rem;font-weight:650}
+.workspace-return .button{min-height:2.75rem;display:inline-flex;align-items:center;justify-content:center;text-align:center}
+@media(max-width:480px){.workspace-return>span{flex-basis:100%}.workspace-return .button{flex:1;font-size:.75rem;padding:.7rem}.app-mode .wallet-actions a{flex-direction:column;gap:.45rem;font-size:.75rem;min-height:4rem}}

@@ -9,7 +9,7 @@
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260928-1">
-  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-1">{% endif %}
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20260928-2">{% endif %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
@@ -84,6 +84,7 @@
     </header>
     {% endif %}
     <main id="main">
+      {% if staff_portal_role %}<nav class="workspace-return" aria-label="Staff workspace switch"><span>{{ staff_portal_role|title }} workspace</span><a class="button small" href="{% url 'staff_entry' %}">Switch workspace</a>{% if not staff_portal_active %}<a class="button secondary small" href="{% url 'staff_dashboard' %}">Open Operations</a>{% else %}<a class="button secondary small" href="{% url 'workspace' %}">Open member workspace</a>{% endif %}</nav>{% endif %}
       {% if messages %}<div aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
       {% if user.is_authenticated and not user.email_verified %}<div class="notice"><strong>Verify your email to unlock Wallet, Messages and work actions.</strong><p>{% if local_email %}Real email delivery is not configured on this local preview yet. The newest code is stored in the private-mail folder.{% else %}Enter the six-digit code sent to {{ user.email }}.{% endif %}</p><a class="link-button" href="{% url 'verify_email' %}">Enter verification code</a></div>{% endif %}
       {% block content %}{% endblock %}

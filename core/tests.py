@@ -216,6 +216,17 @@ class WorkspaceTests(TestCase):
         self.assertNotContains(self.client.get(reverse('support_dashboard')),'Owner workspace switcher')
         self.assertEqual(self.client.get(reverse('owner_dashboard')+'?role=owner').status_code,404)
 
+    def test_workspace_return_is_only_visible_to_approved_staff(self):
+        self.login_as(self.worker)
+        self.assertNotContains(self.client.get(reverse('workspace')), 'Staff workspace switch')
+        self.grant_staff(self.worker, 'admin')
+        response = self.client.get(reverse('workspace'))
+        self.assertContains(response, 'Staff workspace switch')
+        self.assertContains(response, 'Open Operations')
+        self.assertRedirects(self.client.get(reverse('staff_dashboard')), reverse('admin_dashboard'))
+        self.assertContains(self.client.get(reverse('admin_dashboard')), 'Open member workspace')
+        self.assertEqual(self.client.get(reverse('owner_dashboard')).status_code, 404)
+
     def test_operations_pages_use_a_staff_specific_mobile_dock(self):
         self.grant_staff(self.owner,'admin');self.login_as(self.owner)
         response=self.client.get(reverse('admin_dashboard'))
