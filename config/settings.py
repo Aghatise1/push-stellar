@@ -95,9 +95,11 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = PRODUCTION
 CSRF_COOKIE_SECURE = PRODUCTION
+SESSION_COOKIE_NAME = '__Host-push_session' if PRODUCTION else 'push_sessionid'
+CSRF_COOKIE_NAME = '__Host-push_csrf' if PRODUCTION else 'push_csrftoken'
 SESSION_COOKIE_AGE = 3600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SECURE_SSL_REDIRECT = False
+SECURE_SSL_REDIRECT = PRODUCTION
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if PRODUCTION else None
 SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
@@ -105,7 +107,12 @@ SECURE_HSTS_PRELOAD = PRODUCTION
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
-DATA_UPLOAD_MAX_MEMORY_SIZE = 128 * 1024
+# The profile form accepts a 5 MB resume plus multipart overhead.  The old
+# 128 KiB request cap rejected legitimate uploads before the form validators
+# could provide their useful 2 MB / 5 MB messages.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 7 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 100
 PASSWORD_RESET_TIMEOUT = 3600
 EMAIL_FILE_PATH = BASE_DIR/'private-mail'
 EMAIL_HOST = os.environ.get('PUSH_EMAIL_HOST','')
@@ -115,6 +122,9 @@ EMAIL_PORT = int(os.environ.get('PUSH_EMAIL_PORT','587'))
 EMAIL_TIMEOUT = 10
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = os.environ.get('PUSH_EMAIL_FROM','Push <noreply@localhost>')
+PUSH_EMAIL_DAILY_LIMIT = int(os.environ.get('PUSH_EMAIL_DAILY_LIMIT','250'))
+if not 1 <= PUSH_EMAIL_DAILY_LIMIT <= 10000:
+    raise ImproperlyConfigured('PUSH_EMAIL_DAILY_LIMIT must be between 1 and 10000 recipients per day.')
 PUSH_BREVO_API_KEY = os.environ.get('PUSH_BREVO_API_KEY','')
 EMAIL_API_CONFIGURED = bool(PUSH_BREVO_API_KEY and 'localhost' not in DEFAULT_FROM_EMAIL)
 EMAIL_SMTP_CONFIGURED = bool(EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD and 'localhost' not in DEFAULT_FROM_EMAIL)
@@ -146,7 +156,8 @@ STATICFILES_DIRS = [BASE_DIR/'static']
 STATIC_ROOT = BASE_DIR/'staticfiles'
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    'staticfiles': {'BACKEND': ('whitenoise.storage.CompressedManifestStaticFilesStorage'
+                                if PRODUCTION else 'django.contrib.staticfiles.storage.StaticFilesStorage')},
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('PUSH_GOOGLE_CLIENT_ID','').strip()
@@ -179,3 +190,21 @@ SOCIALACCOUNT_PROVIDERS = ({
 # Fixed public testnet endpoints and asset identity. No secret keys are stored by Push.
 STELLAR_TESTNET_HORIZON = os.environ.get('STELLAR_TESTNET_HORIZON','https://horizon-testnet.stellar.org')
 STELLAR_TESTNET_USDC_ISSUER = os.environ.get('STELLAR_TESTNET_USDC_ISSUER','GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {'format': '{asctime} {levelname} {name} request_id={request_id} {message}', 'style': '{'},
+    },
+    'filters': {
+        'request_id': {'()': 'core.logging.RequestIdFilter'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'console', 'filters': ['request_id']},
+    },
+    'loggers': {
+        'django.request': {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
+        'core': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}

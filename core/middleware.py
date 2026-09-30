@@ -1,3 +1,9 @@
+import logging
+import secrets
+
+from .logging import request_id
+
+
 class AccountActivityMiddleware:
     """Count successful signed-in page use, at most once a minute per session."""
     def __init__(self,get_response):
@@ -28,9 +34,26 @@ class AppSecurityMiddleware:
     def __init__(self,get_response):
         self.get_response = get_response
     def __call__(self,request):
-        response = self.get_response(request)
+        value=request.headers.get('X-Request-ID','').strip()
+        if not value or len(value)>64 or not value.replace('-','').isalnum():
+            value=secrets.token_hex(12)
+        token=request_id.set(value)
+        try:
+            response = self.get_response(request)
+        except Exception:
+            logging.getLogger('core.request').exception(
+                'Unhandled request error',extra={'path':request.path,'method':request.method}
+            )
+            raise
+        finally:
+            request_id.reset(token)
+        response['X-Request-ID'] = value
         response['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         response['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+        response['Cross-Origin-Opener-Policy'] = 'same-origin'
+        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        if response.status_code == 429 and 'Retry-After' not in response:
+            response['Retry-After'] = '900'
         if request.user.is_authenticated or request.path.startswith(('/login/','/reset/','/verify/','/password-reset/')):
             response['Cache-Control'] = 'no-store, private'
         return response

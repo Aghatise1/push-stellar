@@ -5,7 +5,7 @@ from .access import staff_role
 STAFF_PORTAL_ROUTES = {
     'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
     'moderator_dashboard', 'support_dashboard', 'moderation', 'staff_invitations',
-    'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team',
+    'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team', 'staff_guide',
     'operations_tickets', 'operations_ticket', 'operations_users',
     'operations_user', 'operations_email', 'operations_payments',
     'operations_docs', 'operations_docs_edit', 'documentation',

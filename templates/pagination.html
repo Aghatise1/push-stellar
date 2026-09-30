@@ -1,0 +1,5 @@
+{% if page_obj and page_obj.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Results pages">
+  {% if page_obj.has_previous %}<a class="button secondary small" href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}{% if selected_status %}status={{ selected_status|urlencode }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button secondary small" href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}{% if selected_status %}status={{ selected_status|urlencode }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>{% endif %}

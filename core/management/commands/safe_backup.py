@@ -14,8 +14,14 @@ class Command(BaseCommand):
     help = 'Create an ignored logical backup and prove that it restores into an isolated SQLite database.'
 
     def handle(self, *args, **options):
-        backup_dir = Path(settings.BASE_DIR) / 'private-backups'
-        backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # ``mkdir(mode=0o700)`` can produce an unusable ACL when the project is
+        # on a Windows-managed workspace.  Keep local artefacts under the
+        # already ignored .local directory and apply Unix permissions only on
+        # platforms where those mode bits have their intended meaning.
+        backup_dir = Path(settings.BASE_DIR) / '.local' / 'backups'
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        if os.name != 'nt':
+            backup_dir.chmod(0o700)
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         backup_path = backup_dir / f'push-{stamp}.json.gz'
         restore_db = backup_dir / f'restore-check-{stamp}.sqlite3'

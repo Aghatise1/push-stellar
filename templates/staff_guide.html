@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block title %}Operations guide — Push{% endblock %}{% block app_location %}Operations · Guide{% endblock %}{% block content %}
+<div class="page-heading"><div><h1>Operations guide.</h1><p class="lead">Internal procedures for account access, moderation, support and settlement records.</p></div><a class="button secondary" href="{% url 'staff_dashboard' %}">Operations overview</a></div>
+<div class="documentation-grid">{% for article in articles %}<a href="{% url 'documentation_article' article.slug %}"><span class="tag">Internal</span><h2>{{ article.title }}</h2><p>{{ article.summary }}</p><small>Updated {{ article.updated_at|date:'j M Y' }}</small></a>{% empty %}<div class="empty"><strong>No internal guidance is published yet.</strong><p>An owner or administrator can publish procedures from Documentation.</p></div>{% endfor %}</div>
+{% endblock %}

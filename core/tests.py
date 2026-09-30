@@ -554,11 +554,11 @@ class WorkspaceTests(TestCase):
                 self.assertTrue(response.url.startswith(reverse('login')+'?next='))
     def test_csrf_and_logout_invalidate_session(self):
         c=Client(enforce_csrf_checks=True);c.force_login(self.worker)
-        old_session=c.cookies['sessionid'].value
+        old_session=c.cookies[settings.SESSION_COOKIE_NAME].value
         self.assertEqual(c.post(reverse('logout')).status_code,403)
-        c.get(reverse('profile'));credential=c.cookies['csrftoken'].value
+        c.get(reverse('profile'));credential=c.cookies[settings.CSRF_COOKIE_NAME].value
         self.assertEqual(c.post(reverse('logout'),{'csrfmiddlewaretoken':credential}).status_code,302)
-        attacker=Client();attacker.cookies['sessionid']=old_session
+        attacker=Client();attacker.cookies[settings.SESSION_COOKIE_NAME]=old_session
         self.assertEqual(attacker.get(reverse('workspace')).status_code,302)
         self.assertEqual(c.get(reverse('logout')).status_code,405)
     def test_email_login_case_and_unsafe_redirect(self):
@@ -791,7 +791,7 @@ class WorkspaceTests(TestCase):
         self.assertNotIn("'unsafe-inline'",response['Content-Security-Policy'])
     def test_password_reset_single_use_and_revokes_old_session(self):
         self.login_as(self.worker)
-        old_session=self.client.cookies['sessionid'].value
+        old_session=self.client.cookies[settings.SESSION_COOKIE_NAME].value
         self.client.logout()
         self.client.post(reverse('password_reset'),{'email':self.worker.email})
         self.assertEqual(len(mail.outbox),1)
@@ -805,7 +805,7 @@ class WorkspaceTests(TestCase):
         self.assertRedirects(response,reverse('password_reset_complete'))
         self.worker.refresh_from_db();self.assertTrue(self.worker.check_password('Another-strong-password-847!'))
         self.assertFalse(default_token_generator.check_token(self.worker,credential))
-        attacker=Client();attacker.cookies['sessionid']=old_session
+        attacker=Client();attacker.cookies[settings.SESSION_COOKIE_NAME]=old_session
         self.assertEqual(attacker.get(reverse('workspace')).status_code,302)
 
     def test_password_reset_emails_google_only_account(self):
@@ -1018,3 +1018,63 @@ class WorkspaceTests(TestCase):
         self.assertEqual(payload['work_attention'],1)
         self.assertEqual(payload['notifications'],1)
         self.assertEqual(payload['latest']['title'],'You were selected')
+
+    def test_launch_hardening_settings_match_upload_and_cookie_contract(self):
+        self.assertGreaterEqual(settings.DATA_UPLOAD_MAX_MEMORY_SIZE,7*1024*1024)
+        self.assertGreaterEqual(settings.FILE_UPLOAD_MAX_MEMORY_SIZE,5*1024*1024)
+        self.assertEqual(settings.DATA_UPLOAD_MAX_NUMBER_FIELDS,100)
+
+    def test_security_headers_and_rate_limit_retry_are_visible(self):
+        response=self.client.get(reverse('home'),HTTP_X_REQUEST_ID='valid-request-123')
+        self.assertEqual(response['X-Request-ID'],'valid-request-123')
+        self.assertEqual(response['Cross-Origin-Opener-Policy'],'same-origin')
+        self.assertEqual(response['Cross-Origin-Resource-Policy'],'same-origin')
+        with patch('core.views.limited',return_value=True):
+            limited_response=self.client.post(reverse('login'),{})
+        self.assertEqual(limited_response.status_code,429)
+        self.assertEqual(limited_response['Retry-After'],'900')
+
+    def test_only_verified_accounts_can_receive_staff_access(self):
+        unverified=User.objects.create_user(username='pending@example.test',email='pending@example.test',password='Independent-cobalt-732!',display_name='Pending')
+        self.grant_staff(self.owner,'owner');self.login_as(self.owner)
+        response=self.client.post(reverse('staff_team'),{'email':unverified.email,'role':'support'})
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,'Create and verify this member account')
+        self.assertFalse(StaffAccess.objects.filter(user=unverified).exists())
+
+    def test_support_guidance_stays_inside_operations(self):
+        DocumentationArticle.objects.create(slug='support-process',title='Support process',summary='Handle member cases.',body='Procedure',audience='staff',status='published')
+        self.grant_staff(self.worker,'support');self.login_as(self.worker)
+        response=self.client.get(reverse('staff_guide'))
+        self.assertEqual(response.status_code,200)
+        self.assertContains(response,'Support process')
+        self.assertContains(response,'Support operations')
+        self.assertEqual(self.client.get(reverse('operations_docs')).status_code,403)
+
+    def test_account_deletion_request_is_a_single_audited_ticket(self):
+        self.login_as(self.worker)
+        first=self.client.post(reverse('request_account_deletion'))
+        ticket=SupportTicket.objects.get(requester=self.worker,subject='Account deletion request')
+        self.assertRedirects(first,reverse('support_ticket',args=[ticket.pk]))
+        second=self.client.post(reverse('request_account_deletion'))
+        self.assertRedirects(second,reverse('support_ticket',args=[ticket.pk]))
+        self.assertEqual(SupportTicket.objects.filter(requester=self.worker,subject='Account deletion request').count(),1)
+        self.assertTrue(AuditEvent.objects.filter(action='privacy.deletion_requested',target_id=str(ticket.pk)).exists())
+
+    def test_public_legal_pages_cover_cookies_and_refunds(self):
+        self.assertContains(self.client.get(reverse('cookies')),'Necessary cookies')
+        self.assertContains(self.client.get(reverse('refunds')),'does not charge platform fees')
+
+    def test_privileged_writes_are_rate_limited(self):
+        self.grant_staff(self.owner,'owner');self.login_as(self.owner)
+        with patch('core.access._staff_write_limited',return_value=True):
+            response=self.client.post(reverse('staff_team'),{})
+        self.assertEqual(response.status_code,429)
+        self.assertEqual(response['Retry-After'],'900')
+
+    @override_settings(PUSH_EMAIL_DAILY_LIMIT=1)
+    def test_email_spend_guard_blocks_excess_recipients(self):
+        from .mailer import EmailDailyLimitError, send_tracked_email
+        send_tracked_email(category='verification',subject='One',message='Hello',recipients=['one@example.test'])
+        with self.assertRaises(EmailDailyLimitError):
+            send_tracked_email(category='verification',subject='Two',message='Hello',recipients=['two@example.test'])

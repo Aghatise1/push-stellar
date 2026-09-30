@@ -13,6 +13,7 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, PasswordResetView
 from django.core import signing
+from django.core.paginator import Paginator
 from django.utils.crypto import salted_hmac
 from django.db import connection, transaction, IntegrityError
 from django.db.models import Q, F, Sum, Max, Count, Avg
@@ -57,9 +58,20 @@ def privacy(request):
     return render(request,'privacy.html')
 
 
+@require_GET
+def cookies(request):
+    return render(request,'cookies.html')
+
+
+@require_GET
+def refunds(request):
+    return render(request,'refunds.html')
+
+
 @login_required
 def account_settings(request):
     return render(request,'account_settings.html',{'settings_staff':staff_role(request.user) is not None})
+
 
 def notify(recipient,kind,title,body,link=''):
     return Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
@@ -101,6 +113,25 @@ def verified(view):
             return HttpResponse('Too many requests. Please try again in 15 minutes.',status=429)
         return view(request,*args,**kwargs)
     return wrapped
+
+
+@verified
+@require_POST
+def request_account_deletion(request):
+    existing=SupportTicket.objects.filter(
+        requester=request.user,category='account',subject='Account deletion request'
+    ).exclude(status='closed').first()
+    if existing:
+        messages.info(request,'Your account deletion request is already open. Support will reply on the existing ticket.')
+        return redirect('support_ticket',pk=existing.pk)
+    ticket=SupportTicket.objects.create(
+        requester=request.user,subject='Account deletion request',category='account',
+        description='Please review this account for deletion. Retain only records required for security, disputes or legal obligations.',
+        priority='high',
+    )
+    audit(request.user,'privacy.deletion_requested',ticket)
+    messages.success(request,'Your deletion request was created. Support will confirm what can be removed and what must be retained.')
+    return redirect('support_ticket',pk=ticket.pk)
 
 
 def review_job_text(job):
@@ -488,6 +519,13 @@ def staff_dashboard(request):
     return redirect(destination)
 
 
+@staff_only('owner','admin','moderator','support')
+def staff_guide(request):
+    """Keep internal procedures inside the protected Operations shell."""
+    articles=DocumentationArticle.objects.filter(audience='staff',status='published').select_related('updated_by')
+    return render(request,'staff_guide.html',{'articles':articles})
+
+
 def _role_dashboard(request,role):
     open_tickets=SupportTicket.objects.exclude(status__in=['resolved','closed']).count()
     open_disputes=Dispute.objects.exclude(status='resolved').count()
@@ -572,7 +610,7 @@ def _role_dashboard(request,role):
                 ('Accounts','Member lookup','Find account details relevant to a support case.',reverse('operations_users'),'→'),
                 ('Invitations','Tester codes','Invite a tester and copy their one-time code.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Waiting','Member responses','Track cases waiting for more information.',reverse('operations_tickets')+'?status=waiting_user',metrics['waiting_user']),
-                ('Guidance','Support documentation','Read current account and support procedures.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
+                ('Guidance','Support documentation','Read current account and support procedures.',reverse('staff_guide'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
             ],
         })
     return render(request,'role_dashboard.html',shared)
@@ -1274,7 +1312,8 @@ def operations_tickets(request):
     status=request.GET.get('status','open')
     if status != 'all':
         tickets=tickets.filter(status=status)
-    return render(request,'operations_tickets.html',{'tickets':tickets,'selected_status':status})
+    page=Paginator(tickets,30).get_page(request.GET.get('page'))
+    return render(request,'operations_tickets.html',{'tickets':page,'page_obj':page,'selected_status':status})
 
 
 @staff_only('owner','admin','support')
@@ -1309,7 +1348,8 @@ def operations_users(request):
     query=request.GET.get('q','').strip()
     if query:
         users=users.filter(Q(email__icontains=query)|Q(display_name__icontains=query))
-    return render(request,'operations_users.html',{'users':users[:100],'query':query,'member_count':User.objects.count()})
+    page=Paginator(users,30).get_page(request.GET.get('page'))
+    return render(request,'operations_users.html',{'users':page,'page_obj':page,'query':query,'member_count':User.objects.count()})
 
 
 @staff_only('owner','admin','moderator','support')

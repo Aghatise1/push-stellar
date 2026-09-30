@@ -85,6 +85,7 @@ class Job(models.Model):
     class Meta:
         ordering = ['-created_at']
         constraints = [models.CheckConstraint(condition=models.Q(budget__gt=0),name='positive_budget')]
+        indexes = [models.Index(fields=['status','moderation_status','-created_at'],name='job_public_feed_idx')]
 
 class Application(models.Model):
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
@@ -95,6 +96,7 @@ class Application(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['job','worker'],name='one_application_per_job')]
+        indexes = [models.Index(fields=['worker','-created_at'],name='application_worker_idx')]
 
 class Assignment(models.Model):
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
@@ -116,6 +118,8 @@ class Assignment(models.Model):
     revisions_used = models.PositiveSmallIntegerField(default=0)
     accepted_terms_at = models.DateTimeField(null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        indexes = [models.Index(fields=['worker','status','-created_at'],name='assignment_worker_idx')]
 
 class Submission(models.Model):
     assignment = models.ForeignKey(Assignment,on_delete=models.CASCADE,related_name='submissions')
@@ -188,6 +192,7 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['-created_at']
+        indexes = [models.Index(fields=['recipient','read_at','-created_at'],name='notification_inbox_idx')]
 
 class WaitlistApplication(models.Model):
     STATUS_CHOICES=[('pending','Pending'),('approved','Approved'),('rejected','Rejected')]
@@ -223,7 +228,7 @@ class Invitation(models.Model):
 class RateBucket(models.Model):
     key = models.CharField(max_length=64,unique=True)
     count = models.PositiveIntegerField(default=0)
-    expires = models.DateTimeField()
+    expires = models.DateTimeField(db_index=True)
 
 class SupportTicket(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
@@ -241,6 +246,7 @@ class SupportTicket(models.Model):
     updated_at=models.DateTimeField(auto_now=True)
     class Meta:
         ordering=['-updated_at']
+        indexes = [models.Index(fields=['status','-updated_at'],name='support_queue_idx')]
 
 class TicketReply(models.Model):
     ticket=models.ForeignKey(SupportTicket,on_delete=models.CASCADE,related_name='replies')
@@ -268,6 +274,7 @@ class EmailDelivery(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['-created_at']
+        indexes = [models.Index(fields=['status','-created_at'],name='email_status_idx')]
 
 class AuditEvent(models.Model):
     actor=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='operations_audit_events')
@@ -278,6 +285,7 @@ class AuditEvent(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['-created_at']
+        indexes = [models.Index(fields=['action','-created_at'],name='audit_action_idx')]
 
 class DocumentationArticle(models.Model):
     AUDIENCE_CHOICES=[('public','Public'),('member','Members'),('staff','Staff')]

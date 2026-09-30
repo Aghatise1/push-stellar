@@ -98,7 +98,7 @@ class StaffAccessForm(forms.Form):
     role=forms.ChoiceField(choices=StaffAccess.ROLE_CHOICES)
     def clean_email(self):
         email=self.cleaned_data['email'].strip().lower()
-        if not User.objects.filter(email__iexact=email,is_active=True).exists():
+        if not User.objects.filter(email__iexact=email,is_active=True,email_verified=True).exists():
             raise forms.ValidationError('Create and verify this member account before granting staff access.')
         return email
 

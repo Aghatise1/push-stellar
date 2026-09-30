@@ -1,13 +1,37 @@
+import hashlib
+from datetime import timedelta
 from functools import wraps
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.db.models import F
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from urllib.parse import urlencode
 
-from .models import StaffAccess, User
+from .models import RateBucket, StaffAccess, User
+
+
+def _staff_write_limited(request,limit=120):
+    """Bound privileged writes per account and source address."""
+    if request.method != 'POST':
+        return False
+    source=request.META.get('REMOTE_ADDR','unknown')
+    raw=f'staff-write:{request.user.pk}:{source}'
+    key=hashlib.sha256(raw.encode()).hexdigest()
+    now=timezone.now()
+    with transaction.atomic():
+        bucket,_=RateBucket.objects.get_or_create(
+            key=key,defaults={'expires':now+timedelta(minutes=15)}
+        )
+        if bucket.expires <= now:
+            RateBucket.objects.filter(pk=bucket.pk).update(
+                count=0,expires=now+timedelta(minutes=15)
+            )
+        return RateBucket.objects.filter(pk=bucket.pk,count__lt=limit).update(count=F('count')+1) == 0
 
 
 def staff_role(user):
@@ -46,6 +70,8 @@ def staff_only(*roles):
                 return redirect(f'{reverse("staff_login")}?{query}')
             if not has_staff_access(request.user,set(roles) if roles else None):
                 raise PermissionDenied('Approved Push staff access is required.')
+            if _staff_write_limited(request):
+                return HttpResponse('Too many staff actions. Try again in 15 minutes.',status=429)
             return view(request,*args,**kwargs)
         return wrapped
     return decorator
