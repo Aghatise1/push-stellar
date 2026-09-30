@@ -100,7 +100,11 @@ SESSION_COOKIE_NAME = '__Host-push_session' if PRODUCTION else 'push_sessionid'
 CSRF_COOKIE_NAME = '__Host-push_csrf' if PRODUCTION else 'push_csrftoken'
 SESSION_COOKIE_AGE = 3600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-SECURE_SSL_REDIRECT = PRODUCTION
+# Render terminates TLS and enforces HTTPS at its public edge. Enabling
+# Django's own redirect behind that proxy can turn an already-secure request
+# into a self-redirect when the forwarded scheme is not preserved verbatim.
+# Keep Django's redirect for other production hosts that terminate TLS here.
+SECURE_SSL_REDIRECT = PRODUCTION and not bool(RENDER_EXTERNAL_HOSTNAME)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if PRODUCTION else None
 SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
