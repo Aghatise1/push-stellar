@@ -4,7 +4,7 @@ from .access import staff_role
 
 STAFF_PORTAL_ROUTES = {
     'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
-    'moderator_dashboard', 'support_dashboard', 'moderation', 'staff_invitations',
+    'trust_support_dashboard', 'moderation', 'staff_invitations',
     'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team', 'staff_guide',
     'operations_tickets', 'operations_ticket', 'operations_users',
     'operations_user', 'operations_email', 'operations_payments',
@@ -42,5 +42,6 @@ def app_context(request):
             'assigned_active_count':assigned_active_count,
             'work_attention_count':work_attention_count,
             'staff_portal_role':portal_role,
+            'staff_portal_role_label':{'owner':'Owner','admin':'Administrator','trust_support':'Trust & Support'}.get(portal_role,''),
             'staff_is_owner':portal_role == 'owner',
             'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES)}

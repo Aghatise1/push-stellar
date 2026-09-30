@@ -74,13 +74,13 @@ class WorkspaceTests(TestCase):
         self.assertEqual(len(short['rows']),7)
         self.assertEqual(self.client.get(reverse('operations_analytics')+'?days=999999').context['report']['days'],30)
 
-    def test_owner_report_preview_keeps_role_and_support_cannot_escalate(self):
+    def test_owner_report_preview_keeps_role_and_trust_support_cannot_escalate(self):
         self.grant_staff(self.owner,'owner');self.login_as(self.owner)
-        response=self.client.get(reverse('operations_analytics')+'?view=support&days=7')
-        self.assertEqual(response.context['role'],'support')
+        response=self.client.get(reverse('operations_analytics')+'?view=trust_support&days=7')
+        self.assertEqual(response.context['role'],'trust_support')
         self.assertNotContains(response,'Collected platform revenue')
-        self.assertContains(response,'amp;view=support')
-        self.client.logout();self.grant_staff(self.worker,'support');self.login_as(self.worker)
+        self.assertContains(response,'amp;view=trust_support')
+        self.client.logout();self.grant_staff(self.worker,'trust_support');self.login_as(self.worker)
         self.assertEqual(self.client.get(reverse('operations_analytics')+'?view=owner').status_code,403)
         self.assertContains(self.client.get(reverse('operations_analytics')),'No ratings yet')
 
@@ -100,7 +100,7 @@ class WorkspaceTests(TestCase):
                 self.assertContains(response,'Too many attempts',status_code=429)
                 self.assertContains(response,'<form',status_code=429)
 
-    def grant_staff(self,user,role='moderator'):
+    def grant_staff(self,user,role='trust_support'):
         user.is_staff=True;user.save(update_fields=['is_staff'])
         return StaffAccess.objects.update_or_create(user=user,defaults={'role':role,'status':'approved','approved_at':timezone.now()})[0]
     def grant_invitation(self,email,code='PUSH-ABCD1234-EFGH5678'):
@@ -127,6 +127,10 @@ class WorkspaceTests(TestCase):
         self.login_as(self.owner)
         for name in ['workspace','work','profile','job_create','wallet','payments','inbox','notifications','help']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
+
+    @override_settings(PUSH_RELEASE='16464714ed3e')
+    def test_health_reports_the_deployed_release_when_host_provides_it(self):
+        self.assertEqual(self.client.get(reverse('health')).json()['release'],'16464714ed3e')
     def test_google_auth_visibility_matches_configuration(self):
         self.assertEqual(self.client.get(reverse('login')).context['google_auth_enabled'],settings.GOOGLE_AUTH_ENABLED)
         self.assertEqual(self.client.get('/accounts/google/login/').status_code,302 if settings.GOOGLE_AUTH_ENABLED else 404)
@@ -179,9 +183,9 @@ class WorkspaceTests(TestCase):
         invitation=Invitation.objects.create(application=application,email=application.email,code_hash=hash_invitation_code('PUSH-AAAABBBB-CCCCDDDD'),created_by=self.owner,expires_at=timezone.now()+timedelta(days=7))
         self.assertEqual(self.client.post(reverse('revoke_invitation',args=[invitation.pk])).status_code,403)
 
-    def test_support_can_issue_and_copy_invitation_without_moderation_access(self):
-        self.grant_staff(self.owner,'support');self.login_as(self.owner)
-        self.assertEqual(self.client.get(reverse('moderation')).status_code,403)
+    def test_trust_support_can_issue_invitation_and_open_case_desk(self):
+        self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
+        self.assertEqual(self.client.get(reverse('moderation')).status_code,200)
         response=self.client.post(reverse('create_staff_invitation'),{
             'name':'Support Tester','email':'support-tester@example.test','role':'QA',
         },follow=True)
@@ -198,7 +202,7 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'Too many attempts',status_code=429)
 
     def test_staff_settings_and_sign_out_are_accessible(self):
-        self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
         settings_page=self.client.get(reverse('account_settings'))
         self.assertContains(settings_page,'Sign out of Push')
         self.assertContains(settings_page,'Change password')
@@ -267,7 +271,7 @@ class WorkspaceTests(TestCase):
         })
         ticket=SupportTicket.objects.get(requester=self.worker)
         self.assertRedirects(response,reverse('support_ticket',args=[ticket.pk]))
-        self.client.logout();self.grant_staff(self.owner,'support')
+        self.client.logout();self.grant_staff(self.owner,'trust_support')
         self.login_as(self.owner)
         response=self.client.post(reverse('operations_ticket',args=[ticket.pk]),{
             'reply-body':'We are checking the public address and network.','send_reply':'1',
@@ -285,14 +289,10 @@ class WorkspaceTests(TestCase):
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
 
     def test_staff_roles_only_open_their_assigned_queues(self):
-        self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
         self.assertEqual(self.client.get(reverse('operations_tickets')).status_code,200)
         self.assertEqual(self.client.get(reverse('operations_users')).status_code,200)
-        self.assertEqual(self.client.get(reverse('operations_payments')).status_code,403)
-        self.assertEqual(self.client.get(reverse('operations_email')).status_code,403)
-        self.client.logout();self.grant_staff(self.owner,'moderator');self.login_as(self.owner)
         self.assertEqual(self.client.get(reverse('operations_payments')).status_code,200)
-        self.assertEqual(self.client.get(reverse('operations_tickets')).status_code,403)
         self.assertEqual(self.client.get(reverse('operations_email')).status_code,403)
         self.assertEqual(self.client.get(reverse('operations_docs')).status_code,403)
 
@@ -300,8 +300,7 @@ class WorkspaceTests(TestCase):
         cases=[
             ('owner','owner_dashboard','Owner control'),
             ('admin','admin_dashboard','Administration'),
-            ('moderator','moderator_dashboard','Moderation desk'),
-            ('support','support_dashboard','Support centre'),
+            ('trust_support','trust_support_dashboard','Trust &amp; Support'),
         ]
         for role,route,heading in cases:
             with self.subTest(role=role):
@@ -314,7 +313,7 @@ class WorkspaceTests(TestCase):
 
     def test_owner_can_view_all_dashboards_without_changing_role(self):
         self.grant_staff(self.owner,'owner');self.login_as(self.owner)
-        for role in ['owner','admin','moderator','support']:
+        for role in ['owner','admin','trust_support']:
             with self.subTest(role=role):
                 response=self.client.get(reverse(role+'_dashboard'))
                 self.assertContains(response,'Owner workspace switcher')
@@ -322,8 +321,8 @@ class WorkspaceTests(TestCase):
                 if role != 'owner':
                     self.assertContains(response,'Your account and owner permissions have not changed')
         self.assertEqual(StaffAccess.objects.get(user=self.owner).role,'owner')
-        self.client.logout();self.grant_staff(self.worker,'support');self.login_as(self.worker)
-        self.assertNotContains(self.client.get(reverse('support_dashboard')),'Owner workspace switcher')
+        self.client.logout();self.grant_staff(self.worker,'trust_support');self.login_as(self.worker)
+        self.assertNotContains(self.client.get(reverse('trust_support_dashboard')),'Owner workspace switcher')
         self.assertEqual(self.client.get(reverse('owner_dashboard')+'?role=owner').status_code,403)
 
     def test_workspace_return_is_only_visible_to_approved_staff(self):
@@ -355,14 +354,13 @@ class WorkspaceTests(TestCase):
         admin=self.client.get(reverse('operations_analytics'))
         self.assertContains(admin,'Total members')
         self.assertContains(admin,'Collected platform revenue')
-        self.client.logout();self.grant_staff(self.owner,'moderator');self.login_as(self.owner)
-        mod=self.client.get(reverse('operations_analytics'))
-        self.assertContains(mod,'Listings awaiting review')
-        self.assertNotContains(mod,'Collected platform revenue')
-        self.client.logout();self.grant_staff(self.owner,'support');self.login_as(self.owner)
-        support=self.client.get(reverse('operations_analytics'))
-        self.assertContains(support,'Support feedback')
-        self.assertContains(support,'Total members')
+        self.client.logout();self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
+        trust_support=self.client.get(reverse('operations_analytics'))
+        self.assertContains(trust_support,'Support cases opened')
+        self.assertContains(trust_support,'Open disputes')
+        self.assertContains(trust_support,'Support feedback')
+        self.assertNotContains(trust_support,'Collected platform revenue')
+        self.assertContains(trust_support,'Total members')
         self.assertContains(self.client.get(reverse('documentation')),'staff-mobile-dock')
         self.assertRedirects(self.client.get(reverse('wallet')),reverse('staff_dashboard'),fetch_redirect_response=False)
 
@@ -377,7 +375,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(sanction.lifted_by,self.owner)
         self.assertTrue(AuditEvent.objects.filter(action='account.sanction.lifted',target_id=str(sanction.pk)).exists())
         self.assertEqual(self.client.post(url,{'reason':'Repeat reversal should be rejected.'}).status_code,409)
-        self.client.logout();self.grant_staff(self.owner,'moderator');self.login_as(self.owner)
+        self.client.logout();self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
         self.assertEqual(self.client.post(url,{'reason':'Unauthorised reversal.'}).status_code,403)
 
     def test_restricted_member_can_appeal_but_cannot_use_work_or_wallet(self):
@@ -394,14 +392,14 @@ class WorkspaceTests(TestCase):
         self.assertEqual(ticket_response.status_code,302)
         self.assertTrue(SupportTicket.objects.filter(requester=self.worker,category='account').exists())
 
-    def test_admin_may_approve_support_but_not_another_administrator(self):
+    def test_admin_may_approve_trust_support_but_not_another_administrator(self):
         self.grant_staff(self.owner,'admin');self.login_as(self.owner)
         denied=self.client.post(reverse('staff_team'),{'email':self.worker.email,'role':'admin'})
         self.assertContains(denied,'Only an owner can grant owner or administrator access.')
         self.assertFalse(StaffAccess.objects.filter(user=self.worker).exists())
-        approved=self.client.post(reverse('staff_team'),{'email':self.worker.email,'role':'support'})
+        approved=self.client.post(reverse('staff_team'),{'email':self.worker.email,'role':'trust_support'})
         self.assertRedirects(approved,reverse('staff_team'))
-        self.assertEqual(StaffAccess.objects.get(user=self.worker).role,'support')
+        self.assertEqual(StaffAccess.objects.get(user=self.worker).role,'trust_support')
 
     def test_ticket_feedback_is_one_rating_from_the_requester_after_resolution(self):
         ticket=SupportTicket.objects.create(requester=self.worker,subject='Help',category='account',description='Please help',status='resolved')
@@ -414,7 +412,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(TicketFeedback.objects.get(ticket=ticket).rating,5)
         self.assertContains(self.client.get(reverse('support_ticket',args=[ticket.pk])),'You rated this answer 5 out of 5')
         self.assertEqual(self.client.post(url,{'rating':'1'}).status_code,409)
-        self.client.logout();self.grant_staff(self.owner,'support');self.login_as(self.owner)
+        self.client.logout();self.grant_staff(self.owner,'trust_support');self.login_as(self.owner)
         self.assertContains(self.client.get(reverse('operations_analytics')),'1 of 1')
 
     @override_settings(PUSH_BOOTSTRAP_OWNER_EMAILS={'worker@example.test'})
@@ -1037,14 +1035,14 @@ class WorkspaceTests(TestCase):
     def test_only_verified_accounts_can_receive_staff_access(self):
         unverified=User.objects.create_user(username='pending@example.test',email='pending@example.test',password='Independent-cobalt-732!',display_name='Pending')
         self.grant_staff(self.owner,'owner');self.login_as(self.owner)
-        response=self.client.post(reverse('staff_team'),{'email':unverified.email,'role':'support'})
+        response=self.client.post(reverse('staff_team'),{'email':unverified.email,'role':'trust_support'})
         self.assertEqual(response.status_code,200)
         self.assertContains(response,'Create and verify this member account')
         self.assertFalse(StaffAccess.objects.filter(user=unverified).exists())
 
     def test_support_guidance_stays_inside_operations(self):
         DocumentationArticle.objects.create(slug='support-process',title='Support process',summary='Handle member cases.',body='Procedure',audience='staff',status='published')
-        self.grant_staff(self.worker,'support');self.login_as(self.worker)
+        self.grant_staff(self.worker,'trust_support');self.login_as(self.worker)
         response=self.client.get(reverse('staff_guide'))
         self.assertEqual(response.status_code,200)
         self.assertContains(response,'Support process')

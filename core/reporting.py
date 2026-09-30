@@ -5,7 +5,7 @@ from django.db.models.functions import TruncDate
 from django.urls import reverse
 from django.utils import timezone
 from .models import (User, AccountActivity, Job, Assignment, Payment, Dispute,
-                     SupportTicket, TicketReply, TicketFeedback, Invitation, EmailDelivery)
+                     SupportTicket, TicketFeedback, Invitation, EmailDelivery)
 
 
 def daily_counts(query, field, start, end):
@@ -53,27 +53,19 @@ def report_data(role, days=30):
                 queue('Unanswered tickets',SupportTicket.objects.filter(status='open'),'operations_tickets'),
                 queue('Failed emails in this period',EmailDelivery.objects.filter(status='failed',created_at__date__gte=start),'operations_email')]
         chart_title='Member growth & completed work'
-    elif role == 'moderator':
-        series_sources=[('Disputes opened',Dispute.objects.all(),'created_at'),('Disputes resolved',Dispute.objects.filter(status='resolved'),'resolved_at')]
-        metrics=[metric('Disputes opened',Dispute.objects.all(),'created_at'),
-                 metric('Disputes resolved',Dispute.objects.filter(status='resolved'),'resolved_at'),
-                 {'label':'Under review','value':Dispute.objects.filter(status='under_review').count(),'note':'Current dispute queue'},
-                 {'label':'Listings awaiting review','value':jobs.filter(moderation_status='review').count(),'note':'Current listing queue'}]
-        queues=[queue('Disputes needing a decision',Dispute.objects.exclude(status='resolved'),'moderation'),
-                queue('Listings awaiting review',jobs.filter(moderation_status='review'),'moderation'),
-                queue('Unclaimed tester invitations',Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=now),'staff_invitations')]
-        chart_title='Dispute activity'
     else:
         tickets=SupportTicket.objects.all()
-        replies=TicketReply.objects.filter(internal=False,author__staff_access__status='approved')
-        series_sources=[('Tickets opened',tickets,'created_at'),('Staff replies',replies,'created_at')]
-        metrics=[metric('Tickets opened',tickets,'created_at'),metric('Staff replies',replies,'created_at'),
-                 {'label':'Waiting for member','value':tickets.filter(status='waiting_user').count(),'note':'Current ticket queue'},
-                 {'label':'Unassigned tickets','value':tickets.filter(assigned_to__isnull=True).exclude(status__in=['resolved','closed']).count(),'note':'Ready for a team member'}]
+        disputes=Dispute.objects.all()
+        series_sources=[('Support cases opened',tickets,'created_at'),('Disputes opened',disputes,'created_at')]
+        metrics=[metric('Support cases opened',tickets,'created_at'),metric('Disputes opened',disputes,'created_at'),
+                 {'label':'Open support cases','value':tickets.exclude(status__in=['resolved','closed']).count(),'note':'Current member-support queue'},
+                 {'label':'Open disputes','value':disputes.exclude(status='resolved').count(),'note':'Current trust queue'}]
         queues=[queue('Urgent unresolved tickets',tickets.filter(priority='urgent').exclude(status__in=['resolved','closed']),'operations_tickets'),
+                queue('Disputes needing a decision',disputes.exclude(status='resolved'),'moderation'),
+                queue('Listings awaiting review',jobs.filter(moderation_status='review'),'moderation'),
                 queue('Open over 48 hours',tickets.filter(created_at__lt=now-timedelta(hours=48)).exclude(status__in=['resolved','closed']),'operations_tickets'),
                 queue('Unassigned tickets',tickets.filter(assigned_to__isnull=True).exclude(status__in=['resolved','closed']),'operations_tickets')]
-        chart_title='Support demand & responses'
+        chart_title='Trust & Support demand'
 
     dates=[start+timedelta(days=i) for i in range(days)]
     series=[]

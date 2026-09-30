@@ -3,7 +3,7 @@
 {% block title %}Operations insights — Push{% endblock %}
 {% block app_location %}Operations · Insights{% endblock %}
 {% block content %}
-<div class="ops-heading"><div><span>{{ role|title }} operations</span><h1>Performance overview</h1><p>Understand member activity, completed work and what needs your attention.</p></div><a class="button secondary" href="{{ dashboard_url }}">Command centre</a></div>
+<div class="ops-heading"><div><span>{% if role == 'trust_support' %}Trust &amp; Support{% else %}{{ role|title }}{% endif %} operations</span><h1>Performance overview</h1><p>Understand member activity, completed work and what needs your attention.</p></div><a class="button secondary" href="{{ dashboard_url }}">Command centre</a></div>
 {% if owner_dashboard_preview %}<p class="notice">Viewing {{ role }} reports as Owner. Your owner permissions have not changed.</p>{% endif %}
 {% include 'operations_report.html' %}
 {% endblock %}

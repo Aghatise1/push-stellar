@@ -82,6 +82,6 @@ class StaffWorkspaceBoundaryMiddleware:
         from django.shortcuts import redirect
         from .access import staff_role
         name=getattr(request.resolver_match,'url_name',None)
-        if name in self.MEMBER_ROUTES and staff_role(request.user) in {'admin','moderator','support'}:
+        if name in self.MEMBER_ROUTES and staff_role(request.user) in {'admin','trust_support'}:
             return redirect('staff_dashboard')
         return None

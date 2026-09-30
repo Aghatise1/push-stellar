@@ -4,7 +4,7 @@
 {% block content %}
 <section class="staff-entry" aria-labelledby="staff-entry-title">
   <div class="staff-entry-heading">
-    <span class="tag">Verified {{ staff_role|title }}</span>
+    <span class="tag">Verified {{ staff_portal_role_label }}</span>
     <h1 id="staff-entry-title">Where are you working?</h1>
     <p class="lead">You are signed in as {{ request.user.email }}. Choose a workspace; your permissions remain enforced by the server.</p>
   </div>
@@ -16,7 +16,7 @@
       <b>Open member workspace →</b>
     </a>
     <a class="operations-destination" href="{% url 'staff_dashboard' %}">
-      <span>{{ staff_role|title }}</span>
+      <span>{{ staff_portal_role_label }}</span>
       <strong>Open Operations</strong>
       <p>Only the administration tools authorised for your assigned role.</p>
       <b>Open staff dashboard →</b>

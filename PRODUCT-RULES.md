@@ -14,6 +14,16 @@ Push gives hiring teams and independent workers one shared record from a clear b
 - Profiles are private until their owner publishes them.
 - Email addresses, proposals and assignments are never displayed on public profiles.
 - A future identity-verification programme must be optional until a specific payment, risk or regulatory requirement makes it necessary.
+- Internal operations use three roles: Owner, Administrator, and a combined Trust & Support role.
+- Trust & Support handles member tickets, reported listings, account context and disputes from one case workspace.
+- Only the Owner may preview another operations workspace; assigned staff permissions never change through the interface.
+
+## MVP technology boundaries
+
+- The invited pilot remains on Stellar testnet; mainnet and real-money custody are outside the current release.
+- Push does not embed an AI assistant, AI job reviewer or AI dispute decision-maker in this MVP.
+- The LLM Council used during product planning is a private development workflow and is not a Push user feature.
+- Large delivery files and videos use external links during the pilot. Push records the link and delivery evidence but does not host video.
 
 ## Job and application rules
 

@@ -9,8 +9,8 @@
 
 <nav class="operations-grid" aria-label="Operations sections">
   <a href="{% url 'operations_users' %}"><span>Accounts</span><strong>Users and sanctions</strong><small>Inspect member records and apply authorised restrictions.</small></a>
-  {% if staff_role == 'owner' or staff_role == 'admin' or staff_role == 'support' %}<a href="{% url 'operations_tickets' %}"><span>Support</span><strong>Ticket queue</strong><small>{{ metrics.tickets }} ticket{{ metrics.tickets|pluralize }} need attention.</small></a>{% endif %}
-  {% if staff_role == 'owner' or staff_role == 'admin' or staff_role == 'moderator' %}<a href="{% url 'operations_payments' %}"><span>Settlement</span><strong>Payments and disputes</strong><small>Review testnet evidence and human decisions.</small></a>{% endif %}
+  {% if staff_role == 'owner' or staff_role == 'admin' or staff_role == 'trust_support' %}<a href="{% url 'operations_tickets' %}"><span>Support</span><strong>Ticket queue</strong><small>{{ metrics.tickets }} ticket{{ metrics.tickets|pluralize }} need attention.</small></a>{% endif %}
+  {% if staff_role == 'owner' or staff_role == 'admin' or staff_role == 'trust_support' %}<a href="{% url 'operations_payments' %}"><span>Settlement</span><strong>Payments and disputes</strong><small>Review testnet evidence and human decisions.</small></a>{% endif %}
   {% if staff_role == 'owner' or staff_role == 'admin' %}<a href="{% url 'operations_email' %}"><span>Delivery</span><strong>Email health</strong><small>{{ metrics.email_failures }} recorded failure{{ metrics.email_failures|pluralize }}.</small></a>{% endif %}
   {% if staff_role == 'owner' or staff_role == 'admin' %}<a href="{% url 'operations_docs' %}"><span>Knowledge</span><strong>Documentation</strong><small>Publish and update product guidance.</small></a>{% endif %}
 </nav>

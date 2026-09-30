@@ -22,10 +22,10 @@ class User(AbstractUser):
         constraints = [models.UniqueConstraint(Lower('email'),name='unique_email_lower')]
 
 class StaffAccess(models.Model):
-    ROLE_CHOICES=[('owner','Owner'),('admin','Administrator'),('moderator','Moderator'),('support','Support')]
+    ROLE_CHOICES=[('owner','Owner'),('admin','Administrator'),('trust_support','Trust & Support')]
     STATUS_CHOICES=[('pending','Pending approval'),('approved','Approved'),('suspended','Suspended'),('revoked','Revoked')]
     user = models.OneToOneField(User,on_delete=models.CASCADE,related_name='staff_access')
-    role = models.CharField(max_length=20,choices=ROLE_CHOICES,default='moderator')
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES,default='trust_support')
     status = models.CharField(max_length=20,choices=STATUS_CHOICES,default='pending')
     approved_by = models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='approved_staff_access')
     approved_at = models.DateTimeField(null=True,blank=True)

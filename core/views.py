@@ -48,7 +48,10 @@ def health(request):
             cursor.fetchone()
     except Exception:
         return JsonResponse({'ok':False},status=503)
-    response=JsonResponse({'ok':True,'service':'push','network':'stellar-testnet'})
+    payload={'ok':True,'service':'push','network':'stellar-testnet'}
+    if settings.PUSH_RELEASE:
+        payload['release']=settings.PUSH_RELEASE
+    response=JsonResponse(payload)
     response['Cache-Control']='no-store'
     return response
 
@@ -513,13 +516,12 @@ def staff_dashboard(request):
     destination={
         'owner':'owner_dashboard',
         'admin':'admin_dashboard',
-        'moderator':'moderator_dashboard',
-        'support':'support_dashboard',
+        'trust_support':'trust_support_dashboard',
     }[staff_role(request.user)]
     return redirect(destination)
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 def staff_guide(request):
     """Keep internal procedures inside the protected Operations shell."""
     articles=DocumentationArticle.objects.filter(audience='staff',status='published').select_related('updated_by')
@@ -575,7 +577,7 @@ def _role_dashboard(request,role):
             'dashboard_lead':'Run member operations, staff workflows, communications and platform records.',
             'dashboard_note':'Administrative authority · Owner accounts remain protected',
             'cards':[
-                ('Team','Operations staff','Manage approved Moderator and Support access.',reverse('staff_team'),metrics['staff']),
+                ('Team','Operations staff','Manage approved Trust & Support access.',reverse('staff_team'),metrics['staff']),
                 ('Accounts','Account operations','Inspect members and record authorised restrictions.',reverse('operations_users'),metrics['restrictions']),
                 ('Support','Tickets and appeals','Assign, answer and close member requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Trust','Moderation queues','Review access, listings and disputed work.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
@@ -585,32 +587,20 @@ def _role_dashboard(request,role):
                 ('Knowledge','Documentation','Update member and staff guidance.',reverse('operations_docs'),DocumentationArticle.objects.count()),
             ],
         })
-    elif role == 'moderator':
+    elif role == 'trust_support':
         shared.update({
-            'dashboard_title':'Moderation desk',
-            'dashboard_lead':'Review flagged listings, tester access and work disputes with a preserved evidence trail.',
-            'dashboard_note':'Trust and safety · no staff administration or email controls',
+            'dashboard_title':'Trust & Support',
+            'dashboard_lead':'Resolve member questions, safety reports and work disputes from one accountable case desk.',
+            'dashboard_note':'Member support and trust operations · no staff administration or platform finance',
             'cards':[
-                ('Review','Listing queue','Approve or remove listings held for human review.',reverse('moderation'),metrics['flagged']),
+                ('Inbox','Open support cases','Assign and respond to member requests.',reverse('operations_tickets'),metrics['tickets']),
                 ('Disputes','Resolution queue','Assess agreements, messages and submitted evidence.',reverse('operations_payments'),metrics['disputes']),
-                ('Access','Tester waitlist','Review applications and issue controlled invitations.',reverse('moderation'),metrics['waitlist']),
+                ('Safety','Trust desk','Review reported listings, disputes and account concerns.',reverse('moderation'),metrics['flagged']+metrics['disputes']),
+                ('Appeals','Account access cases','Review account requests and preserved history.',reverse('operations_tickets')+'?status=all',metrics['account_tickets']),
                 ('Invitations','Tester codes','Create and copy one-time tester invitations.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Accounts','Member context','Inspect limited account context needed for a case.',reverse('operations_users'),metrics['users']),
-                ('Guidance','Staff documentation','Read the current moderation and safety guidance.',reverse('documentation'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
-            ],
-        })
-    else:
-        shared.update({
-            'dashboard_title':'Support centre',
-            'dashboard_lead':'Answer member questions, investigate account access and keep every response attached to a ticket.',
-            'dashboard_note':'Customer support · no settlement, sanctions or staff administration',
-            'cards':[
-                ('Inbox','Open tickets','Assign and respond to member requests.',reverse('operations_tickets'),metrics['tickets']),
-                ('Appeals','Account access cases','Review open account-access requests and their history.',reverse('operations_tickets')+'?status=all',metrics['account_tickets']),
-                ('Accounts','Member lookup','Find account details relevant to a support case.',reverse('operations_users'),'→'),
-                ('Invitations','Tester codes','Invite a tester and copy their one-time code.',reverse('staff_invitations'),Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=timezone.now()).count()),
                 ('Waiting','Member responses','Track cases waiting for more information.',reverse('operations_tickets')+'?status=waiting_user',metrics['waiting_user']),
-                ('Guidance','Support documentation','Read current account and support procedures.',reverse('staff_guide'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
+                ('Guidance','Trust & Support guide','Read current case, safety and dispute procedures.',reverse('staff_guide'),DocumentationArticle.objects.filter(audience='staff',status='published').count()),
             ],
         })
     return render(request,'role_dashboard.html',shared)
@@ -626,14 +616,15 @@ def admin_dashboard(request):
     return _role_dashboard(request,'admin')
 
 
-@staff_only('owner','moderator')
-def moderator_dashboard(request):
-    return _role_dashboard(request,'moderator')
+@staff_only('owner','trust_support')
+def trust_support_dashboard(request):
+    return _role_dashboard(request,'trust_support')
 
 
-@staff_only('owner','support')
-def support_dashboard(request):
-    return _role_dashboard(request,'support')
+@staff_only('owner','trust_support')
+def legacy_trust_support_dashboard(request):
+    """Preserve old bookmarks while presenting the consolidated workspace."""
+    return redirect('trust_support_dashboard')
 
 
 def report_days(request):
@@ -641,18 +632,18 @@ def report_days(request):
     return int(value) if value in {'7','30','90'} else 30
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 def operations_analytics(request):
     actual_role=staff_role(request.user)
     role=request.GET.get('view',actual_role)
-    if role not in {'owner','admin','moderator','support'}:
+    if role not in {'owner','admin','trust_support'}:
         role=actual_role
     if actual_role != 'owner' and role != actual_role:
         return render(request,'403.html',status=403)
     return render(request,'operations_analytics.html',{
         'role':role,'staff_portal_role':role,
         'owner_dashboard_preview':actual_role == 'owner' and role != 'owner',
-        'dashboard_url':reverse({'owner':'owner_dashboard','admin':'admin_dashboard','moderator':'moderator_dashboard','support':'support_dashboard'}[role]),
+        'dashboard_url':reverse({'owner':'owner_dashboard','admin':'admin_dashboard','trust_support':'trust_support_dashboard'}[role]),
         'report':report_data(role,report_days(request)),
     })
 
@@ -1042,7 +1033,7 @@ def job_create(request):
         job.moderation_notes='\n'.join(flags)
         job.save()
         if flags:
-            messages.success(request,'Job saved for moderator review. You will receive a notification after the decision.')
+            messages.success(request,'Job saved for Trust & Support review. You will receive a notification after the decision.')
         else:
             messages.success(request,'Job published. It is now visible in Find work and searchable by other members.')
         return redirect('job_detail',pk=job.pk)
@@ -1071,7 +1062,7 @@ def job_edit(request,pk):
             locked.moderation_notes='\n'.join(flags)
             locked.save(update_fields=[*form._meta.fields,'moderation_status','moderation_notes'])
         if flags:
-            messages.success(request,'Job updated and sent for moderator review because its wording needs a safety check.')
+            messages.success(request,'Job updated and sent for Trust & Support review because its wording needs a safety check.')
         else:
             messages.success(request,'Job updated and visible in Find work. It will lock when the first application arrives.')
         return redirect('job_detail',pk=job.pk)
@@ -1277,7 +1268,7 @@ def assignment_action(request,pk):
     return redirect('assignment',pk=item.pk)
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','trust_support')
 def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
@@ -1285,7 +1276,7 @@ def moderation(request):
     return render(request,'moderation.html',{
         'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
         'moderation_now':timezone.now(),'staff_role':staff_role(request.user),
-        'can_moderate':staff_role(request.user) in {'owner','admin','moderator'},
+        'can_moderate':staff_role(request.user) in {'owner','admin','trust_support'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
@@ -1296,7 +1287,7 @@ def moderation(request):
     })
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 def staff_invitations(request):
     return render(request,'staff_invitations.html',{
         'invitations':Invitation.objects.select_related('application','created_by')[:100],
@@ -1306,7 +1297,7 @@ def staff_invitations(request):
     })
 
 
-@staff_only('owner','admin','support')
+@staff_only('owner','admin','trust_support')
 def operations_tickets(request):
     tickets=SupportTicket.objects.select_related('requester','assigned_to')
     status=request.GET.get('status','open')
@@ -1316,7 +1307,7 @@ def operations_tickets(request):
     return render(request,'operations_tickets.html',{'tickets':page,'page_obj':page,'selected_status':status})
 
 
-@staff_only('owner','admin','support')
+@staff_only('owner','admin','trust_support')
 def operations_ticket(request,pk):
     ticket=get_object_or_404(SupportTicket.objects.select_related('requester','assigned_to'),pk=pk)
     reply_form=TicketReplyForm(request.POST or None,prefix='reply')
@@ -1342,7 +1333,7 @@ def operations_ticket(request,pk):
     })
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 def operations_users(request):
     users=User.objects.all().order_by('-date_joined')
     query=request.GET.get('q','').strip()
@@ -1352,7 +1343,7 @@ def operations_users(request):
     return render(request,'operations_users.html',{'users':page,'page_obj':page,'query':query,'member_count':User.objects.count()})
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 def operations_user(request,pk):
     target=get_object_or_404(User,pk=pk)
     assignments=Assignment.objects.filter(Q(worker=target)|Q(job__owner=target)).select_related('job','worker')[:20]
@@ -1384,11 +1375,11 @@ def operations_email(request):
     })
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','trust_support')
 def operations_payments(request):
     role=staff_role(request.user)
     payments=Payment.objects.select_related('assignment__job','assignment__worker')
-    if role == 'moderator':
+    if role == 'trust_support':
         payments=payments.filter(assignment__dispute__isnull=False)
     return render(request,'operations_payments.html',{
         'payments':payments.order_by('-created_at')[:100],
@@ -1410,7 +1401,7 @@ def operations_docs(request,pk=None):
     return render(request,'operations_docs.html',{'form':form,'article':article,'articles':DocumentationArticle.objects.all()})
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','trust_support')
 @require_POST
 def review_waitlist(request,pk):
     application=get_object_or_404(WaitlistApplication,pk=pk)
@@ -1443,7 +1434,7 @@ def review_waitlist(request,pk):
     return redirect('staff_invitations') if decision == 'approve' else redirect('moderation')
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 @require_POST
 def create_staff_invitation(request):
     if limited(request,f'staff-invite:{request.user.pk}',30):
@@ -1481,7 +1472,7 @@ def create_staff_invitation(request):
     return redirect('staff_invitations')
 
 
-@staff_only('owner','admin','moderator','support')
+@staff_only('owner','admin','trust_support')
 @require_POST
 def revoke_invitation(request,pk):
     updated=Invitation.objects.filter(pk=pk,used_at__isnull=True,revoked_at__isnull=True).update(revoked_at=timezone.now())
@@ -1490,7 +1481,7 @@ def revoke_invitation(request,pk):
     return redirect('staff_invitations')
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','trust_support')
 def moderate_dispute(request,pk):
     dispute=get_object_or_404(Dispute.objects.select_related('assignment__job','assignment__worker','opened_by'),pk=pk)
     form=DisputeResolutionForm(request.POST or None)
@@ -1516,7 +1507,7 @@ def moderate_dispute(request,pk):
     return render(request,'moderate_dispute.html',{'dispute':dispute,'form':form,'sanction_form':sanction_form})
 
 
-@staff_only('owner','admin','moderator')
+@staff_only('owner','admin','trust_support')
 @require_POST
 def moderate_job(request,pk):
     job=get_object_or_404(Job,pk=pk)

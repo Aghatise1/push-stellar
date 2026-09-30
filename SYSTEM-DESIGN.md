@@ -41,7 +41,7 @@ The Django application in this folder is the canonical product. The original sta
 
 ### Future operator
 
-- Handles reports, prohibited content, fraud, support and dispute administration.
+- Trust & Support handles member questions, reports, prohibited content, fraud and dispute administration from one protected case workspace.
 - Must use logged, role-limited tools. Direct database edits are not an acceptable operating process.
 - Cannot silently alter a preserved brief, proposal, assignment event or payment record.
 
@@ -154,7 +154,7 @@ The current build records a dispute and freezes normal approval. Production need
 2. Select production bank/card and stablecoin providers.
 3. Decide whether Push remains non-custodial or introduces regulated escrow.
 4. Approve the fee and refund policy.
-5. Staff support, moderation and dispute operations.
+5. Combined Trust & Support case and dispute operations.
 6. Complete privacy, terms and prohibited-work policies.
 7. Complete threat modelling, penetration testing and incident response.
 8. Run a small invitation-only pilot before a public marketplace launch.

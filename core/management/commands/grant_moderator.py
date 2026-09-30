@@ -3,7 +3,7 @@ from django.utils import timezone
 from core.models import User, StaffAccess
 
 class Command(BaseCommand):
-    help='Grant Trust Desk access to one existing, verified account.'
+    help='Grant Trust & Support access to one existing, verified account.'
     def add_arguments(self,parser):
         parser.add_argument('email')
     def handle(self,*args,**options):
@@ -14,6 +14,6 @@ class Command(BaseCommand):
         if not user.is_staff:
             user.is_staff=True;user.save(update_fields=['is_staff'])
         StaffAccess.objects.update_or_create(
-            user=user,defaults={'role':'moderator','status':'approved','approved_at':timezone.now()}
+            user=user,defaults={'role':'trust_support','status':'approved','approved_at':timezone.now()}
         )
-        self.stdout.write(self.style.SUCCESS('Moderator access granted.'))
+        self.stdout.write(self.style.SUCCESS('Trust & Support access granted.'))

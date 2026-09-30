@@ -1,12 +1,11 @@
 <section class="guidance-panel workspace-picker" aria-label="Owner workspace switcher">
   <h2>Choose a workspace</h2>
-  <p>One account, five views. View each staff dashboard or open your own member workspace.</p>
+  <p>One owner account, three staff views. Inspect each operations workspace or open your own member workspace.</p>
   <nav class="actions" aria-label="Dashboard views">
     <a class="button secondary small" href="{% url 'owner_dashboard' %}" {% if role == 'owner' %}aria-current="page"{% endif %}>Owner</a>
     <a class="button secondary small" href="{% url 'admin_dashboard' %}" {% if role == 'admin' %}aria-current="page"{% endif %}>Administrator</a>
-    <a class="button secondary small" href="{% url 'moderator_dashboard' %}" {% if role == 'moderator' %}aria-current="page"{% endif %}>Moderator</a>
-    <a class="button secondary small" href="{% url 'support_dashboard' %}" {% if role == 'support' %}aria-current="page"{% endif %}>Customer support</a>
+    <a class="button secondary small" href="{% url 'trust_support_dashboard' %}" {% if role == 'trust_support' %}aria-current="page"{% endif %}>Trust &amp; Support</a>
     <a class="button secondary small" href="{% url 'workspace' %}">Open member workspace</a>
   </nav>
-  {% if owner_dashboard_preview %}<p class="notice"><strong>Viewing the {{ role }} dashboard as Owner.</strong> Your account and owner permissions have not changed. Opening a tool uses your owner access.</p>{% endif %}
+  {% if owner_dashboard_preview %}<p class="notice"><strong>Viewing the {% if role == 'trust_support' %}Trust &amp; Support{% else %}{{ role }}{% endif %} dashboard as Owner.</strong> Your account and owner permissions have not changed. Opening a tool uses your owner access.</p>{% endif %}
 </section>

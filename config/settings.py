@@ -35,6 +35,7 @@ if not SECRET_KEY:
 if PRODUCTION and len(SECRET_KEY) < 32:
     raise ImproperlyConfigured('Production secret must contain at least 32 random characters.')
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME','').strip()
+PUSH_RELEASE = (os.environ.get('PUSH_RELEASE') or os.environ.get('RENDER_GIT_COMMIT') or '').strip()[:12]
 default_allowed_hosts = RENDER_EXTERNAL_HOSTNAME if PRODUCTION and RENDER_EXTERNAL_HOSTNAME else 'localhost,127.0.0.1'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('PUSH_ALLOWED_HOSTS', default_allowed_hosts).split(',') if host.strip()]
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
