@@ -6,7 +6,7 @@
   <p class="eyebrow">One step before your account</p>
   <h1>Check your email.</h1>
   <p class="lead">Enter the six-digit code sent to <strong>{{ pending.email }}</strong>. Push will create your account only after the code is accepted.</p>
-  {% if local_email %}<div class="notice"><strong>Email delivery is not connected yet</strong><p>For this local preview, the code is stored in the newest file inside <code>private-mail</code>. Deployment will use protected SMTP settings on the host.</p></div>{% endif %}
+  {% if local_email %}<div class="notice"><strong>Email delivery is not connected yet</strong><p>For this local preview, the code is stored in the newest file inside <code>private-mail</code>. The hosted service uses protected Brevo HTTPS API settings.</p></div>{% endif %}
   <form method="post" novalidate>
     {% csrf_token %}
     {% include 'fields.html' %}

@@ -2,30 +2,27 @@ $ErrorActionPreference = 'Stop'
 $projectPath = $PSScriptRoot
 $envPath = Join-Path $projectPath '.env'
 
-Write-Host 'Push email delivery setup' -ForegroundColor Cyan
-Write-Host 'Use a Google App Password. Do not enter your normal Gmail password.' -ForegroundColor Yellow
-$sender = (Read-Host 'Gmail address that will send Push verification codes').Trim()
+Write-Host 'Push Brevo email delivery setup' -ForegroundColor Cyan
+Write-Host 'Create a Brevo transactional API key and verify the sender before continuing.' -ForegroundColor Yellow
+$sender = (Read-Host 'Verified sender email address').Trim()
 if ($sender -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-    throw 'Enter a valid Gmail address.'
+    throw 'Enter a valid verified sender address.'
 }
 
-$securePassword = Read-Host 'Google App Password (input is hidden)' -AsSecureString
-$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+$secureApiKey = Read-Host 'Brevo API key (input is hidden)' -AsSecureString
+$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureApiKey)
 try {
-    $appPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer).Replace(' ', '')
+    $apiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer).Trim()
 } finally {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
 }
-if ($appPassword.Length -lt 16) {
-    throw 'The Google App Password is missing or too short.'
+if ($apiKey.Length -lt 20) {
+    throw 'The Brevo API key is missing or too short.'
 }
 
 $values = [ordered]@{
-    PUSH_EMAIL_HOST = 'smtp.gmail.com'
-    PUSH_EMAIL_USER = $sender
-    PUSH_EMAIL_PASSWORD = $appPassword
+    PUSH_BREVO_API_KEY = $apiKey
     PUSH_EMAIL_FROM = "Push <$sender>"
-    PUSH_EMAIL_PORT = '587'
 }
 $lines = if (Test-Path -LiteralPath $envPath) { [Collections.Generic.List[string]](Get-Content -LiteralPath $envPath) } else { [Collections.Generic.List[string]]::new() }
 foreach ($name in $values.Keys) {
@@ -37,5 +34,5 @@ foreach ($name in $values.Keys) {
     if ($index -ge 0) { $lines[$index] = $replacement } else { $lines.Add($replacement) }
 }
 $lines | Set-Content -LiteralPath $envPath -Encoding utf8
-$appPassword = $null
-Write-Host 'Email delivery is configured. Restart the Push preview server to activate it.' -ForegroundColor Green
+$apiKey = $null
+Write-Host 'Brevo HTTPS email delivery is configured. Restart the Push preview server to activate it.' -ForegroundColor Green
