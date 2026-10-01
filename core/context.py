@@ -55,4 +55,4 @@ def app_context(request):
             'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES),
             'seo_indexable':seo_indexable,
             'canonical_url':f'{public_origin}{canonical_path}',
-            'seo_image_url':f'{public_origin}{settings.STATIC_URL}images/push-social-card-v2.png'}
+            'seo_image_url':f'{public_origin}{settings.STATIC_URL}images/push-social-card-v3.png'}
