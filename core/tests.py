@@ -15,7 +15,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
+from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
 from .email_backend import BrevoEmailBackend
@@ -127,6 +127,61 @@ class WorkspaceTests(TestCase):
         self.login_as(self.owner)
         for name in ['workspace','work','profile','job_create','wallet','payments','inbox','notifications','help']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)
+
+    def test_community_requires_a_verified_member_and_creates_a_post(self):
+        self.assertRedirects(self.client.get(reverse('community')),f"{reverse('login')}?next={reverse('community')}")
+        self.login_as(self.owner)
+        response=self.client.post(reverse('community_create'),{
+            'topic':'stellar','title':'Build a Stellar testnet payment guide',
+            'body':'Looking for a technical writer and a wallet tester.','skills':'Stellar, documentation',
+        })
+        post=CommunityPost.objects.get()
+        self.assertRedirects(response,reverse('community_detail',args=[post.pk]))
+        listing=self.client.get(reverse('community'))
+        self.assertContains(listing,'Build a Stellar testnet payment guide')
+        self.assertContains(listing,'Stellar builders')
+
+    def test_community_search_reply_and_private_profile_rules(self):
+        post=CommunityPost.objects.create(author=self.owner,topic='skills',title='Exchange research for design',body='I can research user needs.',skills='Research, UI design')
+        self.login_as(self.worker)
+        self.assertContains(self.client.get(reverse('community')+'?q=Research&topic=skills'),post.title)
+        self.assertNotContains(self.client.get(reverse('community')+'?q=Python'),post.title)
+        response=self.client.post(reverse('community_reply',args=[post.pk]),{'body':'I can help with interface design.'})
+        self.assertRedirects(response,reverse('community_detail',args=[post.pk]))
+        self.assertEqual(CommunityReply.objects.get().author,self.worker)
+        detail=self.client.get(reverse('community_detail',args=[post.pk]))
+        self.assertContains(detail,'I can help with interface design.')
+        self.assertNotContains(detail,reverse('public_profile',args=[self.owner.pk]))
+        self.assertTrue(Notification.objects.filter(recipient=self.owner,kind='community').exists())
+
+    def test_community_content_is_escaped_and_closed_posts_reject_replies(self):
+        self.login_as(self.owner)
+        self.client.post(reverse('community_create'),{
+            'topic':'question','title':'Safe question','body':'<script>alert(1)</script>','skills':'',
+        })
+        post=CommunityPost.objects.get()
+        detail=self.client.get(reverse('community_detail',args=[post.pk]))
+        self.assertContains(detail,'&lt;script&gt;alert(1)&lt;/script&gt;')
+        self.client.post(reverse('community_close',args=[post.pk]))
+        post.refresh_from_db();self.assertEqual(post.status,'closed')
+        self.client.logout();self.login_as(self.worker)
+        self.assertEqual(self.client.post(reverse('community_reply',args=[post.pk]),{'body':'Late reply'}).status_code,404)
+
+    def test_community_reports_are_deduplicated_and_staff_can_remove_post(self):
+        post=CommunityPost.objects.create(author=self.owner,topic='collaboration',title='Questionable request',body='A post to review.')
+        self.login_as(self.worker)
+        url=reverse('community_report',args=[post.pk])
+        self.client.post(url,{'reason':'unsafe','detail':'Requests a credential.'})
+        self.client.post(url,{'reason':'spam','detail':'Second attempt.'})
+        self.assertEqual(CommunityReport.objects.filter(post=post,reporter=self.worker).count(),1)
+        self.client.logout();self.grant_staff(self.outsider,'trust_support');self.login_as(self.outsider)
+        desk=self.client.get(reverse('moderation'))
+        self.assertContains(desk,'Questionable request')
+        self.client.post(reverse('moderate_community_post',args=[post.pk]),{'action':'remove'})
+        post.refresh_from_db();self.assertEqual(post.status,'removed')
+        report=CommunityReport.objects.get();self.assertIsNotNone(report.resolved_at)
+        self.client.logout();self.login_as(self.worker)
+        self.assertEqual(self.client.get(reverse('community_detail',args=[post.pk])).status_code,404)
 
     @override_settings(PUSH_RELEASE='16464714ed3e')
     def test_health_reports_the_deployed_release_when_host_provides_it(self):

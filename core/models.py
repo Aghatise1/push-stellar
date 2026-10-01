@@ -194,6 +194,52 @@ class Notification(models.Model):
         ordering=['-created_at']
         indexes = [models.Index(fields=['recipient','read_at','-created_at'],name='notification_inbox_idx')]
 
+class CommunityPost(models.Model):
+    TOPIC_CHOICES=[
+        ('collaboration','Find collaborators'),('skills','Skill exchange'),
+        ('stellar','Stellar builders'),('question','Ask the community'),
+        ('showcase','Share progress'),
+    ]
+    STATUS_CHOICES=[('active','Open'),('closed','Closed'),('removed','Removed')]
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    author=models.ForeignKey(User,on_delete=models.PROTECT,related_name='community_posts')
+    topic=models.CharField(max_length=20,choices=TOPIC_CHOICES)
+    title=models.CharField(max_length=140)
+    body=models.TextField(max_length=3000)
+    skills=models.CharField(max_length=200,blank=True,help_text='Comma-separated skills that help people find this post.')
+    status=models.CharField(max_length=12,choices=STATUS_CHOICES,default='active')
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering=['-updated_at']
+        indexes=[models.Index(fields=['status','topic','-updated_at'],name='community_feed_idx')]
+
+class CommunityReply(models.Model):
+    post=models.ForeignKey(CommunityPost,on_delete=models.CASCADE,related_name='replies')
+    author=models.ForeignKey(User,on_delete=models.PROTECT,related_name='community_replies')
+    body=models.TextField(max_length=2000)
+    active=models.BooleanField(default=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['created_at']
+
+class CommunityReport(models.Model):
+    REASON_CHOICES=[
+        ('spam','Spam or misleading content'),('harassment','Harassment or abuse'),
+        ('unsafe','Unsafe payment or credential request'),('illegal','Prohibited or unlawful activity'),
+        ('other','Other concern'),
+    ]
+    post=models.ForeignKey(CommunityPost,on_delete=models.CASCADE,related_name='reports')
+    reporter=models.ForeignKey(User,on_delete=models.PROTECT,related_name='community_reports')
+    reason=models.CharField(max_length=20,choices=REASON_CHOICES)
+    detail=models.CharField(max_length=500,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    resolved_at=models.DateTimeField(null=True,blank=True)
+    resolved_by=models.ForeignKey(User,on_delete=models.PROTECT,null=True,blank=True,related_name='resolved_community_reports')
+    class Meta:
+        ordering=['-created_at']
+        constraints=[models.UniqueConstraint(fields=['post','reporter'],name='one_community_report_per_member')]
+
 class WaitlistApplication(models.Model):
     STATUS_CHOICES=[('pending','Pending'),('approved','Approved'),('rejected','Rejected')]
     name = models.CharField(max_length=80)

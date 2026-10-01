@@ -59,6 +59,9 @@ The Django application in this folder is the canonical product. The original sta
 | Payment | Settlement method, amount and verification reference | Participants and authorised operators | Created once; transaction reference unique |
 | Message | Work discussion attached to one assignment | Selected worker and hiring participant only | Append-only; sender and time are preserved |
 | Dispute | Reason, evidence, status and resolution | Participants and authorised operators | Append-only evidence; controlled status changes |
+| Community post | Skill exchange, collaboration, questions and progress | Verified members; staff for moderation | Author may close/reopen; staff may remove after a report |
+| Community reply | Constructive response attached to one community post | Verified members; staff for moderation | Append-only during the pilot |
+| Community report | Private safety concern about a post | Reporter and authorised operators | One open record per reporter and post; resolved through Trust & Support |
 
 ## Brief and application state rules
 
@@ -147,6 +150,7 @@ The current build records a dispute and freezes normal approval. Production need
 | Workspace | Owned briefs, applications and assignments |
 | Wallet | Linked public address, testnet send/receive request, earnings and payment record |
 | Assignment | Scope, private participant messages, status, submissions, revisions, disputes and payment evidence |
+| Community | Verified-member collaboration, skill exchange, questions, progress and Stellar builder conversations |
 
 ## Launch gates
 

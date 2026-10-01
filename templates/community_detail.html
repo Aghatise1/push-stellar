@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{{ post.title }} — Push Community{% endblock %}
+{% block app_location %}Community{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'community' %}">Back to community</a>
+<article class="community-thread">
+  <header><div><span class="tag">{{ post.get_topic_display }}</span><span class="community-state {{ post.status }}">{{ post.get_status_display }}</span></div><h1>{{ post.title }}</h1><p>Started by {% if post.author.public_profile %}<a href="{% url 'public_profile' post.author.pk %}">{{ post.author.display_name }}</a>{% else %}{{ post.author.display_name }}{% endif %} · {{ post.created_at|date:'j M Y, H:i' }}</p></header>
+  <div class="community-body">{{ post.body|linebreaks }}</div>
+  {% if post.skills %}<div class="community-skills"><span>Relevant skills</span>{{ post.skills }}</div>{% endif %}
+  {% if is_author %}<form method="post" action="{% url 'community_close' post.pk %}">{% csrf_token %}<button class="button secondary small">{% if post.status == 'active' %}Close replies{% else %}Reopen conversation{% endif %}</button></form>{% endif %}
+</article>
+<section class="community-replies"><div class="section-heading"><h2>Replies</h2><span>{{ replies|length }} response{{ replies|length|pluralize }}</span></div>{% for reply in replies %}<article><header>{% if reply.author.public_profile %}<a href="{% url 'public_profile' reply.author.pk %}">{{ reply.author.display_name }}</a>{% else %}<strong>{{ reply.author.display_name }}</strong>{% endif %}<span>{{ reply.created_at|timesince }} ago</span></header><div>{{ reply.body|linebreaks }}</div></article>{% empty %}<div class="small-empty">No replies yet. A useful first response is a fine way to meet someone.</div>{% endfor %}</section>
+{% if post.status == 'active' %}<section class="community-reply-form"><h2>Join the conversation</h2><form method="post" action="{% url 'community_reply' post.pk %}">{% csrf_token %}{% include 'fields.html' with form=reply_form %}<button class="button">Add reply</button></form></section>{% endif %}
+{% if not is_author %}<details class="community-report"><summary>Report a concern</summary>{% if already_reported %}<p>You have already sent this post to Trust & Support.</p>{% else %}<form method="post" action="{% url 'community_report' post.pk %}">{% csrf_token %}{% include 'fields.html' with form=report_form %}<button class="button secondary small">Send private report</button></form>{% endif %}</details>{% endif %}
+{% endblock %}

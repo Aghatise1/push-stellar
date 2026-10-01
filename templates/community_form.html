@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Start a community conversation — Push{% endblock %}
+{% block app_location %}Community{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'community' %}">Back to community</a>
+<div class="page-heading"><div><span class="tag">Verified members</span><h1>Start something useful.</h1><p class="lead">Say what you are building, what you can offer, and who you hope to meet.</p></div></div>
+<div class="form-layout"><form method="post" class="form-panel">{% csrf_token %}{% include 'fields.html' %}<button class="button">Share with the community</button></form><aside class="side-note"><h2>Keep it constructive</h2><p>Use Community to exchange skills, find collaborators and learn together. Use Post a job when work has a budget or a deliverable.</p><p>Never request private keys, recovery phrases, deposits or off-platform fees. Stellar discussions in this pilot use testnet only.</p></aside></div>
+{% endblock %}

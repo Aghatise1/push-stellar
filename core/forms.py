@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
-from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication, StaffAccess, SupportTicket, TicketReply, DocumentationArticle
+from .models import User, Job, Application, Submission, Message, Dispute, AccountSanction, WaitlistApplication, StaffAccess, SupportTicket, TicketReply, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .access import has_staff_access
 from .stellar import valid_account_id
 
@@ -124,6 +124,27 @@ class DocumentationArticleForm(forms.ModelForm):
         model=DocumentationArticle
         fields=['slug','title','summary','body','audience','status']
         widgets={'body':forms.Textarea(attrs={'rows':16})}
+
+class CommunityPostForm(forms.ModelForm):
+    class Meta:
+        model=CommunityPost
+        fields=['topic','title','body','skills']
+        labels={'body':'What would you like the community to know?','skills':'Relevant skills (optional)'}
+        widgets={'body':forms.Textarea(attrs={'rows':7,'placeholder':'Explain the goal, what you can offer, and what kind of response would help.'})}
+
+class CommunityReplyForm(forms.ModelForm):
+    class Meta:
+        model=CommunityReply
+        fields=['body']
+        labels={'body':'Your reply'}
+        widgets={'body':forms.Textarea(attrs={'rows':4,'placeholder':'Be specific, useful and respectful.'})}
+
+class CommunityReportForm(forms.ModelForm):
+    class Meta:
+        model=CommunityReport
+        fields=['reason','detail']
+        labels={'detail':'Details (optional)'}
+        widgets={'detail':forms.Textarea(attrs={'rows':3})}
 
 class RecoveryForm(PasswordResetForm):
     def send_mail(self,subject_template_name,email_template_name,context,from_email,to_email,html_email_template_name=None):

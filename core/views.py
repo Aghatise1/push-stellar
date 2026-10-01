@@ -24,8 +24,8 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle
-from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
+from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm, CommunityPostForm, CommunityReplyForm, CommunityReportForm
 from .reporting import report_data
 from .access import has_staff_access, staff_only, staff_role
 from .mailer import send_tracked_email
@@ -1006,6 +1006,102 @@ def resume_download(request,pk):
 
 @never_cache
 @verified
+def community(request):
+    posts=CommunityPost.objects.filter(status__in=['active','closed']).select_related('author').annotate(reply_count=Count('replies',filter=Q(replies__active=True))).order_by('-updated_at')
+    query=request.GET.get('q','').strip()[:120]
+    topic=request.GET.get('topic','').strip()
+    valid_topics={value for value,_label in CommunityPost.TOPIC_CHOICES}
+    if query:
+        posts=posts.filter(Q(title__icontains=query)|Q(body__icontains=query)|Q(skills__icontains=query)|Q(author__display_name__icontains=query))
+    if topic in valid_topics:
+        posts=posts.filter(topic=topic)
+    else:
+        topic=''
+    page=Paginator(posts,18).get_page(request.GET.get('page'))
+    return render(request,'community.html',{
+        'posts':page,'page_obj':page,'query':query,'topic':topic,
+        'topics':CommunityPost.TOPIC_CHOICES,
+        'member_count':User.objects.filter(is_active=True,email_verified=True).count(),
+        'open_count':CommunityPost.objects.filter(status='active').count(),
+    })
+
+
+@verified
+def community_create(request):
+    form=CommunityPostForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        post=form.save(commit=False);post.author=request.user;post.save()
+        messages.success(request,'Shared with the Push community.')
+        return redirect('community_detail',pk=post.pk)
+    return render(request,'community_form.html',{'form':form})
+
+
+@verified
+def community_detail(request,pk):
+    post=get_object_or_404(CommunityPost.objects.select_related('author'),pk=pk)
+    is_author=post.author_id == request.user.pk
+    if post.status == 'removed' and not (is_author or has_staff_access(request.user)):
+        raise Http404
+    return render(request,'community_detail.html',{
+        'post':post,'is_author':is_author,
+        'replies':post.replies.filter(active=True).select_related('author'),
+        'reply_form':CommunityReplyForm(),'report_form':CommunityReportForm(),
+        'already_reported':post.reports.filter(reporter=request.user).exists(),
+    })
+
+
+@verified
+@require_POST
+def community_reply(request,pk):
+    post=get_object_or_404(CommunityPost,pk=pk,status='active')
+    form=CommunityReplyForm(request.POST)
+    if not form.is_valid():
+        messages.error(request,'Write a reply of 2,000 characters or fewer.')
+        return redirect('community_detail',pk=post.pk)
+    reply=form.save(commit=False);reply.post=post;reply.author=request.user;reply.save()
+    CommunityPost.objects.filter(pk=post.pk).update(updated_at=timezone.now())
+    if post.author_id != request.user.pk:
+        notify(post.author,'community','New community reply',f'{request.user.display_name} replied to “{post.title}”.',reverse('community_detail',args=[post.pk]))
+    messages.success(request,'Reply added to the community record.')
+    return redirect('community_detail',pk=post.pk)
+
+
+@verified
+@require_POST
+def community_close(request,pk):
+    post=get_object_or_404(CommunityPost,pk=pk,author=request.user)
+    if post.status == 'removed':
+        return HttpResponseBadRequest('A removed post cannot be changed.')
+    post.status='closed' if post.status == 'active' else 'active'
+    post.save(update_fields=['status','updated_at'])
+    messages.success(request,'Community post reopened.' if post.status == 'active' else 'Community post closed to new replies.')
+    return redirect('community_detail',pk=post.pk)
+
+
+@verified
+@require_POST
+def community_report(request,pk):
+    post=get_object_or_404(CommunityPost,pk=pk,status__in=['active','closed'])
+    if post.author_id == request.user.pk:
+        return HttpResponseBadRequest('You cannot report your own post.')
+    form=CommunityReportForm(request.POST)
+    if not form.is_valid():
+        messages.error(request,'Choose a reason for the report.')
+        return redirect('community_detail',pk=post.pk)
+    report,created=CommunityReport.objects.get_or_create(
+        post=post,reporter=request.user,
+        defaults={'reason':form.cleaned_data['reason'],'detail':form.cleaned_data['detail']},
+    )
+    if created:
+        audit(request.user,'community.post_reported',report,{'post_id':str(post.pk),'reason':report.reason})
+        messages.success(request,'Report sent privately to Trust & Support.')
+    else:
+        messages.info(request,'You have already reported this post.')
+    return redirect('community_detail',pk=post.pk)
+
+
+@never_cache
+@verified
 def jobs(request):
     qs = Job.objects.filter(status='open',moderation_status='approved').select_related('owner')
     q = request.GET.get('q','').strip()[:120]
@@ -1272,9 +1368,10 @@ def assignment_action(request,pk):
 def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
+    community_reports=CommunityReport.objects.filter(resolved_at__isnull=True).select_related('post','post__author','reporter')
     waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
     return render(request,'moderation.html',{
-        'disputes':disputes,'flagged_jobs':flagged,'waitlist_items':waitlist_items,
+        'disputes':disputes,'flagged_jobs':flagged,'community_reports':community_reports[:100],'waitlist_items':waitlist_items,
         'moderation_now':timezone.now(),'staff_role':staff_role(request.user),
         'can_moderate':staff_role(request.user) in {'owner','admin','trust_support'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
@@ -1282,9 +1379,28 @@ def moderation(request):
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
                    'waitlist':WaitlistApplication.objects.filter(status='pending').count(),
                    'tickets':SupportTicket.objects.exclude(status__in=['resolved','closed']).count(),
+                   'community_reports':community_reports.count(),
                    'email_failures':EmailDelivery.objects.filter(status='failed').count()},
         'recent_audit':AuditEvent.objects.select_related('actor')[:12],
     })
+
+
+@staff_only('owner','admin','trust_support')
+@require_POST
+def moderate_community_post(request,pk):
+    post=get_object_or_404(CommunityPost,pk=pk)
+    action=request.POST.get('action')
+    if action not in {'remove','restore','keep'}:
+        return HttpResponseBadRequest('Choose a valid moderation action.')
+    if action == 'remove':
+        post.status='removed';post.save(update_fields=['status','updated_at'])
+        notify(post.author,'community','Community post removed',f'“{post.title}” was removed after a Trust & Support review.',reverse('support'))
+    elif action == 'restore':
+        post.status='active';post.save(update_fields=['status','updated_at'])
+    CommunityReport.objects.filter(post=post,resolved_at__isnull=True).update(resolved_at=timezone.now(),resolved_by=request.user)
+    audit(request.user,f'community.post_{action}',post)
+    messages.success(request,'Community report reviewed and recorded.')
+    return redirect('moderation')
 
 
 @staff_only('owner','admin','trust_support')

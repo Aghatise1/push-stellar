@@ -71,6 +71,16 @@ Push gives hiring teams and independent workers one shared record from a clear b
 - Public metrics must distinguish test, sample and production activity.
 - Moderation rules must prohibit fraud, impersonation, unlawful work, harassment, malware and requests for credentials.
 
+## Community rules
+
+- Community is available only to verified, invited members who accepted the current terms.
+- Members may find collaborators, exchange skills, ask practical questions, share progress and meet other Stellar builders.
+- Community posts do not create a job, agreement, payment obligation or endorsement. Paid work must move into a published brief and protected work record.
+- Profiles remain private unless their owner explicitly publishes them; Community shows a display name without overriding that choice.
+- Stellar discussions in the pilot refer to testnet learning and building. Testnet assets have no monetary value, and financial or investment claims receive no promoted status.
+- Members can report a post privately. Trust & Support can retain or remove it, and the decision is written to the operations audit record.
+- Push does not rank members by likes, follower counts or token holdings.
+
 ## Decisions still required before launch
 
 1. First launch countries and the legal entity operating Push.
