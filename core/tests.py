@@ -1243,6 +1243,7 @@ class WorkspaceTests(TestCase):
         self.assertContains(home,'<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">',html=True)
         self.assertContains(home,'<link rel="canonical" href="http://127.0.0.1:8765/">',html=True)
         self.assertContains(home,'property="og:image"')
+        self.assertContains(home,'images/push-social-card-v2.png')
         self.assertContains(home,'name="twitter:site" content="@pushearn_"')
         self.assertContains(home,'"@type":"WebSite"')
         login=self.client.get(reverse('login'))
