@@ -1,6 +1,8 @@
 (function () {
   function csrfToken() {
-    var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) return meta.content;
+    var match = document.cookie.match(/(?:^|; )(?:__Host-push_csrf|push_csrftoken|csrftoken)=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : '';
   }
 
@@ -43,8 +45,14 @@
         throw new Error('Push returned an invalid wallet response. Refresh the page and try again.');
       }
     }
-    if (response.redirected || response.status === 401 || response.status === 403 || /<html/i.test(body)) {
+    if (response.redirected || response.status === 401) {
       throw new Error('Your Push session has expired. Refresh the page, sign in again, then reconnect Freighter.');
+    }
+    if (response.status === 403) {
+      throw new Error('Push could not verify this request. Reload the page once, then reconnect Freighter.');
+    }
+    if (/<html/i.test(body)) {
+      throw new Error('The wallet service returned an unexpected page. Reload Push and try again.');
     }
     throw new Error('The wallet service is temporarily unavailable. Refresh the page and try again.');
   }

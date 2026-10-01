@@ -778,6 +778,25 @@ class WorkspaceTests(TestCase):
         self.assertEqual(connected.status_code,200)
         self.worker.refresh_from_db()
         self.assertEqual(self.worker.stellar_address,address)
+
+    def test_wallet_connect_uses_render_safe_csrf_meta_token(self):
+        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+        client=Client(enforce_csrf_checks=True)
+        client.force_login(self.worker)
+        page=client.get(reverse('wallet'))
+        match=re.search(r'<meta name="csrf-token" content="([^"]+)">',page.content.decode())
+        self.assertIsNotNone(match)
+        self.assertIn(settings.CSRF_COOKIE_NAME,client.cookies)
+        response=client.post(
+            reverse('wallet_connect'),
+            data=json.dumps({'address':address,'network':'TESTNET'}),
+            content_type='application/json',
+            HTTP_X_CSRFTOKEN=match.group(1),
+        )
+        self.assertEqual(response.status_code,200)
+        self.worker.refresh_from_db()
+        self.assertEqual(self.worker.stellar_address,address)
+
     def test_both_payment_simulations_and_immutable_amount(self):
         for method in ['usdc','bank_card']:
             with self.subTest(method=method):

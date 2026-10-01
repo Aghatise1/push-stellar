@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
+  {% if user.is_authenticated %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
   <meta name="description" content="{% block meta_description %}Push keeps the brief, delivery and payment record together for independent work.{% endblock %}">
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
@@ -131,7 +132,7 @@
   <script src="{% static 'vendor/ScrollTrigger.min.js' %}" defer></script>
   <script src="{% static 'app-motion.js' %}?v=20260928-1" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
-  <script src="{% static 'wallet-connect.js' %}?v=20261001-1" defer></script>
+  <script src="{% static 'wallet-connect.js' %}?v=20261001-2" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>
   <script src="{% static 'activity-status.js' %}?v=20260927-1" defer></script>
   {% endif %}
