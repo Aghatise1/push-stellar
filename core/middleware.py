@@ -1,6 +1,8 @@
 import logging
 import secrets
 
+from django.conf import settings
+
 from .logging import request_id
 
 
@@ -52,6 +54,16 @@ class AppSecurityMiddleware:
         response['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         response['Cross-Origin-Opener-Policy'] = 'same-origin'
         response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        # Render terminates TLS before Django.  Its forwarded request can look
+        # non-secure to SecurityMiddleware even though the public response is
+        # HTTPS, so emit the configured HSTS policy at the application edge.
+        if settings.PRODUCTION and settings.PUSH_ORIGIN.startswith('https://') and settings.SECURE_HSTS_SECONDS:
+            hsts=[f'max-age={settings.SECURE_HSTS_SECONDS}']
+            if settings.SECURE_HSTS_INCLUDE_SUBDOMAINS:
+                hsts.append('includeSubDomains')
+            if settings.SECURE_HSTS_PRELOAD:
+                hsts.append('preload')
+            response['Strict-Transport-Security']='; '.join(hsts)
         if response.status_code == 429 and 'Retry-After' not in response:
             response['Retry-After'] = '900'
         if request.user.is_authenticated or request.path.startswith(('/login/','/reset/','/verify/','/password-reset/')):

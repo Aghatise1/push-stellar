@@ -887,6 +887,12 @@ class WorkspaceTests(TestCase):
         self.assertIn('no-store',response['Cache-Control'])
         self.assertIn("script-src 'self'",response['Content-Security-Policy'])
         self.assertNotIn("'unsafe-inline'",response['Content-Security-Policy'])
+
+    @override_settings(PRODUCTION=True,PUSH_ORIGIN='https://pushearn.xyz',SECURE_HSTS_SECONDS=31536000,
+                       SECURE_HSTS_INCLUDE_SUBDOMAINS=True,SECURE_HSTS_PRELOAD=True)
+    def test_render_edge_receives_hsts_policy(self):
+        response=self.client.get(reverse('home'))
+        self.assertEqual(response['Strict-Transport-Security'],'max-age=31536000; includeSubDomains; preload')
     def test_password_reset_single_use_and_revokes_old_session(self):
         self.login_as(self.worker)
         old_session=self.client.cookies[settings.SESSION_COOKIE_NAME].value
@@ -1233,6 +1239,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(sitemap.status_code,200)
         self.assertEqual(sitemap['Content-Type'],'application/xml; charset=utf-8')
         self.assertContains(sitemap,'<loc>http://127.0.0.1:8765/</loc>')
+        self.assertContains(sitemap,'<loc>http://127.0.0.1:8765/about/</loc>')
         self.assertContains(sitemap,'<loc>http://127.0.0.1:8765/privacy/</loc>')
         security=self.client.get(reverse('security_contact'))
         self.assertContains(security,'Expires: 2027-10-01T23:59:59Z')
@@ -1246,6 +1253,10 @@ class WorkspaceTests(TestCase):
         self.assertContains(home,'images/push-social-card-v3.png')
         self.assertContains(home,'name="twitter:site" content="@pushearn_"')
         self.assertContains(home,'"@type":"WebSite"')
+        self.assertContains(home,'"@type":"WebApplication"')
+        about=self.client.get(reverse('about'))
+        self.assertContains(about,'not a paid-task scheme')
+        self.assertContains(about,'<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">',html=True)
         login=self.client.get(reverse('login'))
         self.assertContains(login,'<meta name="robots" content="noindex, nofollow, noarchive">',html=True)
         self.assertNotContains(login,'rel="canonical"')

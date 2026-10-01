@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Push — Work with a clear record{% endblock %}
 {% block meta_description %}Keep freelance briefs, delivery, messages and settlement evidence together with Push.{% endblock %}
-{% block structured_data %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Push","url":"{{ canonical_url }}","description":"A clear work record for briefs, delivery, messages and settlement evidence."}</script>{% endblock %}
+{% block structured_data %}<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Push","url":"{{ canonical_url }}","description":"A clear work record for briefs, delivery, messages and settlement evidence."},{"@type":"WebApplication","name":"Push","url":"{{ canonical_url }}","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"An invite-only freelance work coordination and settlement-record product running on Stellar testnet."}]}</script>{% endblock %}
 {% block content %}
 <section class="intro" data-reveal>
   <div class="intro-visual-column">

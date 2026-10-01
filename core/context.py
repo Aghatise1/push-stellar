@@ -14,7 +14,7 @@ STAFF_PORTAL_ROUTES = {
 }
 
 PUBLIC_INDEX_ROUTES = {
-    'home', 'product', 'how_it_works', 'investors', 'terms', 'privacy',
+    'home', 'about', 'product', 'how_it_works', 'investors', 'terms', 'privacy',
     'cookies', 'refunds', 'help', 'documentation', 'documentation_article',
 }
 

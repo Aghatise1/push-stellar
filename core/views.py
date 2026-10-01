@@ -91,7 +91,7 @@ def robots(request):
 
 @require_GET
 def sitemap(request):
-    public_names=('home','product','how_it_works','investors','documentation','help','terms','privacy','cookies','refunds')
+    public_names=('home','about','product','how_it_works','investors','documentation','help','terms','privacy','cookies','refunds')
     origin=settings.PUSH_ORIGIN.rstrip('/')
     urls=''.join(
         f'<url><loc>{origin}{reverse(name)}</loc></url>' for name in public_names
@@ -291,6 +291,10 @@ def home(request):
 
 def product(request):
     return render(request,'product.html')
+
+
+def about(request):
+    return render(request,'about.html')
 
 
 def how_it_works(request):
