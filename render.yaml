@@ -6,9 +6,15 @@ services:
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py check --deploy && python manage.py check_release
     startCommand: waitress-serve --listen=*:10000 config.wsgi:application
     healthCheckPath: /healthz/
+    domains:
+      - pushearn.xyz
     envVars:
       - key: PUSH_ENV
         value: production
+      - key: PUSH_ALLOWED_HOSTS
+        value: pushearn.xyz,www.pushearn.xyz,push-preview.onrender.com
+      - key: PUSH_ORIGIN
+        value: https://pushearn.xyz
       - key: PUSH_SECRET_KEY
         generateValue: true
       - key: PUSH_DATABASE_URL
