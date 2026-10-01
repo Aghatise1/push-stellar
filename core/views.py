@@ -799,27 +799,28 @@ def analytics(request):
 
 @verified
 def work(request):
+    selected_view=request.GET.get('view','assigned')
+    if selected_view not in {'assigned','applications','hiring','posted'}:
+        selected_view='assigned'
     assigned=Assignment.objects.filter(worker=request.user).select_related('job','job__owner').order_by('-created_at')
     hiring=Assignment.objects.filter(job__owner=request.user).select_related('job','worker').order_by('-created_at')
-    posted=Job.objects.filter(owner=request.user).order_by('-created_at')
+    posted=Job.objects.filter(owner=request.user).annotate(application_count=Count('applications')).order_by('-created_at')
     applications=Application.objects.filter(worker=request.user).select_related('job','job__owner').order_by('-created_at')
-    return render(request,'work.html',{'assigned':assigned,'hiring':hiring,'posted':posted,'applications':applications})
+    return render(request,'work.html',{
+        'selected_view':selected_view,
+        'assigned':assigned,
+        'needs_action':assigned.filter(status__in=['awaiting_acceptance','funded']),
+        'in_progress':assigned.exclude(status__in=['awaiting_acceptance','funded','paid','cancelled']),
+        'finished':assigned.filter(status__in=['paid','cancelled']),
+        'hiring':hiring,
+        'posted':posted,
+        'applications':applications,
+    })
 
 
 @verified
 def assigned_work(request):
-    records=(Assignment.objects.filter(worker=request.user)
-        .select_related('job','job__owner')
-        .order_by('-created_at'))
-    needs_action=records.filter(status__in=['awaiting_acceptance','funded'])
-    in_progress=records.exclude(status__in=['awaiting_acceptance','funded','paid','cancelled'])
-    finished=records.filter(status__in=['paid','cancelled'])
-    return render(request,'assigned_work.html',{
-        'needs_action':needs_action,
-        'in_progress':in_progress,
-        'finished':finished,
-        'assigned_total':records.count(),
-    })
+    return redirect(f"{reverse('work')}?view=assigned")
 
 
 @login_required

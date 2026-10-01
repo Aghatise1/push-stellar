@@ -28,23 +28,35 @@
         </form>
       </details>
       {% endif %}
-      <section>
-        <h2>Applications</h2>
+      <section class="applicant-section">
+        <div class="applicant-section-heading"><div><span class="section-kicker">Hiring shortlist</span><h2>Applications</h2><p>Compare each proposal, review published qualifications and select one worker.</p></div><span>{{ applications|length }} candidate{{ applications|length|pluralize }}</span></div>
+        <div class="candidate-list">
         {% for application in applications %}
-        <article class="application">
-          <h3>{{ application.worker.display_name }}</h3>
-          <p class="preline">{{ application.proposal }}</p>
-          {% if application.worker.public_profile %}<p><a href="{% url 'public_profile' application.worker_id %}">View public profile</a></p>{% endif %}
-          {% if application.withdrawn %}
-            <p class="tag">Withdrawn</p>
-          {% elif job.status == 'open' %}
-            <form method="post" action="{% url 'select' application.pk %}">
-              {% csrf_token %}<button class="button secondary">Select this worker</button>
-            </form>
-          {% endif %}
+        <article class="candidate-card{% if application.withdrawn %} is-withdrawn{% elif active_assignment and active_assignment.worker_id == application.worker_id %} is-selected{% endif %}">
+          <div class="candidate-identity">
+            {% if application.worker.public_profile and application.worker.profile_image %}<img src="{% url 'profile_image' application.worker_id %}" alt="{{ application.worker.display_name }} profile picture">{% else %}<span class="candidate-avatar" aria-hidden="true">{{ application.worker.display_name|first|upper }}</span>{% endif %}
+            <div><h3>{{ application.worker.display_name }}</h3><p>{% if application.worker.public_profile and application.worker.skills %}{{ application.worker.skills }}{% elif application.worker.public_profile %}Published member profile{% else %}Private member profile{% endif %}</p>{% if application.worker.public_profile %}<a href="{% url 'public_profile' application.worker_id %}">View full profile →</a>{% endif %}</div>
+          </div>
+          <details class="candidate-proposal">
+            <summary><span>What I will deliver</span><small>Read proposal</small></summary>
+            <p class="preline">{{ application.proposal }}</p>
+          </details>
+          <div class="candidate-action">
+            {% if application.withdrawn %}
+              <span class="candidate-state">Withdrawn</span><small>This proposal is kept for the record.</small>
+            {% elif active_assignment and active_assignment.worker_id == application.worker_id %}
+              <span class="candidate-state selected">Selected worker</span><a href="{% url 'assignment' active_assignment.pk %}">Open assignment →</a>
+            {% elif job.status == 'open' %}
+              <form method="post" action="{% url 'select' application.pk %}">
+                {% csrf_token %}<button class="button secondary">Select this worker</button>
+              </form><small>Creates the agreement for this job.</small>
+            {% else %}
+              <span class="candidate-state">Selection closed</span>
+            {% endif %}
+          </div>
         </article>
-        {% empty %}<p class="muted">No applications yet.</p>{% endfor %}
-        {% if active_assignment %}<a class="button" href="{% url 'assignment' active_assignment.pk %}">Open assignment</a>{% endif %}
+        {% empty %}<div class="record-empty"><strong>No applications yet.</strong><span>New candidates will appear here with their proposal and published profile details.</span></div>{% endfor %}
+        </div>
       </section>
     {% elif job.demo %}
       <div class="notice">This is an illustrative brief, not a real hiring opportunity. Create a job to try applications.</div>
