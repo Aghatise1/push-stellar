@@ -745,6 +745,26 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'9999.50 XLM')
         self.assertContains(response,'25.00 USDC')
         balances.assert_called_once_with(address)
+    def test_wallet_disconnect_removes_only_the_saved_public_address(self):
+        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+        self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker)
+        self.assertContains(self.client.get(reverse('wallet')),'Disconnect')
+        self.assertEqual(self.client.get(reverse('wallet_disconnect')).status_code,405)
+        response=self.client.post(reverse('wallet_disconnect'))
+        self.assertRedirects(response,reverse('wallet'))
+        self.worker.refresh_from_db();self.assertEqual(self.worker.stellar_address,'')
+
+    def test_wallet_shows_recorded_and_pending_job_values_separately(self):
+        paid=self.make_assignment('paid')
+        Payment.objects.create(assignment=paid,amount=400,method='usdc')
+        second_job=Job.objects.create(owner=self.owner,project='Pending',title='Pending work',description='Brief',deliverables='Export',category='Design',budget=250,deadline=timezone.localdate()+timedelta(days=7),moderation_status='approved',status='assigned')
+        Assignment.objects.create(job=second_job,worker=self.worker,scope='Export',budget=250,status='funded')
+        self.login_as(self.worker)
+        response=self.client.get(reverse('wallet'))
+        self.assertContains(response,'Job earnings are separate from wallet assets')
+        self.assertContains(response,'$400.00')
+        self.assertContains(response,'$250.00')
     def test_freighter_connect_accepts_only_valid_testnet_public_address(self):
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
         url=reverse('wallet_connect')
@@ -1047,6 +1067,25 @@ class WorkspaceTests(TestCase):
         self.assertIsNone(notice.read_at)
         self.login_as(self.owner);self.client.get(reverse('conversation',args=[item.pk]))
         notice.refresh_from_db();self.assertIsNotNone(notice.read_at)
+
+    def test_application_and_payment_activity_send_email_after_commit(self):
+        self.login_as(self.worker)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse('apply',args=[self.job.pk]),{'proposal':'A specific proposal for the brief.'})
+        self.assertEqual(mail.outbox[-1].to,[self.owner.email])
+        self.assertIn('New application received',mail.outbox[-1].subject)
+        self.assertTrue(EmailDelivery.objects.filter(recipient=self.owner.email,category='notification_application',status='sent').exists())
+
+        application=Application.objects.get(job=self.job,worker=self.worker)
+        self.login_as(self.owner)
+        self.client.post(reverse('select',args=[application.pk]))
+        item=Assignment.objects.get(job=self.job)
+        item.status='submitted';item.payment_method='usdc';item.save(update_fields=['status','payment_method'])
+        with self.captureOnCommitCallbacks(execute=True):
+            self.action(item,'approve')
+        self.assertEqual(mail.outbox[-1].to,[self.worker.email])
+        self.assertIn('Work approved',mail.outbox[-1].subject)
+        self.assertTrue(EmailDelivery.objects.filter(recipient=self.worker.email,category='notification_approve',status='sent').exists())
 
     def test_work_page_separates_worker_and_hiring_views(self):
         item=self.make_assignment('funded');self.login_as(self.worker)

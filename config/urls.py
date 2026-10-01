@@ -76,6 +76,7 @@ urlpatterns = [
     path('wallet/',views.wallet,name='wallet'),
     path('payments/',views.payments,name='payments'),
     path('wallet/connect/',views.wallet_connect,name='wallet_connect'),
+    path('wallet/disconnect/',views.wallet_disconnect,name='wallet_disconnect'),
     path('profile/',views.profile,name='profile'),
     path('people/<int:pk>/',views.public_profile,name='public_profile'),
     path('people/<int:pk>/image/',views.profile_image,name='profile_image'),

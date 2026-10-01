@@ -33,6 +33,22 @@
     return error.message || error.code || fallback;
   }
 
+  async function apiResult(response) {
+    var contentType = response.headers.get('content-type') || '';
+    var body = await response.text();
+    if (contentType.indexOf('application/json') !== -1) {
+      try {
+        return JSON.parse(body);
+      } catch (_error) {
+        throw new Error('Push returned an invalid wallet response. Refresh the page and try again.');
+      }
+    }
+    if (response.redirected || response.status === 401 || response.status === 403 || /<html/i.test(body)) {
+      throw new Error('Your Push session has expired. Refresh the page, sign in again, then reconnect Freighter.');
+    }
+    throw new Error('The wallet service is temporarily unavailable. Refresh the page and try again.');
+  }
+
   async function connectWallet(button) {
     var buttons = document.querySelectorAll('[data-wallet-connect]');
     buttons.forEach(function (item) {
@@ -80,7 +96,7 @@
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken()},
         body: JSON.stringify({address: addressResult.address, network: networkResult.network})
       });
-      var result = await response.json();
+      var result = await apiResult(response);
       if (!response.ok || !result.ok) {
         throw new Error(result.message || 'Push could not save this wallet.');
       }

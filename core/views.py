@@ -3,6 +3,7 @@ import hmac
 import json
 import secrets
 import os
+import logging
 from urllib.parse import quote
 from datetime import timedelta
 from functools import wraps
@@ -33,6 +34,7 @@ from .stellar import StellarVerificationError, account_balances, assignment_memo
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
 TERMS_VERSION='2026-09-25.1'
+logger=logging.getLogger(__name__)
 
 
 def staff_permission_denied(request,exception=None):
@@ -77,7 +79,25 @@ def account_settings(request):
 
 
 def notify(recipient,kind,title,body,link=''):
-    return Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
+    notification=Notification.objects.create(recipient=recipient,kind=kind,title=title,body=body,link=link)
+    safe_link=link if link.startswith('/') and not link.startswith('//') else reverse('notifications')
+    open_url=f'{settings.PUSH_ORIGIN}{safe_link}'
+
+    def deliver_notification_email():
+        try:
+            send_tracked_email(
+                category=f'notification_{kind}'[:40],
+                subject=f'Push · {title}'[:180],
+                message=f'{body}\n\nOpen Push: {open_url}\n\nThis is an account activity email from Push.',
+                recipients=[recipient.email],
+            )
+        except Exception:
+            # The in-app notification is the source of truth. Provider failure
+            # is recorded by send_tracked_email and must not undo the action.
+            logger.exception('Activity email delivery failed for notification %s',notification.pk)
+
+    transaction.on_commit(deliver_notification_email)
+    return notification
 
 
 def audit(actor,action,target,detail=None):
@@ -890,8 +910,15 @@ def wallet(request):
         if not form.errors:
             request_uri=payment_uri(destination=destination,amount=form.cleaned_data['amount'],
                 memo=form.cleaned_data['memo'] or 'Push test payment',asset=form.cleaned_data['asset'])
+    payment_records=Payment.objects.filter(assignment__worker=request.user)
+    recorded_earnings=payment_records.aggregate(total=Sum('amount'))['total'] or 0
+    pending_earnings=Assignment.objects.filter(
+        worker=request.user,status__in=['awaiting_funding','funded','submitted']
+    ).aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'wallet.html',{
         'form':form,'request_uri':request_uri,'balances':balances,'balance_error':balance_error,
+        'recorded_earnings':recorded_earnings,'pending_earnings':pending_earnings,
+        'payment_record_count':payment_records.count(),
     })
 
 
@@ -949,6 +976,15 @@ def wallet_connect(request):
     request.user.stellar_address=address
     request.user.save(update_fields=['stellar_address'])
     return JsonResponse({'ok':True,'message':'Freighter connected on Stellar testnet.','address':address})
+
+
+@verified
+@require_POST
+def wallet_disconnect(request):
+    request.user.stellar_address=''
+    request.user.save(update_fields=['stellar_address'])
+    messages.success(request,'Wallet disconnected from Push. Freighter and its keys were not changed.')
+    return redirect('wallet')
 
 
 @login_required
