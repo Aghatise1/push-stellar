@@ -1,18 +1,31 @@
 (function () {
   const notice = document.querySelector('[data-cookie-notice]');
   if (!notice) return;
+  const preferenceKey = 'push-cookie-consent';
+
   try {
-    if (localStorage.getItem('push-cookie-notice') === 'dismissed') {
+    const preference = localStorage.getItem(preferenceKey);
+    if (preference === 'accepted' || preference === 'declined') {
       notice.hidden = true;
-      notice.style.display = 'none';
       return;
     }
   } catch (_) {}
+
   notice.hidden = false;
   document.addEventListener('click', function (event) {
-    if (!event.target.closest('[data-cookie-dismiss]')) return;
+    const choiceButton = event.target.closest('[data-cookie-choice]');
+    if (!choiceButton) return;
+    const choice = choiceButton.dataset.cookieChoice;
+    if (choice !== 'accepted' && choice !== 'declined') return;
+
     notice.hidden = true;
-    notice.style.display = 'none';
-    try { localStorage.setItem('push-cookie-notice', 'dismissed'); } catch (_) {}
+    try {
+      localStorage.setItem(preferenceKey, choice);
+      localStorage.removeItem('push-cookie-notice');
+    } catch (_) {}
+
+    window.dispatchEvent(new CustomEvent('push:cookie-consent', {
+      detail: { optionalCookies: choice === 'accepted' }
+    }));
   });
 })();

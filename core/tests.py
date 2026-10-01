@@ -1201,7 +1201,12 @@ class WorkspaceTests(TestCase):
         self.assertTrue(AuditEvent.objects.filter(action='privacy.deletion_requested',target_id=str(ticket.pk)).exists())
 
     def test_public_legal_pages_cover_cookies_and_refunds(self):
-        self.assertContains(self.client.get(reverse('cookies')),'Necessary cookies')
+        cookie_policy=self.client.get(reverse('cookies'))
+        self.assertContains(cookie_policy,'Necessary cookies')
+        self.assertContains(cookie_policy,'Optional cookies')
+        home=self.client.get(reverse('home'))
+        self.assertContains(home,'Accept optional cookies')
+        self.assertContains(home,'Decline optional cookies')
         self.assertContains(self.client.get(reverse('refunds')),'does not charge platform fees')
 
     def test_privileged_writes_are_rate_limited(self):

@@ -139,8 +139,14 @@
   <script src="{% static 'menu-behavior.js' %}?v=20260927-3" defer></script>
   <script src="{% static 'share-link.js' %}?v=20260927-5" defer></script>
   <script src="{% static 'form-state.js' %}?v=20260929-1" defer></script>
-  <aside class="cookie-notice" data-cookie-notice hidden aria-label="Cookie notice"><p><strong>Necessary cookies only.</strong> Push uses secure account cookies and remembers this notice. <a href="{% url 'cookies' %}">Read the cookie policy</a>.</p><button class="button small" type="button" data-cookie-dismiss>Understood</button></aside>
-  <script src="{% static 'cookie-notice.js' %}?v=20260929-2" defer></script>
+  <aside class="cookie-notice" data-cookie-notice hidden aria-label="Cookie preferences" aria-live="polite">
+    <p><strong>Your cookie choice.</strong> Push uses necessary cookies for secure accounts. Optional cookies are off unless you accept them. <a href="{% url 'cookies' %}">Read the cookie policy</a>.</p>
+    <div class="cookie-notice__actions">
+      <button class="button small secondary" type="button" data-cookie-choice="declined">Decline optional cookies</button>
+      <button class="button small" type="button" data-cookie-choice="accepted">Accept optional cookies</button>
+    </div>
+  </aside>
+  <script src="{% static 'cookie-notice.js' %}?v=20261001-1" defer></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
