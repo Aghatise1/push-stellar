@@ -17,15 +17,20 @@
 
     if (reduceMotion || !window.gsap) return;
     var gsap = window.gsap;
+    function animateIfPresent(selector, vars) {
+      if (document.querySelector(selector)) gsap.to(selector, vars);
+    }
 
-    gsap.from('.app-reveal', {
-      opacity: 0,
-      y: 12,
-      duration: 0.22,
-      stagger: 0.04,
-      ease: 'power3.out',
-      clearProps: 'transform,opacity'
-    });
+    if (document.querySelector('.app-reveal')) {
+      gsap.from('.app-reveal', {
+        opacity: 0,
+        y: 12,
+        duration: 0.22,
+        stagger: 0.04,
+        ease: 'power3.out',
+        clearProps: 'transform,opacity'
+      });
+    }
 
     var roleDashboard = document.querySelector('[data-role-dashboard]');
     if (roleDashboard) {
@@ -74,12 +79,12 @@
         .to(flowToken, { opacity: 0, scale: 0.94, duration: 0.3, delay: 0.45 });
     }
 
-    gsap.to('.flow-spark', { rotation: 360, scale: 1.35, duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut', stagger: 0.45 });
-    gsap.to('.token-disc', { y: -8, rotation: 3, duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut' });
-    gsap.to('.orbit-one', { rotation: 360, duration: 22, repeat: -1, ease: 'none' });
-    gsap.to('.orbit-two', { rotation: -360, duration: 16, repeat: -1, ease: 'none' });
-    gsap.to('.card-front', { y: -12, rotation: -4, duration: 3.2, repeat: -1, yoyo: true, ease: 'sine.inOut' });
-    gsap.to('.card-back', { y: 10, rotation: 5, duration: 3.8, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+    animateIfPresent('.flow-spark', { rotation: 360, scale: 1.35, duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut', stagger: 0.45 });
+    animateIfPresent('.token-disc', { y: -8, rotation: 3, duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+    animateIfPresent('.orbit-one', { rotation: 360, duration: 22, repeat: -1, ease: 'none' });
+    animateIfPresent('.orbit-two', { rotation: -360, duration: 16, repeat: -1, ease: 'none' });
+    animateIfPresent('.card-front', { y: -12, rotation: -4, duration: 3.2, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+    animateIfPresent('.card-back', { y: 10, rotation: 5, duration: 3.8, repeat: -1, yoyo: true, ease: 'sine.inOut' });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

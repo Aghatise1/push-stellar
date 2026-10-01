@@ -35,6 +35,8 @@ services:
         sync: false
       - key: PUSH_EMAIL_FROM
         sync: false
+      - key: PUSH_EMAIL_DAILY_LIMIT
+        value: 250
       - key: PUSH_BREVO_API_KEY
         sync: false
       - key: STELLAR_TESTNET_HORIZON

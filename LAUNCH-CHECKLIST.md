@@ -1,6 +1,6 @@
 # Push release gates
 
-Updated 24 September 2026. This checklist distinguishes the working local preview from a production service. No paid service has been purchased or connected.
+Updated 1 October 2026. This checklist distinguishes the deployed Stellar testnet MVP from the safeguards still required before accepting real money.
 
 ## Completed locally
 
@@ -20,14 +20,18 @@ Updated 24 September 2026. This checklist distinguishes the working local previe
 - [x] Fail-fast production configuration and release-readiness validation.
 - [x] Official Stellar testnet Horizon endpoint and USDC issuer verified against current Stellar documentation.
 - [x] Supabase connectivity, migration state and live Stellar Horizon connectivity checked.
+- [x] Deploy the MVP through Render at `pushearn.xyz` with TLS, exact hosts, protected secrets and release checks.
+- [x] Configure Brevo HTTPS email delivery for Render and verify account email delivery.
+- [x] Apply database-backed request throttles plus a hard daily email-recipient cap (`PUSH_EMAIL_DAILY_LIMIT`, default 250).
+- [x] Publish explicit cookie choices, legal policies, canonical metadata, social previews, `robots.txt`, `sitemap.xml` and `security.txt`.
 
 ## Information required from the founder
 
 1. **Operating country and initial customer countries.** These determine which payment providers can support receiving funds and paying workers. A card checkout alone does not establish a worker-payout service.
 2. **Business/account owner.** Confirm whether an existing registered business will operate the service. Provider onboarding and verification must be completed by that owner.
-3. **Launch budget ceiling.** Local development needs no paid service today. Production domain, email, hosting, backups and transaction costs require a current quote before purchase; no indefinite free-operation promise is made.
+3. **Launch budget ceiling.** The domain has been purchased and the MVP currently uses free hosting/service tiers. Backups, monitoring and real transaction costs still require a current quote; no indefinite free-operation promise is made.
 4. **Rules of the marketplace.** Agree fees, revision limits, acceptance deadlines, cancellation/refund rules and who resolves disputes. No platform fee has been invented or charged.
-5. **Brand/domain.** Confirm a cleared product name and domain before publishing; “Push” is a working name. The earlier research identified an existing Push Protocol brand.
+5. **Brand clearance.** `pushearn.xyz` is active, but the product name still needs a formal trademark/name-conflict review before a larger public launch.
 
 Do not send private keys, seed phrases, card numbers or API secrets in chat. When providers are chosen, enter credentials directly into protected server settings.
 
@@ -39,10 +43,10 @@ Do not send private keys, seed phrases, card numbers or API secrets in chat. Whe
 - [ ] Build separate payment adapters with authenticated, replay-resistant webhooks, reconciliation and verified settlement. Never mark a real payment successful because the browser says so.
 - [ ] Test duplicate, delayed and out-of-order notifications, failed payouts, refunds, chargebacks and network failures in provider sandboxes.
 - [ ] Define dispute resolution and an audited support interface. Preview disputes currently remain frozen.
-- [ ] Set up a verified email sender and HTTPS email API on Render Free (see `EMAIL-SETUP.md`), then test real invitation, verification and recovery delivery.
-- [ ] Provision production hosting, TLS, restricted hosts, secret storage, static serving, trusted proxy configuration and deployment rollback.
-- [ ] Replace local SQLite with the chosen production database; retest concurrency and permissions against it. Current tests do not prove distributed concurrency behaviour.
-- [ ] Configure edge/distributed request limits and monitoring. Current database/IP throttling is for the local foundation and can group users behind the same proxy.
+- [x] Set up Brevo HTTPS email delivery on Render Free (see `EMAIL-SETUP.md`) and verify real account email delivery.
+- [x] Provision Render hosting, TLS, restricted hosts, protected settings, static serving and trusted proxy configuration.
+- [x] Replace production SQLite with managed Supabase PostgreSQL and run the permission/concurrency test suite against disposable test data.
+- [ ] Add an edge rate limiter and external uptime/error monitoring. Application and staff writes are already database-throttled; the edge layer remains useful for traffic that should be rejected before Django.
 - [ ] Add administrator MFA, least-privilege support access, incident response and credential rotation procedures.
 - [ ] Implement account deletion/export, retention policy, moderation and abuse handling before collecting real user data.
 - [ ] Define project ownership verification. A typed project name in the preview is not proof of affiliation; team memberships are not implemented.

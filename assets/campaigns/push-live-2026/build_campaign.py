@@ -80,8 +80,8 @@ def master_png():
     draw.text((75, 535), "Brief. Deliver. Settle with a clear record.", font=font(29), fill=INK)
     draw.text((75, 582), "Now open for invite-only MVP testing on Stellar testnet.", font=font(21), fill=MUTED)
     rounded_label(draw, (72, 659), "EXPLORE  pushearn.xyz", LIME, INK, 20)
-    draw.text((75, 817), "@PushN_", font=font(18, True), fill=FOREST)
-    draw.text((185, 818), "Independent project · not affiliated with SDF", font=font(15), fill=MUTED)
+    draw.text((75, 817), "@pushearn_", font=font(18, True), fill=FOREST)
+    draw.text((205, 818), "Independent project · not affiliated with SDF", font=font(15), fill=MUTED)
 
     # Apply official asset imagery and a clean Stellar network symbol to the blank render.
     paste_usdc(canvas, (1012, 528), 142)
@@ -104,7 +104,7 @@ def square_png():
     rounded_label(draw, (62, 430), "pushearn.xyz", LIME, INK, 19)
     paste_usdc(canvas, (687, 803), 130)
     stellar_mark(draw, 927, 610, 48, CREAM)
-    draw.text((62, 1027), "@PushN_   ·   Independent project · not affiliated with SDF", font=font(15), fill=MUTED)
+    draw.text((62, 1027), "@pushearn_   ·   Independent project · not affiliated with SDF", font=font(15), fill=MUTED)
     canvas.convert("RGB").save(ROOT / "push-live-square-1080x1080.png", quality=96)
 
 
@@ -122,7 +122,7 @@ def svg_master():
 <g id="push-brand"><rect x="72" y="65" width="58" height="58" rx="12" fill="{CREAM}" stroke="#CCD2CB"/><text x="88" y="106" font-family="Arial" font-size="36" font-weight="700" fill="{FOREST}">P</text><rect x="116" y="106" width="8" height="8" fill="{ORANGE}"/><text x="146" y="96" font-family="Arial" font-size="32" font-weight="700" fill="{INK}">PUSH</text><text x="146" y="119" font-family="Arial" font-size="13" font-weight="700" fill="{MUTED}">WORK RECORD</text></g>
 <g id="copy"><rect x="72" y="180" width="274" height="48" rx="24" fill="{FOREST}"/><text x="93" y="211" font-family="Arial" font-size="17" font-weight="700" fill="{CREAM}">MVP / STELLAR TESTNET</text><text x="68" y="337" font-family="Arial" font-size="104" font-weight="700" fill="{INK}">PUSH IS</text><text x="68" y="480" font-family="Arial" font-size="154" font-weight="700" fill="{FOREST}">LIVE.</text><text x="75" y="566" font-family="Arial" font-size="29" fill="{INK}">Brief. Deliver. Settle with a clear record.</text><text x="75" y="608" font-family="Arial" font-size="21" fill="{MUTED}">Now open for invite-only MVP testing on Stellar testnet.</text><rect x="72" y="659" width="278" height="53" rx="27" fill="{LIME}"/><text x="94" y="693" font-family="Arial" font-size="20" font-weight="700" fill="{INK}">EXPLORE  pushearn.xyz</text></g>
 <defs><clipPath id="usdc-circle"><circle cx="1012" cy="528" r="71"/></clipPath></defs><g id="network-assets"><image href="{usdc}" x="941" y="457" width="142" height="142" clip-path="url(#usdc-circle)"/><g stroke="{CREAM}" fill="none" stroke-width="10"><circle cx="1422" cy="174" r="58"/><path d="M1345 214L1499 134M1345 178L1499 98"/></g><text x="1357" y="258" font-family="Arial" font-size="17" font-weight="700" fill="{CREAM}">STELLAR</text></g>
-<g id="footer"><text x="75" y="837" font-family="Arial" font-size="18" font-weight="700" fill="{FOREST}">@PushN_</text><text x="185" y="837" font-family="Arial" font-size="15" fill="{MUTED}">Independent project · not affiliated with SDF</text></g>
+<g id="footer"><text x="75" y="837" font-family="Arial" font-size="18" font-weight="700" fill="{FOREST}">@pushearn_</text><text x="205" y="837" font-family="Arial" font-size="15" fill="{MUTED}">Independent project · not affiliated with SDF</text></g>
 </svg>'''
     (ROOT / "push-live-x-editable.svg").write_text(svg, encoding="utf-8")
 

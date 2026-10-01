@@ -13,6 +13,11 @@ STAFF_PORTAL_ROUTES = {
     'account_settings', 'password_change', 'password_change_done',
 }
 
+PUBLIC_INDEX_ROUTES = {
+    'home', 'product', 'how_it_works', 'investors', 'terms', 'privacy',
+    'cookies', 'refunds', 'help', 'documentation', 'documentation_article',
+}
+
 def app_context(request):
     conversation_count = 0
     unread_notification_count = 0
@@ -33,6 +38,9 @@ def app_context(request):
         work_attention_count = worker_actions + client_actions
     resolved_name = getattr(getattr(request, 'resolver_match', None), 'url_name', None)
     portal_role = staff_role(request.user)
+    public_origin = settings.PUSH_ORIGIN.rstrip('/')
+    canonical_path = request.path if request.path.endswith('/') else f'{request.path}/'
+    seo_indexable = not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES
     return {'payment_notice':'Preview · Stellar testnet and simulated payments only.',
             'local_email': not settings.EMAIL_DELIVERY_CONFIGURED,
             'google_auth_enabled': settings.GOOGLE_AUTH_ENABLED,
@@ -44,4 +52,7 @@ def app_context(request):
             'staff_portal_role':portal_role,
             'staff_portal_role_label':{'owner':'Owner','admin':'Administrator','trust_support':'Trust & Support'}.get(portal_role,''),
             'staff_is_owner':portal_role == 'owner',
-            'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES)}
+            'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES),
+            'seo_indexable':seo_indexable,
+            'canonical_url':f'{public_origin}{canonical_path}',
+            'seo_image_url':f'{public_origin}{settings.STATIC_URL}images/push-social-card.png'}

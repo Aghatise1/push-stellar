@@ -1,4 +1,4 @@
-# Push — local working preview
+# Push — Stellar testnet MVP
 
 This folder is the canonical Push project. The original static landing site has been audited and mapped in `ORIGINAL-MIGRATION.md`; system behaviour and authority are defined in `SYSTEM-DESIGN.md` and `PRODUCT-RULES.md`.
 
@@ -24,7 +24,7 @@ Create or refresh the two verified showcase identities and their representative 
 
 The command writes the random passwords to `private-demo-credentials.txt`. That file is ignored by version control. Use the **Atise** account to inspect the worker experience and the **Demo Studio** account to inspect the hiring experience. The command cannot run when `PUSH_ENV=production`.
 
-Google sign-in is prepared but hidden until valid credentials are added. Follow `GOOGLE-OAUTH-SETUP.md`; secrets belong in the ignored `.env` file or the deployment secret manager.
+Google sign-in appears only when both OAuth credentials are configured. The production client must authorise `https://pushearn.xyz` and its exact callback; follow `GOOGLE-OAUTH-SETUP.md`. Secrets belong in the ignored `.env` file or the deployment secret manager.
 
 ## Supabase database for a shared test deployment
 
@@ -63,7 +63,7 @@ The three sample jobs are labelled and do not accept applications. To add them t
 - Server-side ownership and participant checks; private proposals and assignments.
 - Hiring accounts can close unassigned jobs; workers can withdraw applications while a job is open. Both actions retain records, require confirmation, and are terminal in this preview.
 - Hiring accounts can edit an open brief until its first application arrives. The terms then become read-only to protect what applicants considered.
-- CSRF protection, request limits, form validation, escaped output, restricted profile fields and security headers.
+- CSRF protection, database-backed request limits, a hard daily email-recipient cap, form validation, escaped output, restricted profile fields and security headers.
 - Server-controlled assignment state changes, stored agreement scope/budget and a chronological event record.
 - One simulated payment record per assignment; browser-supplied amounts cannot change the agreed amount.
 - Non-custodial Stellar testnet payment requests using SEP-7 and server-side Horizon verification of success, memo, recipient, exact amount and the official testnet USDC issuer.
@@ -87,6 +87,6 @@ On this computer the existing prepared Python also lives at `../../work/push-ven
 
 Never upload `.local-key`, `.env`, `db.sqlite3`, database journals, `private-mail`, or any environment folder. `.gitignore` excludes them, but a manual ZIP may still include them. Do not serve this project directory as static files: only the `static` directory contains public assets.
 
-`PUSH_ENV=production` disables debug output, requires a long signing key, an email transport and an HTTPS site origin, and enables secure cookies and HTTPS protections. Render Free blocks outbound SMTP ports, so use the HTTPS email API described in `EMAIL-SETUP.md` for that service. Those switches alone do not make deployment complete. Production needs configured TLS/proxy trust, static-file serving, a production database, backups, operational monitoring and payment integration. See `LAUNCH-CHECKLIST.md`.
+`PUSH_ENV=production` disables debug output, requires a long signing key, an email transport and an HTTPS site origin, and enables secure cookies and HTTPS protections. The deployed testnet MVP uses Render, Supabase PostgreSQL and the Brevo HTTPS mail API described in `EMAIL-SETUP.md`. Backups, external monitoring and real payment integration remain release gates. See `LAUNCH-CHECKLIST.md`.
 
 No system can honestly promise zero bugs or immunity to attack. This is a tested foundation with explicit release gates, not a completed independent security audit.

@@ -13,7 +13,9 @@ This checklist applies to the private prototype and every future deployment.
 ## Authentication
 
 - Email/password accounts use Django's password hashing and validation.
-- Registration, login, password reset and verification endpoints are rate-limited.
+- Registration, login, password reset and verification endpoints are rate-limited in database-backed 15-minute windows.
+- General verified writes are limited to 90 per 15 minutes per account/source, staff writes to 120, login to 12, staff login to 8, registration to 6, recovery to 5, and verification resend to 3.
+- Email delivery reserves recipients atomically against `PUSH_EMAIL_DAILY_LIMIT` (250 by default), so a repeated action cannot silently exceed the configured daily spend ceiling.
 - Password reset credentials expire and become invalid after use.
 - Sessions are HTTP-only, same-site and expire when the browser closes.
 - Google sign-in must use an approved OAuth callback, exact allowed origins and a server-side client secret. It remains disabled until real credentials are configured.

@@ -8,8 +8,8 @@ Create an **OAuth 2.0 Client ID** with application type **Web application**. Con
 
 - Local authorised origin: `http://127.0.0.1:8765`
 - Local authorised redirect URI: `http://127.0.0.1:8765/accounts/google/login/callback/`
-- Production origin: the final HTTPS domain
-- Production redirect URI: `https://YOUR-DOMAIN/accounts/google/login/callback/`
+- Production origin: `https://pushearn.xyz`
+- Production redirect URI: `https://pushearn.xyz/accounts/google/login/callback/`
 
 Google will issue a client ID and client secret. Do not paste the client secret into templates, JavaScript, screenshots or committed files.
 
@@ -31,5 +31,6 @@ Restart the server. The **Continue with Google** action will appear automaticall
 - Restrict the OAuth consent screen to the intended test users until review.
 - Request only `profile` and `email` scopes.
 - Rotate the secret if it appears in source, logs, screenshots or chat.
-- Test new-account login, existing-email linking, logout and account recovery before submission.
+- Keep `https://pushearn.xyz` in the authorised JavaScript origins and the exact callback above in authorised redirect URIs.
+- Test new-account login, existing-email linking, logout and account recovery after every domain or OAuth consent-screen change.
 

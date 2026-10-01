@@ -1222,3 +1222,33 @@ class WorkspaceTests(TestCase):
         send_tracked_email(category='verification',subject='One',message='Hello',recipients=['one@example.test'])
         with self.assertRaises(EmailDailyLimitError):
             send_tracked_email(category='verification',subject='Two',message='Hello',recipients=['two@example.test'])
+
+    def test_public_seo_discovery_files_are_available(self):
+        robots=self.client.get(reverse('robots'))
+        self.assertEqual(robots.status_code,200)
+        self.assertEqual(robots['Content-Type'],'text/plain; charset=utf-8')
+        self.assertContains(robots,'Sitemap: http://127.0.0.1:8765/sitemap.xml')
+        self.assertContains(robots,'Disallow: /staff/')
+        sitemap=self.client.get(reverse('sitemap'))
+        self.assertEqual(sitemap.status_code,200)
+        self.assertEqual(sitemap['Content-Type'],'application/xml; charset=utf-8')
+        self.assertContains(sitemap,'<loc>http://127.0.0.1:8765/</loc>')
+        self.assertContains(sitemap,'<loc>http://127.0.0.1:8765/privacy/</loc>')
+        security=self.client.get(reverse('security_contact'))
+        self.assertContains(security,'Expires: 2027-10-01T23:59:59Z')
+        self.assertContains(security,'Canonical: http://127.0.0.1:8765/.well-known/security.txt')
+
+    def test_public_pages_publish_canonical_social_metadata(self):
+        home=self.client.get(reverse('home'))
+        self.assertContains(home,'<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">',html=True)
+        self.assertContains(home,'<link rel="canonical" href="http://127.0.0.1:8765/">',html=True)
+        self.assertContains(home,'property="og:image"')
+        self.assertContains(home,'name="twitter:site" content="@pushearn_"')
+        self.assertContains(home,'"@type":"WebSite"')
+        login=self.client.get(reverse('login'))
+        self.assertContains(login,'<meta name="robots" content="noindex, nofollow, noarchive">',html=True)
+        self.assertNotContains(login,'rel="canonical"')
+
+    def test_signed_in_home_redirects_to_workspace(self):
+        self.login_as(self.worker)
+        self.assertRedirects(self.client.get(reverse('home')),reverse('workspace'),fetch_redirect_response=False)

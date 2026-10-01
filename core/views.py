@@ -59,6 +59,62 @@ def health(request):
 
 
 @require_GET
+def robots(request):
+    origin=settings.PUSH_ORIGIN.rstrip('/')
+    body='\n'.join([
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /accounts/',
+        'Disallow: /activity/',
+        'Disallow: /applications/',
+        'Disallow: /assignments/',
+        'Disallow: /invite/',
+        'Disallow: /login/',
+        'Disallow: /messages/',
+        'Disallow: /moderation/',
+        'Disallow: /notifications/',
+        'Disallow: /operations/',
+        'Disallow: /payments/',
+        'Disallow: /register/',
+        'Disallow: /reset/',
+        'Disallow: /settings/',
+        'Disallow: /staff/',
+        'Disallow: /verify/',
+        'Disallow: /wallet/',
+        'Disallow: /work/',
+        'Disallow: /workspace/',
+        f'Sitemap: {origin}/sitemap.xml',
+        '',
+    ])
+    return HttpResponse(body,content_type='text/plain; charset=utf-8')
+
+
+@require_GET
+def sitemap(request):
+    public_names=('home','product','how_it_works','investors','documentation','help','terms','privacy','cookies','refunds')
+    origin=settings.PUSH_ORIGIN.rstrip('/')
+    urls=''.join(
+        f'<url><loc>{origin}{reverse(name)}</loc></url>' for name in public_names
+    )
+    body=f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    return HttpResponse(body,content_type='application/xml; charset=utf-8')
+
+
+@require_GET
+def security_contact(request):
+    origin=settings.PUSH_ORIGIN.rstrip('/')
+    body='\n'.join([
+        'Contact: mailto:aghatiseehioghae644@gmail.com',
+        'Expires: 2027-10-01T23:59:59Z',
+        f'Policy: {origin}/privacy/',
+        f'Canonical: {origin}/.well-known/security.txt',
+        'Preferred-Languages: en',
+        '',
+    ])
+    return HttpResponse(body,content_type='text/plain; charset=utf-8')
+
+
+@require_GET
 def privacy(request):
     return render(request,'privacy.html')
 
@@ -225,6 +281,8 @@ def queue_verification_success(request,title,description,next_name):
 
 
 def home(request):
+    if request.user.is_authenticated:
+        return redirect('workspace')
     # The public landing page may show illustrative briefs, but never exposes
     # live tester jobs. Real opportunities belong to the invite-only product.
     sample_jobs = Job.objects.filter(status='open', moderation_status='approved', demo=True)[:3]

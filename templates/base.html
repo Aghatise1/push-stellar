@@ -3,10 +3,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="google-site-verification" content="1jBmdTPNEK8kaJ1UPqD3Suns2DBvsJM-VX21NhAqdws">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   {% if user.is_authenticated %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
   <meta name="description" content="{% block meta_description %}Push keeps the brief, delivery and payment record together for independent work.{% endblock %}">
+  <meta name="robots" content="{% if seo_indexable %}index, follow, max-image-preview:large, max-snippet:-1{% else %}noindex, nofollow, noarchive{% endif %}">
+  {% if seo_indexable %}
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:site_name" content="Push">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{% block social_title %}Push — Work with a clear record{% endblock %}">
+  <meta property="og:description" content="{% block social_description %}Keep the brief, delivery and payment record together for independent work.{% endblock %}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:image" content="{{ seo_image_url }}">
+  <meta property="og:image:width" content="1600">
+  <meta property="og:image:height" content="900">
+  <meta property="og:image:alt" content="Push work records on Stellar testnet">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@pushearn_">
+  <meta name="twitter:title" content="{% block twitter_title %}Push — Work with a clear record{% endblock %}">
+  <meta name="twitter:description" content="{% block twitter_description %}Keep the brief, delivery and payment record together for independent work.{% endblock %}">
+  <meta name="twitter:image" content="{{ seo_image_url }}">
+  {% endif %}
+  {% block structured_data %}{% endblock %}
   <title>{% block title %}Push — Work with a clear record{% endblock %}</title>
   <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260929-1">
@@ -130,7 +150,7 @@
   </nav>
   <script src="{% static 'vendor/gsap.min.js' %}" defer></script>
   <script src="{% static 'vendor/ScrollTrigger.min.js' %}" defer></script>
-  <script src="{% static 'app-motion.js' %}?v=20260928-1" defer></script>
+  <script src="{% static 'app-motion.js' %}?v=20261001-2" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
   <script src="{% static 'wallet-connect.js' %}?v=20261001-2" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>
@@ -146,7 +166,7 @@
       <button class="button small" type="button" data-cookie-choice="accepted">Accept optional cookies</button>
     </div>
   </aside>
-  <script src="{% static 'cookie-notice.js' %}?v=20261001-1" defer></script>
+  <script src="{% static 'cookie-notice.js' %}?v=20261001-2" defer></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
