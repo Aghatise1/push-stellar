@@ -3,6 +3,7 @@ import secrets
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
+from .security import trusted_csrf_origins
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 local_env_path = BASE_DIR / '.env'
@@ -173,7 +174,8 @@ PUSH_BOOTSTRAP_OWNER_EMAILS = {
 }
 if PRODUCTION and not GOOGLE_AUTH_ENABLED:
     raise ImproperlyConfigured('Production requires the Google OAuth client ID and client secret.')
-CSRF_TRUSTED_ORIGINS = [PUSH_ORIGIN] if PUSH_ORIGIN.startswith('https://') else []
+CSRF_TRUSTED_ORIGINS = trusted_csrf_origins(PUSH_ORIGIN, ALLOWED_HOSTS, RENDER_EXTERNAL_HOSTNAME)
+CSRF_FAILURE_VIEW = 'core.errors.csrf_failure'
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*','password1*','password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'none'

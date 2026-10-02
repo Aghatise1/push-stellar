@@ -49,6 +49,21 @@ class AppSecurityMiddleware:
             raise
         finally:
             request_id.reset(token)
+        if (response.status_code >= 400 and
+                response.get('Content-Type','').startswith('text/html') and
+                not response.streaming and b'<html' not in response.content.lower()):
+            from .errors import error_response
+            titles = {400:'We could not read that request.',403:'This action is not available.',
+                      404:'That page could not be found.',405:'Please use the page controls.',
+                      429:'Please wait before trying again.'}
+            original = response
+            response = error_response(original.status_code,
+                titles.get(original.status_code,'We could not complete that request.'),
+                original.content.decode(original.charset).strip() or 'Return to Push and try again shortly.')
+            for name,header_value in original.items():
+                if name.lower() not in {'content-type','content-length','cache-control'}:
+                    response[name] = header_value
+            response.cookies.update(original.cookies)
         response['X-Request-ID'] = value
         response['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         response['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'

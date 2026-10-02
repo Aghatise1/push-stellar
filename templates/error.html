@@ -1,0 +1,22 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ title }}</title>
+  <link rel="icon" href="{% static 'images/push-logo.png' %}" type="image/png">
+  <link rel="stylesheet" href="{% static 'workspace.css' %}">
+  <link rel="stylesheet" href="{% static 'error.css' %}">
+</head>
+<body>
+  <header class="error-header"><a href="/" aria-label="Push home"><img src="{% static 'images/push-logo.png' %}" alt="">Push</a></header>
+  <main class="error-shell">
+    <p class="error-code">Error {{ status }}</p>
+    <h1>{{ title }}</h1>
+    <p class="error-message">{{ message }}</p>
+    <div class="actions"><a class="button" href="{{ recovery_url }}">{{ recovery_label }}</a></div>
+  </main>
+</body>
+</html>

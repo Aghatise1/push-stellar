@@ -4,6 +4,9 @@ from django.contrib.auth import views as auth_views
 from core import views
 
 handler403 = 'core.views.staff_permission_denied'
+handler400 = 'core.errors.bad_request'
+handler404 = 'core.errors.not_found'
+handler500 = 'core.errors.server_error'
 
 urlpatterns = [
     path('healthz/',views.health,name='health'),

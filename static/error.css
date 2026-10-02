@@ -1,0 +1,7 @@
+.error-header{padding:1.5rem clamp(1.5rem,6vw,6rem);border-bottom:1px solid var(--line)}
+.error-header a{display:inline-flex;align-items:center;gap:.75rem;text-decoration:none;font-size:1.5rem;font-weight:600;color:var(--forest)}
+.error-header img{width:2.75rem;height:2.75rem;object-fit:contain;background:var(--forest);padding:.35rem;border-radius:.5rem}
+.error-shell{max-width:64rem;margin:0 auto;padding:clamp(3rem,9vw,8rem) clamp(1.5rem,6vw,5rem)}
+.error-code{color:var(--forest);font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em}
+.error-shell h1{max-width:14ch;font-size:clamp(2.75rem,7vw,5.75rem)}
+.error-message{max-width:36rem;color:var(--muted);font-size:1.1rem}

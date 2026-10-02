@@ -4,7 +4,7 @@ from io import StringIO
 from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.conf import settings
 from django.urls import reverse
 from django.core import mail, signing
@@ -204,6 +204,84 @@ class WorkspaceTests(TestCase):
         application.refresh_from_db();self.assertEqual(application.status,'approved')
         invitation=application.invitations.get();self.assertIsNone(invitation.used_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn('Invitation code:',mail.outbox[0].body)
+    def test_csrf_origins_include_only_the_allowlisted_render_service(self):
+        from config.security import trusted_csrf_origins
+        canonical='https://pushearn.xyz'
+        alias='push-preview.onrender.com'
+        self.assertEqual(trusted_csrf_origins(canonical,['pushearn.xyz',alias],alias),
+                         [canonical,f'https://{alias}'])
+        self.assertEqual(trusted_csrf_origins(canonical,['pushearn.xyz'],alias),[canonical])
+        self.assertEqual(trusted_csrf_origins(canonical,['*.onrender.com'],'*.onrender.com'),[canonical])
+        self.assertEqual(trusted_csrf_origins(canonical,['pushearn.xyz'],'pushearn.xyz'),[canonical])
+        self.assertEqual(trusted_csrf_origins('http://localhost',['localhost'],''),[])
+
+    @override_settings(DEBUG=False)
+    def test_error_pages_are_branded_and_keep_their_status_codes(self):
+        response=self.client.get('/this-page-does-not-exist/')
+        self.assertContains(response,'Error 404',status_code=404)
+        self.assertContains(response,'images/push-logo',status_code=404)
+        self.assertContains(response,'error.css',status_code=404)
+        self.assertEqual(response['Cache-Control'],'no-store, private')
+        from .errors import bad_request, server_error
+        request=RequestFactory().get('/')
+        with self.assertNumQueries(0):
+            self.assertContains(bad_request(request),'Error 400',status_code=400)
+            self.assertContains(server_error(request),'Error 500',status_code=500)
+        client=Client(enforce_csrf_checks=True)
+        response=client.post(reverse('review_waitlist',args=[7]),{'decision':'approve'})
+        self.assertContains(response,'Error 403',status_code=403)
+        self.assertContains(response,'Your action was not submitted',status_code=403)
+        self.assertContains(response,'href="/moderation/"',status_code=403)
+        self.assertNotContains(response,'DEBUG=True',status_code=403)
+
+    def test_plain_errors_are_branded_and_json_errors_remain_json(self):
+        from django.http import HttpResponse, JsonResponse
+        from .middleware import AppSecurityMiddleware
+        request=RequestFactory().get('/')
+        request.user=self.worker
+        middleware=AppSecurityMiddleware(lambda request: HttpResponse('Try later.',status=429))
+        response=middleware(request)
+        self.assertContains(response,'Error 429',status_code=429)
+        self.assertContains(response,'Try later.',status_code=429)
+        self.assertEqual(response['Retry-After'],'900')
+        middleware=AppSecurityMiddleware(lambda request: JsonResponse({'error':'Try later.'},status=429))
+        self.assertEqual(json.loads(middleware(request).content),{'error':'Try later.'})
+
+    def test_staff_waitlist_approval_checks_csrf_on_both_public_hosts_behind_proxy(self):
+        from config.security import trusted_csrf_origins
+        hosts=['pushearn.xyz','push-preview.onrender.com']
+        origins=trusted_csrf_origins('https://pushearn.xyz',hosts,hosts[1])
+        self.grant_staff(self.owner)
+        with override_settings(ALLOWED_HOSTS=hosts,CSRF_TRUSTED_ORIGINS=origins):
+            for index,host in enumerate(hosts):
+                with self.subTest(host=host):
+                    application=WaitlistApplication.objects.create(
+                        name='Invited Tester',email=f'proxy{index}@example.test',
+                        role='Developer',reason='Test the hiring flow.',accepted_testing_terms=True)
+                    client=Client(enforce_csrf_checks=True)
+                    client.force_login(self.owner)
+                    # Public HTTPS can reach Django as HTTP after TLS termination.
+                    page=client.get(reverse('moderation'),HTTP_HOST=host,HTTP_X_FORWARDED_PROTO='http')
+                    self.assertEqual(page.status_code,200)
+                    token=re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"',page.content.decode()).group(1)
+                    url=reverse('review_waitlist',args=[application.pk])
+                    headers={'HTTP_HOST':host,'HTTP_X_FORWARDED_PROTO':'http',
+                             'HTTP_ORIGIN':f'https://{host}','HTTP_REFERER':f'https://{host}/moderation/'}
+                    data={'decision':'approve','csrfmiddlewaretoken':token}
+                    self.assertEqual(client.post(url,data,**{**headers,'HTTP_ORIGIN':'https://attacker.example'}).status_code,403)
+                    self.assertEqual(client.post(url,{'decision':'approve'},**headers).status_code,403)
+                    self.assertEqual(client.post(url,{**data,'csrfmiddlewaretoken':'A'*64},**headers).status_code,403)
+                    application.refresh_from_db()
+                    self.assertEqual(application.status,'pending')
+                    self.assertFalse(application.invitations.exists())
+                    response=client.post(url,data,**headers)
+                    self.assertEqual(response.status_code,302)
+                    self.assertEqual(response.url,reverse('staff_invitations'))
+                    application.refresh_from_db()
+                    self.assertEqual(application.status,'approved')
+                    self.assertEqual(application.invitations.count(),1)
+            self.assertEqual(len(mail.outbox),2)
+
     def test_login_makes_new_tester_route_prominent(self):
         response=self.client.get(reverse('login'))
         self.assertContains(response,'Create your tester account')
