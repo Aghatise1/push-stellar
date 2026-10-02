@@ -28,7 +28,8 @@
   {% endif %}
   {% block structured_data %}{% endblock %}
   <title>{% block title %}Push{% endblock %}</title>
-  <link rel="icon" href="{% static 'push-mark.svg' %}" type="image/svg+xml">
+  <link rel="icon" href="{% static 'images/push-logo.png' %}" type="image/png" sizes="512x512">
+  <link rel="apple-touch-icon" href="{% static 'images/push-logo.png' %}">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260929-1">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20261001-1">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
