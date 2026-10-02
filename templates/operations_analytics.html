@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Operations insights — Push{% endblock %}
+{% block title %}Operations insights{% endblock %}
 {% block app_location %}Operations · Insights{% endblock %}
 {% block content %}
 <div class="ops-heading"><div><span>{% if role == 'trust_support' %}Trust &amp; Support{% else %}{{ role|title }}{% endif %} operations</span><h1>Performance overview</h1><p>Understand member activity, completed work and what needs your attention.</p></div><a class="button secondary" href="{{ dashboard_url }}">Command centre</a></div>

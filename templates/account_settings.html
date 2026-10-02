@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Account settings — Push{% endblock %}
+{% block title %}Account settings{% endblock %}
 {% block app_location %}Account settings{% endblock %}
 {% block content %}
 <div class="page-heading"><div><h1>Account settings.</h1><p class="lead">Manage how you sign in, check your account status and end this session.</p></div><form method="post" action="{% url 'logout' %}" class="settings-header-logout">{% csrf_token %}<button class="button secondary" type="submit">Sign out of Push</button></form></div>
