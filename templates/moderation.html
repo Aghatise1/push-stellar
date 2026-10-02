@@ -17,7 +17,6 @@
 
 {% if can_moderate %}
 <div class="moderation-metrics">
-  <div><span>Waiting</span><strong>{{ metrics.waitlist }}</strong></div>
   <div><span>Open disputes</span><strong>{{ metrics.open_disputes }}</strong></div>
   <div><span>Community reports</span><strong>{{ metrics.community_reports }}</strong></div>
   <div><span>Jobs</span><strong>{{ metrics.jobs }}</strong></div>
@@ -31,18 +30,6 @@
 {% endif %}
 
 {% if can_moderate %}
-<section class="invitation-desk"><div class="section-heading"><div><h2>Tester invitations</h2><p>Create and copy one-time codes in a dedicated workspace.</p></div><a class="button" href="{% url 'staff_invitations' %}">Open invitations</a></div></section>
-
-<section>
-  <div class="section-heading"><div><h2>Tester waitlist</h2><p>Review people who applied through the public landing page.</p></div><span>Approve only this testing round</span></div>
-  {% for application in waitlist_items %}
-  <article class="moderation-row">
-    <div><span class="tag">{{ application.get_status_display }}</span><strong>{{ application.name }} · {{ application.email }}</strong><p>{{ application.role }}{% if application.skills %} · {{ application.skills }}{% endif %}</p><p>{{ application.reason }}</p></div>
-    {% if can_moderate and application.status == 'pending' %}<form method="post" action="{% url 'review_waitlist' application.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approve">Approve and create code</button><button class="button secondary small" name="decision" value="reject">Not this round</button></form>{% endif %}
-  </article>
-  {% empty %}<div class="record-empty"><strong>No applications are waiting.</strong><span>New waitlist applications will appear here.</span></div>{% endfor %}
-</section>
-
 <section><div class="section-heading"><h2>Dispute queue</h2><span>Human decisions with an audit trail</span></div><div class="review-list">{% for dispute in disputes %}<a href="{% url 'moderate_dispute' dispute.pk %}"><span class="tag">{{ dispute.get_status_display }}</span><strong>{{ dispute.assignment.job.title }}</strong><small>Opened by {{ dispute.opened_by.display_name }} · {{ dispute.created_at|date:'j M, H:i' }}</small></a>{% empty %}<p class="empty">No disputes are waiting.</p>{% endfor %}</div></section>
 <section><div class="section-heading"><h2>Listing review</h2><span>Flagged before member discovery</span></div>{% for job in flagged_jobs %}<article class="moderation-row"><div><strong>{{ job.title }}</strong><p>{{ job.moderation_notes }}</p></div>{% if can_moderate %}<form method="post" action="{% url 'moderate_job' job.pk %}">{% csrf_token %}<button class="button small" name="decision" value="approved">Approve</button><button class="button secondary small" name="decision" value="removed">Remove</button></form>{% endif %}</article>{% empty %}<p class="empty">No listings need review.</p>{% endfor %}</section>
 <section><div class="section-heading"><div><h2>Community reports</h2><p>Private member reports from Community.</p></div><span>{{ metrics.community_reports }} waiting</span></div>{% for report in community_reports %}<article class="moderation-row"><div><span class="tag">{{ report.get_reason_display }}</span><strong>{{ report.post.title }}</strong><p>Reported by {{ report.reporter.display_name }} · posted by {{ report.post.author.display_name }}</p>{% if report.detail %}<p>{{ report.detail }}</p>{% endif %}<a href="{% url 'community_detail' report.post.pk %}">Open conversation</a></div><form method="post" action="{% url 'moderate_community_post' report.post.pk %}">{% csrf_token %}<button class="button small" name="action" value="keep">Keep post</button><button class="button secondary small" name="action" value="remove">Remove post</button>{% if report.post.status == 'removed' %}<button class="button secondary small" name="action" value="restore">Restore</button>{% endif %}</form></article>{% empty %}<p class="empty">No community reports are waiting.</p>{% endfor %}</section>

@@ -31,7 +31,7 @@ def _reserve_daily_email_capacity(recipient_count):
         raise EmailDailyLimitError('Daily transactional email safety limit reached.')
 
 
-def send_tracked_email(*,category,subject,message,recipients):
+def send_tracked_email(*,category,subject,message,recipients,invitation=None):
     recipients=list(dict.fromkeys(recipients))
     if not recipients:
         raise ValueError('At least one email recipient is required.')
@@ -44,9 +44,11 @@ def send_tracked_email(*,category,subject,message,recipients):
         for recipient in recipients:
             EmailDelivery.objects.create(
                 recipient=recipient,category=category,subject=subject,status='failed',
-                error_type=type(exc).__name__[:120],
+                error_type=type(exc).__name__[:120],invitation=invitation,
             )
         raise
     for recipient in recipients:
-        EmailDelivery.objects.create(recipient=recipient,category=category,subject=subject,status='sent')
+        EmailDelivery.objects.create(
+            recipient=recipient,category=category,subject=subject,status='sent',invitation=invitation,
+        )
     return sent

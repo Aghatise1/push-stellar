@@ -17,7 +17,7 @@ from django.core import signing
 from django.core.paginator import Paginator
 from django.utils.crypto import salted_hmac
 from django.db import connection, transaction, IntegrityError
-from django.db.models import Q, F, Sum, Max, Count, Avg
+from django.db.models import Q, F, Sum, Max, Count, Avg, Prefetch
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1468,15 +1468,13 @@ def moderation(request):
     disputes=Dispute.objects.select_related('assignment__job','opened_by','assignment__worker').order_by('status','-created_at')
     flagged=Job.objects.filter(moderation_status='review').select_related('owner')
     community_reports=CommunityReport.objects.filter(resolved_at__isnull=True).select_related('post','post__author','reporter')
-    waitlist_items=WaitlistApplication.objects.select_related('reviewed_by')[:100]
     return render(request,'moderation.html',{
-        'disputes':disputes,'flagged_jobs':flagged,'community_reports':community_reports[:100],'waitlist_items':waitlist_items,
+        'disputes':disputes,'flagged_jobs':flagged,'community_reports':community_reports[:100],
         'moderation_now':timezone.now(),'staff_role':staff_role(request.user),
         'can_moderate':staff_role(request.user) in {'owner','admin','trust_support'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
                    'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
-                   'waitlist':WaitlistApplication.objects.filter(status='pending').count(),
                    'tickets':SupportTicket.objects.exclude(status__in=['resolved','closed']).count(),
                    'community_reports':community_reports.count(),
                    'email_failures':EmailDelivery.objects.filter(status='failed').count()},
@@ -1504,11 +1502,23 @@ def moderate_community_post(request,pk):
 
 @staff_only('owner','admin','trust_support')
 def staff_invitations(request):
+    now=timezone.now()
+    invitation_deliveries=EmailDelivery.objects.filter(category='invitation').order_by('-created_at')
+    invitations=Invitation.objects.select_related('application','created_by').prefetch_related(
+        Prefetch('email_deliveries',queryset=invitation_deliveries,to_attr='delivery_attempts')
+    )[:100]
     return render(request,'staff_invitations.html',{
-        'invitations':Invitation.objects.select_related('application','created_by')[:100],
+        'applications':WaitlistApplication.objects.select_related('reviewed_by')[:100],
+        'invitations':invitations,
         'invitation_form':StaffInvitationForm(),
         'new_invitation':request.session.pop('push_new_invitation',None),
-        'moderation_now':timezone.now(),
+        'moderation_now':now,
+        'invitation_metrics':{
+            'pending':WaitlistApplication.objects.filter(status='pending').count(),
+            'active':Invitation.objects.filter(used_at__isnull=True,revoked_at__isnull=True,expires_at__gt=now).count(),
+            'accepted':EmailDelivery.objects.filter(category='invitation',status='sent').count(),
+            'failed':EmailDelivery.objects.filter(category='invitation',status='failed').count(),
+        },
     })
 
 
@@ -1638,6 +1648,7 @@ def review_waitlist(request,pk):
                 category='invitation',subject='Your Push testing invitation',
                 message=f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
                 recipients=[application.email],
+                invitation=invitation,
             )
         except Exception:
             messages.warning(request,'Approved, but email delivery failed. Copy the one-time code from Tester invitations and share it securely.')
@@ -1646,7 +1657,7 @@ def review_waitlist(request,pk):
     else:
         messages.success(request,f'{application.email} was not approved for this testing round.')
     audit(request.user,'waitlist.reviewed',application,{'decision':decision})
-    return redirect('staff_invitations') if decision == 'approve' else redirect('moderation')
+    return redirect('staff_invitations')
 
 
 @staff_only('owner','admin','trust_support')
@@ -1678,6 +1689,7 @@ def create_staff_invitation(request):
             category='invitation',subject='Your Push testing invitation',
             message=f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
             recipients=[application.email],
+            invitation=invitation,
         )
     except Exception:
         messages.warning(request,'The code was created, but email delivery failed. Copy it from the secure one-time panel below.')

@@ -317,6 +317,7 @@ class EmailDelivery(models.Model):
     subject=models.CharField(max_length=180)
     status=models.CharField(max_length=12,choices=STATUS_CHOICES)
     error_type=models.CharField(max_length=120,blank=True)
+    invitation=models.ForeignKey(Invitation,on_delete=models.SET_NULL,null=True,blank=True,related_name='email_deliveries')
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['-created_at']

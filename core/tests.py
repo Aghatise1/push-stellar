@@ -204,6 +204,27 @@ class WorkspaceTests(TestCase):
         application.refresh_from_db();self.assertEqual(application.status,'approved')
         invitation=application.invitations.get();self.assertIsNone(invitation.used_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn('Invitation code:',mail.outbox[0].body)
+        delivery=EmailDelivery.objects.get(invitation=invitation)
+        self.assertEqual(delivery.status,'sent')
+        page=self.client.get(reverse('staff_invitations'))
+        self.assertContains(page,'Tester applications')
+        self.assertContains(page,'Ada Tester')
+        self.assertContains(page,'Email accepted by provider')
+        self.assertNotContains(self.client.get(reverse('moderation')),'Tester waitlist')
+
+    def test_rejected_tester_stays_in_the_combined_invitation_workspace(self):
+        application=WaitlistApplication.objects.create(
+            name='Later Tester',email='later@example.test',role='QA',
+            intended_use='Test later.',reason='Available next round.',accepted_testing_terms=True,
+        )
+        self.grant_staff(self.owner);self.login_as(self.owner)
+        response=self.client.post(reverse('review_waitlist',args=[application.pk]),{'decision':'reject'})
+        self.assertRedirects(response,reverse('staff_invitations'))
+        application.refresh_from_db()
+        self.assertEqual(application.status,'rejected')
+        page=self.client.get(reverse('staff_invitations'))
+        self.assertContains(page,'Later Tester')
+        self.assertContains(page,'Rejected')
     def test_csrf_origins_include_only_the_allowlisted_render_service(self):
         from config.security import trusted_csrf_origins
         canonical='https://pushearn.xyz'
@@ -300,6 +321,7 @@ class WorkspaceTests(TestCase):
         invitation=Invitation.objects.get(email='friend@example.test')
         self.assertIsNone(invitation.revoked_at)
         self.assertEqual(len(mail.outbox),1);self.assertIn(code,mail.outbox[0].body)
+        self.assertTrue(EmailDelivery.objects.filter(invitation=invitation,status='sent').exists())
         self.assertNotContains(self.client.get(reverse('staff_invitations')),code)
         self.client.post(reverse('revoke_invitation',args=[invitation.pk]))
         invitation.refresh_from_db();self.assertIsNotNone(invitation.revoked_at)
