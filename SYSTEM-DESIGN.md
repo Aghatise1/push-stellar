@@ -107,13 +107,14 @@ Every state change requires the current state, actor and action to match. The se
 
 The product uses a payment-route abstraction so marketplace logic does not depend on one chain.
 
-- **Stellar USDC testnet:** non-custodial payment request and transaction verification.
+- **Stellar XLM/USDC testnet:** the server builds an exact, short-lived transaction; Freighter signs it; the server rejects altered envelopes, submits it to Horizon and records the confirmed hash.
+- **Soroban milestone contract:** implemented and deployed on testnet for transparent evaluation, but disabled in the web application's custody path until independent security review.
 - **Generic USDC:** simulated until a production wallet/provider and network policy are selected.
 - **Bank/card:** simulated until a regulated provider and country scope are selected.
 
 Amount comes from the assignment, recipient from the worker profile, and one transaction hash can settle only one assignment. A chain payment must match network, asset/issuer, recipient, amount, unique assignment memo and success status. No private key, recovery phrase or service credential belongs in browser code or version control.
 
-The wallet page currently links a public Stellar address and creates a standards-based wallet request. Linking an address is not proof of ownership. Browser-wallet connection and signature verification remain a launch task. Because Push is non-custodial, it has no internal wallet balance to withdraw; future bank cash-out requires a regulated provider.
+The wallet page links a public Stellar address. Freighter proves control when it signs each payment, and the server verifies that signature against the connected address before submission. Manually entering an address alone is still not proof of ownership. Push has no internal wallet balance to withdraw; future bank cash-out requires a regulated provider.
 
 The original concept proposed a 12.5% platform fee. That figure is preserved as research history, not an active rule. Before launch, Push must decide the fee, payer, charging point, refund treatment and disclosure.
 

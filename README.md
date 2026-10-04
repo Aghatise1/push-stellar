@@ -2,7 +2,9 @@
 
 This folder is the canonical Push project. The original static landing site has been audited and mapped in `ORIGINAL-MIGRATION.md`; system behaviour and authority are defined in `SYSTEM-DESIGN.md` and `PRODUCT-RULES.md`.
 
-This app demonstrates accounts, private-by-default profiles, jobs, applications, a participant-only messaging inbox, earnings summaries, and an assignment from acceptance to payment. **It is not a public launch or escrow service.** USDC and bank/card remain simulation choices. Stellar testnet tools can create wallet payment requests and verify a direct test-USDC settlement; testnet assets have no monetary value. Push never collects wallet secret keys and has no proprietary token.
+This app demonstrates accounts, private-by-default profiles, jobs, applications, a participant-only messaging inbox, earnings summaries, and an assignment from acceptance to payment. **It is not a public launch or production escrow service.** The wallet now builds exact short-lived Stellar testnet transactions, obtains approval in Freighter, submits them to Horizon and records the confirmed hash. Generic USDC and bank/card remain simulation choices. Testnet assets have no monetary value. Push never collects wallet secret keys and has no proprietary token.
+
+A Soroban milestone contract is also included under `contracts/`, with deployment and complete lifecycle evidence for testnet. Contract-held payments remain feature-gated because the contract has not received an independent security audit; the active web flow remains a direct, non-custodial wallet payment.
 
 The current Stellar testnet pilot is invite-only so participation can be controlled and reviewed while the workflow is tested safely. That restriction applies to the pilot rather than the intended mainnet product, which is designed for public access with human profile review to improve marketplace trust.
 
@@ -52,9 +54,9 @@ The start script applies local database migrations and starts a development serv
 4. Use a separate browser profile or sign out, create a second worker account, verify it, and apply to the job.
 5. As the hiring account, select the application. As the worker, accept the scope.
 6. Use the private assignment thread to discuss the work. Only the selected worker and hiring account can read or send these messages.
-7. From **Payments**, connect a Freighter wallet set to Stellar testnet. Push stores only the public G-address; it never receives a secret key or recovery phrase. The profile form remains available for manually entering a public testnet address during local testing.
+7. From **Wallet**, connect a Freighter wallet set to Stellar testnet. Push stores only the public G-address; it never receives a secret key or recovery phrase. The profile form remains available for manually entering a public testnet address during local testing.
 8. As the hiring account, select simulated USDC, simulated bank/card, or Stellar testnet USDC. The Stellar route requires the worker to have a public testnet G-address connected.
-9. As the worker, submit notes and an optional work link. The hiring account can request revisions or approve. For Stellar testnet, send the exact requested test USDC with the generated memo, then submit its transaction hash for server-side verification.
+9. As the worker, submit notes and an optional work link. The hiring account can request revisions or approve. For Stellar testnet, Push prepares the exact test-USDC transaction and Freighter shows the recipient, amount and memo before approval. Push validates the signed transaction, submits it to Horizon and records the confirmed hash. An existing matching transaction can still be verified manually.
 10. Both participants can raise a dispute before approval; disputes freeze the preview workflow. Cancellation is available before the route is confirmed.
 
 The three sample jobs are labelled and do not accept applications. To add them to a fresh database, run `python manage.py seed_demo` with the prepared Python environment. No shared demo password or login bypass exists. Profiles appear publicly only after their owner enables publication.
@@ -68,17 +70,21 @@ The three sample jobs are labelled and do not accept applications. To add them t
 - CSRF protection, database-backed request limits, a hard daily email-recipient cap, form validation, escaped output, restricted profile fields and security headers.
 - Server-controlled assignment state changes, stored agreement scope/budget and a chronological event record.
 - One simulated payment record per assignment; browser-supplied amounts cannot change the agreed amount.
-- Non-custodial Stellar testnet payment requests using SEP-7 and server-side Horizon verification of success, memo, recipient, exact amount and the official testnet USDC issuer.
+- Non-custodial Stellar testnet sends signed in Freighter, with server-controlled recipient, asset, amount and memo; the server rejects altered envelopes, submits the signed transaction to Horizon and records its unique hash.
+- A Soroban milestone contract with role authorisation, exact token locking, delivery hashes, release, expiry, dispute and split-resolution paths; tested locally and through a complete Stellar testnet lifecycle, but kept out of the active custody path until independent review.
 - A participant-only inbox and project conversations backed by server-side access checks. These messages are private to assignment participants but are not end-to-end encrypted.
 - Separate Wallet and Payments areas: Wallet handles Freighter, send and receive actions; Payments handles earnings, pending work and settlement history.
 - Dashboard earnings/progress summaries and a Freighter testnet public-address connection.
 - Separate public and signed-in interfaces, with a bold wallet-style balance, responsive work console, custom mark and reduced-motion-safe payment animation. GSAP is vendored locally, so the interface makes no third-party runtime request.
 
-The included tests cover account flows, job editing/closure, application withdrawal, access restrictions, invalid state changes, both simulated payment methods and repeated approval. Run:
+The included tests cover account flows, job editing/closure, application withdrawal, access restrictions, invalid state changes, simulated payment methods, signed Stellar transaction validation and repeated approval. Run:
 
 ```powershell
 .\.runtime-venv\Scripts\python.exe manage.py test core
 .\.runtime-venv\Scripts\python.exe manage.py check
+cd contracts
+cargo test -p push-milestone
+stellar contract build --package push-milestone
 ```
 
 On this computer the existing prepared Python also lives at `../../work/push-venv/Scripts/python.exe`. Tests use a separate disposable database, not your preview accounts.

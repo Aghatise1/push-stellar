@@ -197,6 +197,14 @@ SOCIALACCOUNT_PROVIDERS = ({
 # Fixed public testnet endpoints and asset identity. No secret keys are stored by Push.
 STELLAR_TESTNET_HORIZON = os.environ.get('STELLAR_TESTNET_HORIZON','https://horizon-testnet.stellar.org')
 STELLAR_TESTNET_USDC_ISSUER = os.environ.get('STELLAR_TESTNET_USDC_ISSUER','GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5')
+STELLAR_TESTNET_SOROBAN_RPC = os.environ.get('STELLAR_TESTNET_SOROBAN_RPC','https://soroban-testnet.stellar.org')
+PUSH_MILESTONE_CONTRACT_ID = os.environ.get(
+    'PUSH_MILESTONE_CONTRACT_ID',
+    'CBHGI6TOJMIUPHDQ6BY27YII3VLLYDDSAQ7U3PXUIG5QJ3GSXZRYUT2A',
+).strip()
+# The contract is deployed for transparent testnet evaluation, but holding
+# funds is deliberately feature-gated until an independent review is complete.
+PUSH_SOROBAN_ESCROW_ENABLED = os.environ.get('PUSH_SOROBAN_ESCROW_ENABLED','false').lower() == 'true'
 
 LOGGING = {
     'version': 1,

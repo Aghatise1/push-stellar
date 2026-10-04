@@ -121,10 +121,112 @@
     }
   }
 
+  function paymentStatus(form, message, state, explorerUrl) {
+    var node = form.parentElement.querySelector('[data-payment-status]');
+    if (!node) return;
+    node.textContent = message;
+    node.dataset.state = state || 'working';
+    node.hidden = false;
+    if (explorerUrl) {
+      var link = document.createElement('a');
+      link.href = explorerUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = ' View confirmed transaction ↗';
+      node.appendChild(link);
+    }
+  }
+
+  async function postJson(url, payload) {
+    var response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken()},
+      body: JSON.stringify(payload)
+    });
+    var result = await apiResult(response);
+    if (!response.ok || !result.ok) throw new Error(result.message || 'The Stellar payment could not be completed.');
+    return result;
+  }
+
+  async function activeFreighterAccount() {
+    if (!window.freighterApi) {
+      throw new Error('Freighter could not load. Open Push in Chrome or Edge with Freighter installed.');
+    }
+    var connection = await window.freighterApi.isConnected();
+    if (!connection || !connection.isConnected) {
+      throw new Error('Freighter is not available in this browser. Unlock the extension and try again.');
+    }
+    var network = await window.freighterApi.getNetwork();
+    if (!network || network.error || network.network !== 'TESTNET') {
+      throw new Error('Switch Freighter to Stellar testnet before sending.');
+    }
+    var address = await window.freighterApi.getAddress();
+    if (!address || address.error || !address.address) {
+      throw new Error('Freighter did not return its active public address.');
+    }
+    return address.address;
+  }
+
+  async function sendPayment(form) {
+    var submit = form.querySelector('button[type="submit"]');
+    var submitLabel = submit ? submit.textContent : '';
+    if (submit) {
+      submit.disabled = true;
+      submit.setAttribute('aria-busy', 'true');
+    }
+    try {
+      paymentStatus(form, 'Checking Freighter and preparing the exact testnet transaction…');
+      var activeAddress = await activeFreighterAccount();
+      var payload = {};
+      new FormData(form).forEach(function (value, key) {
+        if (key !== 'csrfmiddlewaretoken') payload[key] = value;
+      });
+      if (form.dataset.assignment) payload.assignment = form.dataset.assignment;
+      var prepared = await postJson(form.dataset.prepareEndpoint, payload);
+      if (activeAddress !== prepared.source) {
+        throw new Error('Freighter is using a different account from the one connected to Push. Switch accounts or reconnect the wallet.');
+      }
+      paymentStatus(form, 'Review the recipient, asset, amount and memo in Freighter. Nothing moves until you approve.');
+      var signed = await window.freighterApi.signTransaction(prepared.xdr, {
+        networkPassphrase: prepared.networkPassphrase,
+        address: prepared.source,
+        accountToSign: prepared.source
+      });
+      if (!signed || signed.error || !signed.signedTxXdr) {
+        throw new Error(errorMessage(signed && signed.error, 'The transaction was not approved in Freighter.'));
+      }
+      paymentStatus(form, 'Signature received. Submitting to Stellar testnet…');
+      var completed = await postJson(form.dataset.submitEndpoint, {
+        token: prepared.token,
+        signedXdr: signed.signedTxXdr
+      });
+      paymentStatus(form, completed.message, 'success', completed.explorerUrl);
+      if (form.dataset.assignment && completed.redirectUrl) {
+        window.setTimeout(function () { window.location.assign(completed.redirectUrl); }, 1400);
+      }
+    } catch (error) {
+      paymentStatus(form, errorMessage(error, 'The Stellar payment failed. No transaction was recorded.'), 'error');
+    } finally {
+      if (submit) {
+        submit.disabled = false;
+        submit.removeAttribute('aria-busy');
+        submit.textContent = submitLabel;
+      }
+    }
+  }
+
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-wallet-connect]');
     if (!button) return;
     event.preventDefault();
     connectWallet(button);
+  });
+
+  document.addEventListener('submit', function (event) {
+    var form = event.target.closest('[data-stellar-payment]');
+    if (!form) return;
+    event.preventDefault();
+    sendPayment(form);
   });
 }());

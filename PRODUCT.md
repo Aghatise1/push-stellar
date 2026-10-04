@@ -9,7 +9,7 @@ Web3 workers and hiring projects. A person can apply for work and post jobs usin
 ## Product Purpose
 Manage profiles, jobs, applications, work submission and approval with protected private records.
 ## Constraints
-No Push token or token-related discovery features. Both USDC and bank/card payments are desired. Bank/card and generic USDC remain simulated; Stellar USDC has a non-custodial testnet verification route only. No paid provisioning. Email/password is an implementation default, not an explicitly selected user preference. External email and production providers require configuration. Do not publish or deploy customer payments in this phase.
+No Push token or token-related discovery features. Both USDC and bank/card payments are desired. Bank/card and generic USDC remain simulated; Stellar testnet XLM and USDC can be signed through Freighter and confirmed through Horizon. The deployed Soroban milestone contract remains a testnet evaluation feature and is not enabled for holding user funds until an independent review. No paid provisioning. Email/password is an implementation default, not an explicitly selected user preference. External email and production providers require configuration. Do not publish or deploy customer payments in this phase.
 ## Brand Commitments
 User requests mature professional UI and rejects black-hole video and glass styling. Push is a working name pending naming resolution.
 ## Evidence

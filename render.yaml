@@ -43,3 +43,9 @@ services:
         value: https://horizon-testnet.stellar.org
       - key: STELLAR_TESTNET_USDC_ISSUER
         value: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+      - key: STELLAR_TESTNET_SOROBAN_RPC
+        value: https://soroban-testnet.stellar.org
+      - key: PUSH_MILESTONE_CONTRACT_ID
+        value: CBHGI6TOJMIUPHDQ6BY27YII3VLLYDDSAQ7U3PXUIG5QJ3GSXZRYUT2A
+      - key: PUSH_SOROBAN_ESCROW_ENABLED
+        value: false

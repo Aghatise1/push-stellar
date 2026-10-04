@@ -11,6 +11,8 @@ Updated 25 September 2026. This plan keeps the existing Django account system an
 - Shared database: connected to Supabase PostgreSQL and migrated through `core.0006_pendingregistration`.
 - Production static-file serving: prepared with WhiteNoise.
 - Render deployment blueprint: prepared in `render.yaml`.
+- Direct Freighter payments: implemented for Stellar testnet XLM and configured testnet USDC; no real assets.
+- Soroban milestone contract: deployed and lifecycle-tested on testnet, but application custody is disabled pending independent security review.
 - Real payments: deliberately not enabled.
 
 ## Build order

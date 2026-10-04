@@ -15,9 +15,10 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
-from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
+from stellar_sdk import Account, Asset, Keypair, Network, TransactionBuilder
+from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
-from .stellar import StellarVerificationError, assignment_memo, payment_uri, valid_account_id, verify_payment
+from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, valid_account_id, validate_signed_payment, verify_payment
 from .email_backend import BrevoEmailBackend
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
@@ -814,26 +815,99 @@ class WorkspaceTests(TestCase):
         self.assertContains(self.client.get(reverse('inbox')),'Design a useful page')
         self.assertEqual(self.client.post(reverse('conversation',args=[item.pk]),{'body':'A second private message.'}).status_code,302)
         self.assertEqual(item.messages.count(),2)
-    def test_wallet_request_is_non_custodial(self):
+    @patch('core.views.prepare_payment')
+    def test_wallet_request_is_non_custodial(self, prepare):
+        source=Keypair.random().public_key
+        self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
         self.login_as(self.worker)
-        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
-        response=self.client.post(reverse('wallet'),{'destination':address,'asset':'USDC','amount':'1.5','memo':'Push test'})
+        address=Keypair.random().public_key
+        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'d'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
+        response=self.client.post(reverse('wallet_prepare'),data={
+            'destination':address,'asset':'USDC','amount':'1.5','memo':'Push test',
+        },content_type='application/json')
         self.assertEqual(response.status_code,200)
-        self.assertTrue(response.context['request_uri'].startswith('web+stellar:pay?'))
+        self.assertEqual(response.json()['xdr'],'unsigned-xdr')
+        prepare.assert_called_once_with(source=source,destination=address,amount=Decimal('1.5'),memo='Push test',asset='USDC')
         self.assertEqual(Payment.objects.count(),0)
 
-    def test_wallet_resolves_member_email_and_supports_native_xlm(self):
-        address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+    @patch('core.views.prepare_payment')
+    def test_wallet_resolves_member_email_and_supports_native_xlm(self, prepare):
+        address=Keypair.random().public_key
+        source=Keypair.random().public_key
         self.owner.stellar_address=address;self.owner.save(update_fields=['stellar_address'])
+        self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
         self.login_as(self.worker)
-        response=self.client.post(reverse('wallet'),{
+        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'e'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
+        response=self.client.post(reverse('wallet_prepare'),data={
             'destination':self.owner.email.upper(),'asset':'XLM','amount':'2.5','memo':'Push test',
-        })
+        },content_type='application/json')
         self.assertEqual(response.status_code,200)
-        uri=response.context['request_uri']
-        self.assertIn('destination='+address,uri)
-        self.assertNotIn('asset_code',uri)
+        prepare.assert_called_once_with(source=source,destination=address,amount=Decimal('2.5'),memo='Push test',asset='XLM')
         self.assertEqual(Payment.objects.count(),0)
+
+    def test_signed_payment_must_exactly_match_server_prepared_transaction(self):
+        source=Keypair.random();destination=Keypair.random().public_key
+        prepared=build_payment_xdr(
+            source_account=Account(source.public_key,10),destination=destination,
+            amount='12.5',memo='Push transfer',asset='XLM',base_fee=100,
+        )
+        from stellar_sdk import TransactionEnvelope
+        envelope=TransactionEnvelope.from_xdr(prepared['xdr'],Network.TESTNET_NETWORK_PASSPHRASE)
+        envelope.sign(source)
+        validated=validate_signed_payment(
+            signed_xdr=envelope.to_xdr(),source=source.public_key,destination=destination,
+            amount='12.5',memo='Push transfer',asset='XLM',
+            transaction_body_digest=prepared['transaction_body_digest'],
+        )
+        self.assertEqual(validated.hash_hex(),envelope.hash_hex())
+        with self.assertRaises(StellarVerificationError):
+            validate_signed_payment(
+                signed_xdr=envelope.to_xdr(),source=source.public_key,destination=destination,
+                amount='12.6',memo='Push transfer',asset='XLM',
+                transaction_body_digest=prepared['transaction_body_digest'],
+            )
+
+    @patch('core.views.submit_signed_payment')
+    @patch('core.views.prepare_payment')
+    def test_freighter_submission_records_confirmed_wallet_transfer(self, prepare, submit):
+        source=Keypair.random().public_key;destination=Keypair.random().public_key
+        self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
+        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'f'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
+        submit.return_value='a'*64
+        self.login_as(self.worker)
+        prepared=self.client.post(reverse('wallet_prepare'),data={
+            'destination':destination,'asset':'XLM','amount':'1000','memo':'Push test',
+        },content_type='application/json').json()
+        response=self.client.post(reverse('wallet_submit'),data={
+            'token':prepared['token'],'signedXdr':'signed-xdr',
+        },content_type='application/json')
+        self.assertEqual(response.status_code,200)
+        transfer=WalletTransfer.objects.get()
+        self.assertEqual(transfer.sender,self.worker)
+        self.assertEqual(transfer.destination,destination)
+        self.assertEqual(transfer.amount,Decimal('1000.0000000'))
+        self.assertEqual(transfer.transaction_hash,'a'*64)
+        self.assertFalse(Payment.objects.exists())
+
+    @patch('core.views.submit_signed_payment')
+    @patch('core.views.prepare_payment')
+    def test_freighter_assignment_payment_completes_work_record(self, prepare, submit):
+        owner_address=Keypair.random().public_key;worker_address=Keypair.random().public_key
+        self.owner.stellar_address=owner_address;self.owner.save(update_fields=['stellar_address'])
+        self.worker.stellar_address=worker_address;self.worker.save(update_fields=['stellar_address'])
+        item=self.make_assignment('submitted');item.payment_method='stellar_usdc_testnet';item.save(update_fields=['payment_method'])
+        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'1'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
+        submit.return_value='b'*64
+        self.login_as(self.owner)
+        prepared=self.client.post(reverse('wallet_prepare'),data={'assignment':str(item.pk)},content_type='application/json').json()
+        response=self.client.post(reverse('wallet_submit'),data={
+            'token':prepared['token'],'signedXdr':'signed-xdr',
+        },content_type='application/json')
+        self.assertEqual(response.status_code,200)
+        item.refresh_from_db();self.assertEqual(item.status,'paid')
+        payment=Payment.objects.get(assignment=item)
+        self.assertFalse(payment.simulated);self.assertEqual(payment.transaction_hash,'b'*64)
+        self.assertEqual(WalletTransfer.objects.get(assignment=item).destination,worker_address)
 
     @patch('core.views.account_balances')
     def test_wallet_displays_live_testnet_balances(self, balances):

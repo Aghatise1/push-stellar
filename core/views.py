@@ -25,12 +25,12 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
-from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
+from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, WalletTransfer, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm, CommunityPostForm, CommunityReplyForm, CommunityReportForm
 from .reporting import report_data
 from .access import has_staff_access, staff_only, staff_role
 from .mailer import send_tracked_email
-from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, verify_payment, valid_account_id
+from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, prepare_payment, submit_signed_payment, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
 TERMS_VERSION='2026-09-25.1'
@@ -952,7 +952,6 @@ def notifications_read_all(request):
 
 @verified
 def wallet(request):
-    request_uri=None
     balances=None
     balance_error=''
     if request.user.stellar_address:
@@ -960,27 +959,173 @@ def wallet(request):
             balances=account_balances(request.user.stellar_address)
         except StellarVerificationError as exc:
             balance_error=str(exc)
-    form=WalletRequestForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        destination=form.cleaned_data['destination']
-        if '@' in destination:
-            recipient=User.objects.filter(email__iexact=destination).only('stellar_address').first()
-            if not recipient or not recipient.stellar_address:
-                form.add_error('destination','That recipient is not ready to receive testnet payments through Push.')
-            else:
-                destination=recipient.stellar_address
-        if not form.errors:
-            request_uri=payment_uri(destination=destination,amount=form.cleaned_data['amount'],
-                memo=form.cleaned_data['memo'] or 'Push test payment',asset=form.cleaned_data['asset'])
+    form=WalletRequestForm()
     payment_records=Payment.objects.filter(assignment__worker=request.user)
     recorded_earnings=payment_records.aggregate(total=Sum('amount'))['total'] or 0
     pending_earnings=Assignment.objects.filter(
         worker=request.user,status__in=['awaiting_funding','funded','submitted']
     ).aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'wallet.html',{
-        'form':form,'request_uri':request_uri,'balances':balances,'balance_error':balance_error,
+        'form':form,'balances':balances,'balance_error':balance_error,
         'recorded_earnings':recorded_earnings,'pending_earnings':pending_earnings,
         'payment_record_count':payment_records.count(),
+        'wallet_transfers':request.user.wallet_transfers.all()[:8],
+        'milestone_contract_id':settings.PUSH_MILESTONE_CONTRACT_ID,
+        'soroban_escrow_enabled':settings.PUSH_SOROBAN_ESCROW_ENABLED,
+    })
+
+
+def _json_payload(request):
+    try:
+        payload=json.loads(request.body or '{}')
+    except (json.JSONDecodeError,UnicodeDecodeError):
+        raise ValueError('The wallet request was not valid.')
+    if not isinstance(payload,dict):
+        raise ValueError('The wallet request was not valid.')
+    return payload
+
+
+def _form_error_message(form):
+    for errors in form.errors.values():
+        if errors:
+            return str(errors[0])
+    return 'Check the recipient, asset and amount, then try again.'
+
+
+@verified
+@require_POST
+def wallet_prepare(request):
+    if not request.user.stellar_address:
+        return JsonResponse({'ok':False,'message':'Connect Freighter before preparing a payment.'},status=400)
+    try:
+        payload=_json_payload(request)
+    except ValueError as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
+    assignment_id=str(payload.get('assignment','')).strip()
+    assignment_item=None
+    if assignment_id:
+        assignment_item=get_object_or_404(
+            Assignment.objects.select_related('job','worker'),pk=assignment_id,job__owner=request.user,
+        )
+        if assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+            return JsonResponse({'ok':False,'message':'This assignment is not ready for a Stellar testnet payment.'},status=409)
+        if not assignment_item.worker.stellar_address:
+            return JsonResponse({'ok':False,'message':'The worker has no Stellar testnet receiving address.'},status=400)
+        destination=assignment_item.worker.stellar_address
+        asset='USDC'
+        amount=assignment_item.budget
+        memo=assignment_memo(assignment_item.id)
+    else:
+        form=WalletRequestForm(payload)
+        if not form.is_valid():
+            return JsonResponse({'ok':False,'message':_form_error_message(form),'errors':form.errors.get_json_data()},status=400)
+        destination=form.cleaned_data['destination']
+        if '@' in destination:
+            recipient=User.objects.filter(email__iexact=destination).only('stellar_address').first()
+            if not recipient or not recipient.stellar_address:
+                return JsonResponse({'ok':False,'message':'That recipient is not ready to receive testnet payments through Push.'},status=400)
+            destination=recipient.stellar_address
+        asset=form.cleaned_data['asset']
+        amount=form.cleaned_data['amount']
+        memo=form.cleaned_data['memo'] or 'Push test payment'
+    try:
+        prepared=prepare_payment(
+            source=request.user.stellar_address,destination=destination,
+            amount=amount,memo=memo,asset=asset,
+        )
+    except StellarVerificationError as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
+    token=secrets.token_urlsafe(24)
+    intent={
+        'token':token,'created_at':int(timezone.now().timestamp()),
+        'source':request.user.stellar_address,'destination':destination,
+        'asset':asset,'amount':str(amount),'memo':memo,
+        'transaction_body_digest':prepared['transaction_body_digest'],
+        'assignment':str(assignment_item.id) if assignment_item else '',
+    }
+    request.session['wallet_payment_intent']=intent
+    return JsonResponse({
+        'ok':True,'token':token,'xdr':prepared['xdr'],
+        'networkPassphrase':prepared['network_passphrase'],
+        'source':intent['source'],'destination':destination,'asset':asset,
+        'amount':intent['amount'],'memo':memo,
+    })
+
+
+def _record_submitted_transfer(request,intent,transaction_hash):
+    assignment_id=intent.get('assignment')
+    with transaction.atomic():
+        existing=WalletTransfer.objects.filter(transaction_hash=transaction_hash).first()
+        if existing:
+            if existing.sender_id != request.user.pk:
+                raise StellarVerificationError('That Stellar transaction is already attached to another Push account.')
+            return existing
+        assignment_item=None
+        if assignment_id:
+            assignment_item=Assignment.objects.select_for_update().select_related('job','worker').get(
+                pk=assignment_id,job__owner=request.user,
+            )
+            if assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+                raise StellarVerificationError('This assignment changed before the payment completed. The transaction hash remains available for support review.')
+            if (assignment_item.worker.stellar_address != intent['destination']
+                    or str(assignment_item.budget) != str(intent['amount'])
+                    or assignment_memo(assignment_item.id) != intent['memo']):
+                raise StellarVerificationError('The assignment payment details changed before completion.')
+        transfer=WalletTransfer.objects.create(
+            sender=request.user,assignment=assignment_item,
+            destination=intent['destination'],asset=intent['asset'],
+            amount=intent['amount'],memo=intent['memo'],transaction_hash=transaction_hash,
+        )
+        if assignment_item:
+            if Payment.objects.filter(transaction_hash__iexact=transaction_hash).exists():
+                raise StellarVerificationError('That Stellar transaction is already used by another assignment.')
+            Payment.objects.create(
+                assignment=assignment_item,amount=assignment_item.budget,
+                method=assignment_item.payment_method,simulated=False,
+                network='stellar_testnet',transaction_hash=transaction_hash,
+            )
+            assignment_item.status='paid';assignment_item.save(update_fields=['status'])
+            Job.objects.filter(pk=assignment_item.job_id).update(status='completed')
+            Event.objects.create(assignment=assignment_item,actor=request.user,kind='approve',note='Stellar testnet payment signed and verified.')
+            notify(
+                assignment_item.worker,'approve','Work approved',
+                f'{assignment_item.job.title} was approved and its Stellar testnet payment was verified.',
+                f'/assignments/{assignment_item.pk}/',
+            )
+        return transfer
+
+
+@verified
+@require_POST
+def wallet_submit(request):
+    try:
+        payload=_json_payload(request)
+    except ValueError as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
+    intent=request.session.get('wallet_payment_intent')
+    if not intent or not secrets.compare_digest(str(payload.get('token','')),str(intent.get('token',''))):
+        return JsonResponse({'ok':False,'message':'This payment request is missing or has expired. Prepare it again.'},status=409)
+    if int(timezone.now().timestamp())-int(intent.get('created_at',0)) > 300:
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({'ok':False,'message':'This payment approval expired. Prepare it again.'},status=409)
+    if request.user.stellar_address != intent.get('source'):
+        return JsonResponse({'ok':False,'message':'The connected Push wallet changed. Reconnect Freighter and prepare the payment again.'},status=409)
+    try:
+        transaction_hash=submit_signed_payment(
+            signed_xdr=str(payload.get('signedXdr','')),
+            source=intent['source'],destination=intent['destination'],
+            amount=intent['amount'],memo=intent['memo'],asset=intent['asset'],
+            transaction_body_digest=intent['transaction_body_digest'],
+        )
+        transfer=_record_submitted_transfer(request,intent,transaction_hash)
+    except (StellarVerificationError,Assignment.DoesNotExist) as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
+    request.session.pop('wallet_payment_intent',None)
+    redirect_url=reverse('assignment',args=[transfer.assignment_id]) if transfer.assignment_id else reverse('wallet')
+    return JsonResponse({
+        'ok':True,'message':'Stellar testnet payment confirmed.','hash':transaction_hash,
+        'explorerUrl':f'https://stellar.expert/explorer/testnet/tx/{transaction_hash}',
+        'redirectUrl':redirect_url,
     })
 
 

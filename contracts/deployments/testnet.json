@@ -1,0 +1,18 @@
+{
+  "network": "testnet",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "contractId": "CBHGI6TOJMIUPHDQ6BY27YII3VLLYDDSAQ7U3PXUIG5QJ3GSXZRYUT2A",
+  "wasmSha256": "6c163e103eb538fa9c25675f739a4894f77568a99e6c1d70523f8139793a1eb7",
+  "uploadTransaction": "7f152fdcc9f74b407f243f8da2621c0ae54bffd6cda042d0b85ad27ee5173d4c",
+  "deployTransaction": "c52696cbd603e485fc271e3f7152b21290d62c116853f560d128e12d56d612b8",
+  "verifiedLifecycle": {
+    "agreementId": "0404040404040404040404040404040404040404040404040404040404040404",
+    "createTransaction": "3f34d7f7442d588fd297c7a0456b96cae7a0c36df0139cc6e4b203f3fb33bbea",
+    "fundTransaction": "45eef90adb444376e7833377fa291ac842499ec7df4b71531b99649d46eaeee9",
+    "submitTransaction": "d5920d8fd061936c60dece263b7f39a8e4bd076921468cb8ed0b720c0a0b4012",
+    "approveTransaction": "d4f09bb4c180075e9d94a2f76fa1070a98a686d846d0b04a46bd60f102dfb8c5",
+    "finalStatus": "Released"
+  },
+  "deployedAt": "2026-10-04T20:00:00Z",
+  "warning": "Testnet only. Unaudited. Contract-held payments are disabled in the Push web application."
+}

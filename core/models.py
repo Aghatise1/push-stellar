@@ -157,6 +157,21 @@ class Payment(models.Model):
     transaction_hash = models.CharField(max_length=64,blank=True,null=True,unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+class WalletTransfer(models.Model):
+    """Confirmed outbound testnet transfers signed by the member's own wallet."""
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    sender = models.ForeignKey(User,on_delete=models.PROTECT,related_name='wallet_transfers')
+    assignment = models.OneToOneField(Assignment,on_delete=models.PROTECT,null=True,blank=True,related_name='wallet_transfer')
+    destination = models.CharField(max_length=56)
+    asset = models.CharField(max_length=12,choices=[('XLM','Test XLM'),('USDC','Test USDC')])
+    amount = models.DecimalField(max_digits=18,decimal_places=7)
+    memo = models.CharField(max_length=28,blank=True)
+    network = models.CharField(max_length=20,default='stellar_testnet',editable=False)
+    transaction_hash = models.CharField(max_length=64,unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ['-created_at']
+
 class Dispute(models.Model):
     assignment = models.OneToOneField(Assignment,on_delete=models.PROTECT,related_name='dispute')
     opened_by = models.ForeignKey(User,on_delete=models.PROTECT,related_name='opened_disputes')
