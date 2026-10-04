@@ -5,6 +5,7 @@
 <section class="auth-panel">
   <h1>Sign in to Push.</h1>
   <p class="lead">Existing testers can continue their briefs, applications and assignments.</p>
+  {% include 'testing_notice.html' %}
   {% if google_auth_enabled %}
     {% include 'google_auth_button.html' with google_label='Sign in with Google' %}
     <div class="auth-divider"><span>or use email</span></div>

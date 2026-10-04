@@ -4,6 +4,8 @@ This folder is the canonical Push project. The original static landing site has 
 
 This app demonstrates accounts, private-by-default profiles, jobs, applications, a participant-only messaging inbox, earnings summaries, and an assignment from acceptance to payment. **It is not a public launch or escrow service.** USDC and bank/card remain simulation choices. Stellar testnet tools can create wallet payment requests and verify a direct test-USDC settlement; testnet assets have no monetary value. Push never collects wallet secret keys and has no proprietary token.
 
+The current Stellar testnet pilot is invite-only so participation can be controlled and reviewed while the workflow is tested safely. That restriction applies to the pilot rather than the intended mainnet product, which is designed for public access with human profile review to improve marketplace trust.
+
 ## Open the preview
 
 While the local server is running, open http://127.0.0.1:8765/ in a browser on this computer. `start-local.ps1` starts it again. The original Desktop website remains separate and unchanged.

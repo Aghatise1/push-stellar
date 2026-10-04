@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Push{% endblock %}
 {% block meta_description %}Keep freelance briefs, delivery, messages and settlement evidence together with Push.{% endblock %}
-{% block structured_data %}<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Push","url":"{{ canonical_url }}","description":"A clear work record for briefs, delivery, messages and settlement evidence."},{"@type":"WebApplication","name":"Push","url":"{{ canonical_url }}","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"An invite-only freelance work coordination and settlement-record product running on Stellar testnet."}]}</script>{% endblock %}
+{% block structured_data %}<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Push","url":"{{ canonical_url }}","description":"A clear work record for briefs, delivery, messages and settlement evidence."},{"@type":"WebApplication","name":"Push","url":"{{ canonical_url }}","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"A freelance work coordination and settlement-record product currently operating through a controlled Stellar testnet pilot."}]}</script>{% endblock %}
 {% block content %}
 <section class="intro" data-reveal>
   <div class="intro-visual-column">
@@ -19,7 +19,7 @@
   <div class="intro-copy">
     <p class="lead">Push keeps the brief, the delivery and the payment trail in one place—so independent work does not depend on scattered messages and vague promises.</p>
     <div class="actions"><a class="button" href="{% url 'waitlist' %}">Join as a tester</a><a class="button secondary" href="{% url 'login' %}">Tester sign in</a></div>
-    <p class="intro-meta">Invite-only testing for Web3 teams and independent talent. No Push token. Stellar payments are currently testnet only.</p>
+    <p class="intro-meta">Invite-only testing for Web3 teams and independent talent. Testing is voluntary and unpaid. Testnet tokens have no real monetary value. No earnings or rewards are promised.</p>
   </div>
 </section>
 <div class="landing-record-rail" data-reveal aria-label="Push work record stages">

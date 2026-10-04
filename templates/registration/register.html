@@ -7,6 +7,7 @@
   <h1>Make room for good work.</h1>
   <p class="lead">One account to find work and build your team.</p>
   <div class="notice"><strong>Invitation accepted</strong><p>Create the account with {{ invitation.email }}. The invitation is used once after verification.</p></div>
+  {% include 'testing_notice.html' %}
   {% if google_auth_enabled %}
     {% include 'google_auth_button.html' with google_label='Continue with Google' %}
     <div class="auth-divider"><span>or use email</span></div>

@@ -284,7 +284,7 @@ def home(request):
     if request.user.is_authenticated:
         return redirect('workspace')
     # The public landing page may show illustrative briefs, but never exposes
-    # live tester jobs. Real opportunities belong to the invite-only product.
+    # live tester jobs. Real opportunities belong to the controlled testnet pilot.
     sample_jobs = Job.objects.filter(status='open', moderation_status='approved', demo=True)[:3]
     return render(request,'home.html',{'jobs':sample_jobs})
 
@@ -451,7 +451,7 @@ def register(request):
     if request.user.is_authenticated: return redirect('workspace')
     invitation=current_invitation(request)
     if invitation is None:
-        messages.info(request,'Push account creation is invite-only. Enter your invitation code first.')
+        messages.info(request,'Account creation for the current testnet pilot requires an invitation. Enter your invitation code first.')
         return redirect('invite_redeem')
     if request.method == 'POST' and limited(request,'register',6):
         form=Registration(request.POST)
@@ -1646,7 +1646,7 @@ def review_waitlist(request,pk):
         try:
             send_tracked_email(
                 category='invitation',subject='Your Push testing invitation',
-                message=f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+                message=f'You have been approved to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testing is voluntary and unpaid. All payments currently use testnet tokens with no real monetary value. No earnings or rewards are promised.',
                 recipients=[application.email],
                 invitation=invitation,
             )
@@ -1687,7 +1687,7 @@ def create_staff_invitation(request):
     try:
         send_tracked_email(
             category='invitation',subject='Your Push testing invitation',
-            message=f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testnet assets have no monetary value and testing does not guarantee payment.',
+            message=f'You have been invited to test Push.\n\nInvitation code: {code}\n\nEnter it at {request.build_absolute_uri(reverse("invite_redeem"))}\n\nThis code expires in 7 days, works once, and is tied to {application.email}. Testing is voluntary and unpaid. All payments currently use testnet tokens with no real monetary value. No earnings or rewards are promised.',
             recipients=[application.email],
             invitation=invitation,
         )

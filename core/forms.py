@@ -10,7 +10,7 @@ from .stellar import valid_account_id
 STELLAR_ADDRESS_PATTERN = r'^G[A-Z2-7]{55}$'
 
 class WaitlistForm(forms.ModelForm):
-    accepted_testing_terms = forms.BooleanField(label='I understand that access is limited, testing is voluntary, payment is not guaranteed and testnet assets have no monetary value.')
+    accepted_testing_terms = forms.BooleanField(label='I understand that access is limited, testing is voluntary and unpaid, testnet tokens have no real monetary value, and no earnings or rewards are promised.')
     class Meta:
         model=WaitlistApplication
         fields=['name','email','role','skills','intended_use','reason','accepted_testing_terms']
