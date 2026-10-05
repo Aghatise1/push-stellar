@@ -18,6 +18,7 @@ if local_env_path.exists():
             value = value[1:-1]
         os.environ.setdefault(name.strip(), value)
 PRODUCTION = os.environ.get('PUSH_ENV') == 'production'
+PUSH_DEPLOYMENT_TIER = os.environ.get('PUSH_DEPLOYMENT_TIER','production' if PRODUCTION else 'development')
 DEBUG = not PRODUCTION
 SECRET_KEY = os.environ.get('PUSH_SECRET_KEY')
 if not SECRET_KEY:

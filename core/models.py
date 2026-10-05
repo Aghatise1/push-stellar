@@ -105,8 +105,8 @@ class Assignment(models.Model):
     scope = models.TextField()
     budget = models.PositiveIntegerField()
     status = models.CharField(max_length=24,default='awaiting_acceptance',choices=[
-        ('awaiting_acceptance','Awaiting agreement'),('awaiting_funding','Awaiting simulated funding'),
-        ('funded','Ready for work'),('submitted','Ready for review'),('paid','Completed · simulated payment'),
+        ('awaiting_acceptance','Awaiting agreement'),('awaiting_funding','Awaiting payment route'),
+        ('funded','Ready for work'),('submitted','Ready for review'),('paid','Completed · see payment record'),
         ('disputed','Dispute open'),('cancelled','Cancelled')])
     payment_method = models.CharField(max_length=32,blank=True,choices=[
         ('usdc','USDC simulation'),
@@ -118,6 +118,10 @@ class Assignment(models.Model):
     revisions_used = models.PositiveSmallIntegerField(default=0)
     accepted_terms_at = models.DateTimeField(null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    @property
+    def can_send_messages(self):
+        return self.status in {'awaiting_funding','funded','submitted','disputed'}
+
     class Meta:
         indexes = [models.Index(fields=['worker','status','-created_at'],name='assignment_worker_idx')]
 

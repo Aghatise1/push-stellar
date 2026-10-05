@@ -1,0 +1,42 @@
+# Create as a separate Blueprint. Do not reuse production database or secrets.
+services:
+  - type: web
+    name: push-staging
+    runtime: python
+    plan: free
+    branch: staging
+    autoDeployTrigger: checksPass
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py check --deploy && python manage.py check_release
+    startCommand: waitress-serve --listen=*:10000 config.wsgi:application
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PUSH_ENV
+        value: production
+      - key: PUSH_DEPLOYMENT_TIER
+        value: staging
+      - key: PUSH_SECRET_KEY
+        generateValue: true
+      - key: PUSH_DATABASE_URL
+        sync: false
+      - key: PUSH_GOOGLE_CLIENT_ID
+        sync: false
+      - key: PUSH_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: PUSH_BOOTSTRAP_OWNER_EMAILS
+        sync: false
+      - key: PUSH_BREVO_API_KEY
+        sync: false
+      - key: PUSH_EMAIL_FROM
+        sync: false
+      - key: PUSH_EMAIL_DAILY_LIMIT
+        value: 20
+      - key: STELLAR_TESTNET_HORIZON
+        value: https://horizon-testnet.stellar.org
+      - key: STELLAR_TESTNET_SOROBAN_RPC
+        value: https://soroban-testnet.stellar.org
+      - key: STELLAR_TESTNET_USDC_ISSUER
+        value: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+      - key: PUSH_MILESTONE_CONTRACT_ID
+        value: ''
+      - key: PUSH_SOROBAN_ESCROW_ENABLED
+        value: false

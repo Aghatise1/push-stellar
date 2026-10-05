@@ -17,7 +17,7 @@
         <strong class="hero-balance"><sup>$</sup>{{ total_earnings }}<small>.00</small></strong>
         <p>Testnet and simulated payments are separated below so the record stays clear.</p>
         <div class="wallet-actions" aria-label="Payment actions">
-          <a href="{% url 'wallet' %}#send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-5z"/></svg><span>Send</span></a>
+          <a href="{% url 'wallet' %}#send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-5z"/></svg><span>Pay for work</span></a>
           <a href="{% url 'wallet' %}#receive"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></svg><span>Receive</span></a>
           <a href="{% url 'payments' %}#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>History</span></a>
         </div>
@@ -35,17 +35,17 @@
       </div>
     </article>
 
-    <article class="messages-panel app-reveal" id="messages">
+    {% if has_project_conversations %}<article class="messages-panel app-reveal" id="messages">
       <div class="panel-title"><div><span>Messages</span><h2>Workroom</h2></div><strong>{{ message_count }}</strong></div>
       <div class="message-preview-list">
         {% for message in recent_messages %}
           <a href="{% url 'conversation' message.assignment.pk %}"><span class="mini-avatar">{{ message.sender.display_name|first|upper }}</span><span><strong>{{ message.sender.display_name }}</strong><small>{{ message.assignment.job.title }}</small><p>{{ message.body|truncatechars:56 }}</p></span><time>{{ message.created_at|date:'H:i' }}</time></a>
         {% empty %}
-          <div class="panel-empty"><span class="empty-ring"></span><h3>No messages yet</h3><p>Your conversation begins after a hiring account selects an application.</p></div>
+          <div class="panel-empty"><span class="empty-ring"></span><h3>No messages yet</h3><p>Your conversation begins after the selected worker accepts the agreement.</p></div>
         {% endfor %}
       </div>
       <a class="panel-link" href="{% url 'inbox' %}">Open messages <span>→</span></a>
-    </article>
+    </article>{% else %}<article class="messages-panel app-reveal"><div class="panel-title"><h2>Your first workroom</h2></div><p>After a selected worker accepts the agreement, both participants can discuss delivery in a private project conversation.</p><a class="panel-link" href="{% url 'work' %}">Review your work <span>→</span></a></article>{% endif %}
 
     <article class="metric-card app-reveal"><span>Available record</span><strong>${{ verified_earnings }}<small>.00</small></strong><p>Verified testnet earnings</p></article>
     <article class="metric-card app-reveal"><span>Simulation record</span><strong>${{ simulated_earnings }}<small>.00</small></strong><p>Demonstration payments</p></article>

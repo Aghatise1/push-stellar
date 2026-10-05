@@ -820,36 +820,17 @@ class WorkspaceTests(TestCase):
         self.assertEqual(self.client.post(reverse('conversation',args=[item.pk]),{'body':'A second private message.'}).status_code,302)
         self.assertEqual(item.messages.count(),2)
     @patch('core.views.prepare_payment')
-    def test_wallet_request_is_non_custodial(self, prepare):
+    def test_general_transfers_are_rejected_for_addresses_and_emails(self, prepare):
         source=Keypair.random().public_key
         self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
-        self.login_as(self.worker)
-        self.connect_wallet_session(source)
-        address=Keypair.random().public_key
-        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'d'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
-        response=self.client.post(reverse('wallet_prepare'),data={
-            'destination':address,'asset':'USDC','amount':'1.5','memo':'Push test',
-        },content_type='application/json')
-        self.assertEqual(response.status_code,200)
-        self.assertEqual(response.json()['xdr'],'unsigned-xdr')
-        prepare.assert_called_once_with(source=source,destination=address,amount=Decimal('1.5'),memo='Push test',asset='USDC')
-        self.assertEqual(Payment.objects.count(),0)
-
-    @patch('core.views.prepare_payment')
-    def test_wallet_resolves_member_email_and_supports_native_xlm(self, prepare):
-        address=Keypair.random().public_key
-        source=Keypair.random().public_key
-        self.owner.stellar_address=address;self.owner.save(update_fields=['stellar_address'])
-        self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
-        self.login_as(self.worker)
-        self.connect_wallet_session(source)
-        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'e'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
-        response=self.client.post(reverse('wallet_prepare'),data={
-            'destination':self.owner.email.upper(),'asset':'XLM','amount':'2.5','memo':'Push test',
-        },content_type='application/json')
-        self.assertEqual(response.status_code,200)
-        prepare.assert_called_once_with(source=source,destination=address,amount=Decimal('2.5'),memo='Push test',asset='XLM')
-        self.assertEqual(Payment.objects.count(),0)
+        self.login_as(self.worker);self.connect_wallet_session(source)
+        for destination in [Keypair.random().public_key,self.owner.email]:
+            response=self.client.post(reverse('wallet_prepare'),data={
+                'destination':destination,'asset':'XLM','amount':'1','memo':'Test',
+            },content_type='application/json')
+            self.assertEqual(response.status_code,403)
+        prepare.assert_not_called()
+        self.assertFalse(WalletTransfer.objects.exists())
 
     def test_signed_payment_must_exactly_match_server_prepared_transaction(self):
         source=Keypair.random();destination=Keypair.random().public_key
@@ -874,27 +855,17 @@ class WorkspaceTests(TestCase):
             )
 
     @patch('core.views.submit_signed_payment')
-    @patch('core.views.prepare_payment')
-    def test_freighter_submission_records_confirmed_wallet_transfer(self, prepare, submit):
-        source=Keypair.random().public_key;destination=Keypair.random().public_key
-        self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
-        prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'f'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
-        submit.return_value='a'*64
+    def test_previously_prepared_general_transfer_cannot_be_submitted(self, submit):
         self.login_as(self.worker)
-        self.connect_wallet_session(source)
-        prepared=self.client.post(reverse('wallet_prepare'),data={
-            'destination':destination,'asset':'XLM','amount':'1000','memo':'Push test',
-        },content_type='application/json').json()
+        session=self.client.session
+        session['wallet_payment_intent']={'token':'old-token','assignment':''}
+        session.save()
         response=self.client.post(reverse('wallet_submit'),data={
-            'token':prepared['token'],'signedXdr':'signed-xdr',
+            'token':'old-token','signedXdr':'signed-xdr',
         },content_type='application/json')
-        self.assertEqual(response.status_code,200)
-        transfer=WalletTransfer.objects.get()
-        self.assertEqual(transfer.sender,self.worker)
-        self.assertEqual(transfer.destination,destination)
-        self.assertEqual(transfer.amount,Decimal('1000.0000000'))
-        self.assertEqual(transfer.transaction_hash,'a'*64)
-        self.assertFalse(Payment.objects.exists())
+        self.assertEqual(response.status_code,403)
+        submit.assert_not_called()
+        self.assertNotIn('wallet_payment_intent',self.client.session)
 
     @patch('core.views.submit_signed_payment')
     @patch('core.views.prepare_payment')
@@ -1515,3 +1486,56 @@ class WorkspaceTests(TestCase):
     def test_signed_in_home_redirects_to_workspace(self):
         self.login_as(self.worker)
         self.assertRedirects(self.client.get(reverse('home')),reverse('workspace'),fetch_redirect_response=False)
+
+    def test_disconnect_survives_sync_until_explicit_reconnect(self):
+        address=Keypair.random().public_key
+        self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker);self.connect_wallet_session(address)
+        self.client.post(reverse('wallet_disconnect'))
+        payload={'connected':True,'address':address,'network':'TESTNET'}
+        for _ in range(2):
+            response=self.client.post(reverse('wallet_sync'),data=payload,content_type='application/json')
+            self.assertFalse(response.json()['connected'])
+            self.assertNotIn('wallet_connected_address',self.client.session)
+        response=self.client.post(reverse('wallet_connect'),data=payload,content_type='application/json')
+        self.assertEqual(response.status_code,200)
+        self.assertNotIn('wallet_explicitly_disconnected',self.client.session)
+        response=self.client.post(reverse('wallet_sync'),data=payload,content_type='application/json')
+        self.assertTrue(response.json()['connected'])
+
+    def test_message_policy_applies_to_both_endpoints_and_preserves_evidence(self):
+        item=self.make_assignment()
+        self.login_as(self.worker)
+        routes=[reverse('assignment_message',args=[item.pk]),reverse('conversation',args=[item.pk])]
+        for state,allowed in [('awaiting_acceptance',False),('awaiting_funding',True),('funded',True),('submitted',True),('disputed',True),('paid',False),('cancelled',False)]:
+            item.status=state;item.save(update_fields=['status'])
+            for url in routes:
+                before=item.messages.count()
+                response=self.client.post(url,{'body':'Preserved project evidence'})
+                self.assertEqual(response.status_code,302 if allowed else 403,(state,url))
+                self.assertEqual(item.messages.count(),before+(1 if allowed else 0))
+        self.assertContains(self.client.get(routes[1]),'Preserved project evidence')
+        self.assertContains(self.client.get(routes[1]),'read-only')
+        self.assertNotContains(self.client.get(routes[1]),'class="chat-composer"')
+
+    @patch('core.views.account_balances')
+    def test_wallet_has_assignment_payments_but_no_general_send_form(self, balances):
+        balances.return_value={'xlm':Decimal('10'),'usdc':Decimal('0'),'has_usdc_trustline':False}
+        self.login_as(self.worker)
+        response=self.client.get(reverse('wallet'))
+        self.assertContains(response,'Pay through your workroom')
+        self.assertNotContains(response,'data-stellar-payment')
+
+    def test_messages_navigation_opens_after_agreement_acceptance(self):
+        item=self.make_assignment();self.login_as(self.worker)
+        self.assertNotContains(self.client.get(reverse('workspace')),'<span>Messages</span>')
+        item.status='awaiting_funding';item.save(update_fields=['status'])
+        self.assertContains(self.client.get(reverse('workspace')),'<span>Messages</span>')
+
+    @override_settings(PUSH_DEPLOYMENT_TIER='staging')
+    def test_staging_public_pages_are_identified_and_not_indexable(self):
+        response=self.client.get(reverse('home'))
+        self.assertContains(response,'Staging environment')
+        self.assertContains(response,'noindex, nofollow, noarchive')
+        self.assertEqual(self.client.get(reverse('robots')).content,b'User-agent: *\nDisallow: /\n')
+        self.assertEqual(self.client.get(reverse('sitemap')).status_code,404)

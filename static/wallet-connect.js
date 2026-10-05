@@ -176,6 +176,10 @@
       }
       var result = await postJson(shell.dataset.walletSyncEndpoint, payload);
       renderWalletState(result);
+      if (shell.dataset.initialConnected !== String(Boolean(result.connected))) {
+        shell.dataset.initialConnected = String(Boolean(result.connected));
+        window.location.reload();
+      }
       return result;
     } catch (error) {
       if (!(options && options.quiet)) showStatus(errorMessage(error, 'Push could not refresh the Freighter connection.'), 'error');

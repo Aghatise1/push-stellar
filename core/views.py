@@ -60,6 +60,8 @@ def health(request):
 
 @require_GET
 def robots(request):
+    if settings.PUSH_DEPLOYMENT_TIER == 'staging':
+        return HttpResponse('User-agent: *\nDisallow: /\n',content_type='text/plain; charset=utf-8')
     origin=settings.PUSH_ORIGIN.rstrip('/')
     body='\n'.join([
         'User-agent: *',
@@ -91,6 +93,8 @@ def robots(request):
 
 @require_GET
 def sitemap(request):
+    if settings.PUSH_DEPLOYMENT_TIER == 'staging':
+        return HttpResponse(status=404)
     public_names=('home','about','product','how_it_works','investors','documentation','help','terms','privacy','cookies','refunds')
     origin=settings.PUSH_ORIGIN.rstrip('/')
     urls=''.join(
@@ -1019,18 +1023,7 @@ def wallet_prepare(request):
         amount=assignment_item.budget
         memo=assignment_memo(assignment_item.id)
     else:
-        form=WalletRequestForm(payload)
-        if not form.is_valid():
-            return JsonResponse({'ok':False,'message':_form_error_message(form),'errors':form.errors.get_json_data()},status=400)
-        destination=form.cleaned_data['destination']
-        if '@' in destination:
-            recipient=User.objects.filter(email__iexact=destination).only('stellar_address').first()
-            if not recipient or not recipient.stellar_address:
-                return JsonResponse({'ok':False,'message':'That recipient is not ready to receive testnet payments through Push.'},status=400)
-            destination=recipient.stellar_address
-        asset=form.cleaned_data['asset']
-        amount=form.cleaned_data['amount']
-        memo=form.cleaned_data['memo'] or 'Push test payment'
+        return JsonResponse({'ok':False,'message':'Payments in Push must belong to an assignment. Open its workroom to pay.'},status=403)
     try:
         prepared=prepare_payment(
             source=source,destination=destination,
@@ -1108,6 +1101,9 @@ def wallet_submit(request):
     intent=request.session.get('wallet_payment_intent')
     if not intent or not secrets.compare_digest(str(payload.get('token','')),str(intent.get('token',''))):
         return JsonResponse({'ok':False,'message':'This payment request is missing or has expired. Prepare it again.'},status=409)
+    if not intent.get('assignment'):
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({'ok':False,'message':'General transfers are disabled. Open an assignment to pay.'},status=403)
     if int(timezone.now().timestamp())-int(intent.get('created_at',0)) > 300:
         request.session.pop('wallet_payment_intent',None)
         return JsonResponse({'ok':False,'message':'This payment approval expired. Prepare it again.'},status=409)
@@ -1147,6 +1143,7 @@ def payments(request):
 
 def conversation_list(user):
     return (Assignment.objects.filter(Q(worker=user)|Q(job__owner=user))
+        .filter(~Q(status='awaiting_acceptance')|Q(messages__isnull=False)).distinct()
         .select_related('job','job__owner','worker')
         .annotate(latest_message_at=Max('messages__created_at'))
         .order_by(F('latest_message_at').desc(nulls_last=True),'-created_at'))
@@ -1163,6 +1160,8 @@ def conversation(request,pk):
     Notification.objects.filter(recipient=request.user,kind='message',link=f'/messages/{item.pk}/',read_at__isnull=True).update(read_at=timezone.now())
     form=MessageForm(request.POST or None)
     if request.method == 'POST':
+        if not item.can_send_messages:
+            return HttpResponseForbidden('Messaging opens after agreement acceptance and closes when the assignment ends.')
         if form.is_valid():
             record=form.save(commit=False);record.assignment=item;record.sender=request.user;record.save()
             recipient=item.worker if item.job.owner_id == request.user.pk else item.job.owner
@@ -1177,8 +1176,8 @@ def conversation(request,pk):
 @require_POST
 def wallet_connect(request):
     try:
-        payload=json.loads(request.body or '{}')
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        payload=_json_payload(request)
+    except ValueError:
         return JsonResponse({'ok':False,'message':'The wallet response was not valid.'},status=400)
     address=str(payload.get('address','')).strip()
     network=str(payload.get('network','')).upper().strip()
@@ -1186,6 +1185,8 @@ def wallet_connect(request):
         return JsonResponse({'ok':False,'message':'Switch Freighter to Stellar testnet and try again.'},status=400)
     if not valid_account_id(address):
         return JsonResponse({'ok':False,'message':'Freighter did not return a valid Stellar public address.'},status=400)
+    request.session.pop('wallet_explicitly_disconnected',None)
+    request.session.pop('wallet_payment_intent',None)
     request.user.stellar_address=address
     request.user.save(update_fields=['stellar_address'])
     request.session['wallet_connected_address']=address
@@ -1199,7 +1200,7 @@ def wallet_sync(request):
         payload=_json_payload(request)
     except ValueError as exc:
         return JsonResponse({'ok':False,'message':str(exc)},status=400)
-    if not payload.get('connected'):
+    if request.session.get('wallet_explicitly_disconnected') or not payload.get('connected'):
         request.session.pop('wallet_connected_address',None)
         request.session.pop('wallet_payment_intent',None)
         return JsonResponse({
@@ -1248,6 +1249,7 @@ def wallet_sync(request):
 @verified
 @require_POST
 def wallet_disconnect(request):
+    request.session['wallet_explicitly_disconnected']=True
     request.session.pop('wallet_connected_address',None)
     request.session.pop('wallet_payment_intent',None)
     messages.success(request,'Freighter disconnected from Push. Your saved receiving address was retained.')
@@ -1531,7 +1533,7 @@ def select(request,pk):
             scope=application.job.deliverables,budget=application.job.budget,agreement_snapshot=snapshot)
         Event.objects.create(assignment=assignment,actor=request.user,kind='Worker selected')
         notify(application.worker,'selection','You were selected',f'{application.job.owner.display_name} selected you for {application.job.title}.',f'/assignments/{assignment.pk}/')
-    messages.success(request,'Worker selected. They must accept the agreed scope before simulated funding.')
+    messages.success(request,'Worker selected. They must accept the agreed scope before a payment route is selected.')
     return redirect('assignment',pk=assignment.pk)
 
 
@@ -1564,6 +1566,8 @@ def assignment(request,pk):
 @require_POST
 def assignment_message(request,pk):
     item=participant_assignment(request,pk)
+    if not item.can_send_messages:
+        return HttpResponseForbidden('Messaging opens after agreement acceptance and closes when the assignment ends.')
     form=MessageForm(request.POST)
     if not form.is_valid():
         messages.error(request,'Write a message of 2,000 characters or fewer.')
@@ -1592,7 +1596,7 @@ def assignment_action(request,pk):
     }
     submission = None
     if action == 'dispute':
-        if item.status not in ['funded','submitted'] or not note: return HttpResponseBadRequest('A reason and an active funded assignment are required.')
+        if item.status not in ['funded','submitted'] or not note: return HttpResponseBadRequest('A reason and an active assignment are required.')
         expected,new,allowed = item.status,'disputed',True
     elif action == 'cancel':
         expected,new,allowed = item.status,'cancelled',item.status in ['awaiting_acceptance','awaiting_funding']

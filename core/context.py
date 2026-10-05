@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db.models import Q
 from .models import Assignment, Notification
 from .access import staff_role
 
@@ -19,12 +20,14 @@ PUBLIC_INDEX_ROUTES = {
 }
 
 def app_context(request):
+    has_project_conversations = False
     conversation_count = 0
     unread_notification_count = 0
     notification_preview = []
     assigned_active_count = 0
     work_attention_count = 0
     if request.user.is_authenticated:
+        has_project_conversations = Assignment.objects.filter(Q(worker=request.user)|Q(job__owner=request.user)).filter(~Q(status='awaiting_acceptance')|Q(messages__isnull=False)).exists()
         notice_qs = Notification.objects.filter(recipient=request.user,read_at__isnull=True)
         conversation_count = notice_qs.filter(kind='message').count()
         unread_notification_count = notice_qs.count()
@@ -49,10 +52,12 @@ def app_context(request):
     portal_role = staff_role(request.user)
     public_origin = settings.PUSH_ORIGIN.rstrip('/')
     canonical_path = request.path if request.path.endswith('/') else f'{request.path}/'
-    seo_indexable = not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES
+    seo_indexable = settings.PUSH_DEPLOYMENT_TIER != 'staging' and not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES
     return {'payment_notice':'Preview · Stellar testnet and simulated payments only.',
+            'is_staging':settings.PUSH_DEPLOYMENT_TIER == 'staging',
             'local_email': not settings.EMAIL_DELIVERY_CONFIGURED,
             'google_auth_enabled': settings.GOOGLE_AUTH_ENABLED,
+            'has_project_conversations':has_project_conversations,
             'conversation_count':conversation_count,
             'unread_notification_count':unread_notification_count,
             'notification_preview':notification_preview,
