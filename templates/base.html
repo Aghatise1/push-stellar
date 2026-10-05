@@ -13,16 +13,16 @@
   <link rel="canonical" href="{{ canonical_url }}">
   <meta property="og:site_name" content="Push">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="{% block social_title %}Push — Work with a clear record{% endblock %}">
+  <meta property="og:title" content="{% block social_title %}Push â€” Work with a clear record{% endblock %}">
   <meta property="og:description" content="{% block social_description %}Keep the brief, delivery and payment record together for independent work.{% endblock %}">
   <meta property="og:url" content="{{ canonical_url }}">
   <meta property="og:image" content="{{ seo_image_url }}">
   <meta property="og:image:width" content="1672">
   <meta property="og:image:height" content="941">
-  <meta property="og:image:alt" content="Push is live — work with a clear record">
+  <meta property="og:image:alt" content="Push is live â€” work with a clear record">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@pushearn_">
-  <meta name="twitter:title" content="{% block twitter_title %}Push — Work with a clear record{% endblock %}">
+  <meta name="twitter:title" content="{% block twitter_title %}Push â€” Work with a clear record{% endblock %}">
   <meta name="twitter:description" content="{% block twitter_description %}Keep the brief, delivery and payment record together for independent work.{% endblock %}">
   <meta name="twitter:image" content="{{ seo_image_url }}">
   {% endif %}
@@ -33,6 +33,7 @@
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260929-1">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20261005-1">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
+<link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261006-1">
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
@@ -106,17 +107,17 @@
       <span class="app-location">{% block app_location %}Overview{% endblock %}</span>
       <span class="network-status"><i></i> {% if staff_portal_active %}Protected operations{% else %}Stellar testnet{% endif %}</span>
       {% if not staff_portal_active %}<a class="top-notification{% if unread_notification_count %} has-unread{% endif %}" href="{% url 'notifications' %}" aria-label="Notifications{% if unread_notification_count %}, {{ unread_notification_count }} unread{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg><b data-live-count="notifications"{% if not unread_notification_count %} hidden{% endif %}>{{ unread_notification_count }}</b></a>{% endif %}
-      {% if not staff_portal_active %}<details class="wallet-menu" data-wallet-shell data-initial-connected="{% if wallet_session_connected %}true{% else %}false{% endif %}" data-wallet-connect-endpoint="{% url 'wallet_connect' %}" data-wallet-sync-endpoint="{% url 'wallet_sync' %}" data-wallet-disconnect-endpoint="{% url 'wallet_disconnect' %}" data-saved-address="{{ saved_wallet_address }}"><summary class="top-wallet-link"><span data-wallet-chip>{% if wallet_session_connected %}{{ connected_wallet_address|slice:':6' }}…{{ connected_wallet_address|slice:'-4:' }}{% elif saved_wallet_address %}Saved {{ saved_wallet_address|slice:':6' }}…{{ saved_wallet_address|slice:'-4:' }}{% else %}Connect wallet{% endif %}</span></summary><div class="wallet-menu-panel"><span class="wallet-menu-state" data-wallet-state data-state="{% if wallet_session_connected %}connected{% else %}disconnected{% endif %}">{% if wallet_session_connected %}Connected to Freighter{% elif saved_wallet_address %}Freighter disconnected{% else %}No wallet connected{% endif %}</span><code data-wallet-address>{% if saved_wallet_address %}{{ saved_wallet_address }}{% else %}No saved receiving address{% endif %}</code><p data-wallet-message>{% if wallet_session_connected %}Testnet · ready to sign{% elif saved_wallet_address %}Your receiving address is saved, but sending requires Freighter.{% else %}Connect Freighter to send from Push.{% endif %}</p><div><button type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">{% if saved_wallet_address %}Reconnect{% else %}Connect Freighter{% endif %}</button><a href="{% url 'wallet' %}">Open wallet</a></div>{% if saved_wallet_address %}<form method="post" action="{% url 'wallet_disconnect' %}" data-wallet-disconnect{% if not wallet_session_connected %} hidden{% endif %}>{% csrf_token %}<button type="submit">Disconnect from Push</button></form>{% endif %}</div></details>{% endif %}
+      {% if not staff_portal_active %}<details class="wallet-menu" data-wallet-shell data-initial-connected="{% if wallet_session_connected %}true{% else %}false{% endif %}" data-wallet-connect-endpoint="{% url 'wallet_connect' %}" data-wallet-sync-endpoint="{% url 'wallet_sync' %}" data-wallet-disconnect-endpoint="{% url 'wallet_disconnect' %}" data-saved-address="{{ saved_wallet_address }}"><summary class="top-wallet-link"><span data-wallet-chip>{% if wallet_session_connected %}{{ connected_wallet_address|slice:':6' }}â€¦{{ connected_wallet_address|slice:'-4:' }}{% elif saved_wallet_address %}Saved {{ saved_wallet_address|slice:':6' }}â€¦{{ saved_wallet_address|slice:'-4:' }}{% else %}Connect wallet{% endif %}</span></summary><div class="wallet-menu-panel"><span class="wallet-menu-state" data-wallet-state data-state="{% if wallet_session_connected %}connected{% else %}disconnected{% endif %}">{% if wallet_session_connected %}Connected to Freighter{% elif saved_wallet_address %}Freighter disconnected{% else %}No wallet connected{% endif %}</span><code data-wallet-address>{% if saved_wallet_address %}{{ saved_wallet_address }}{% else %}No saved receiving address{% endif %}</code><p data-wallet-message>{% if wallet_session_connected %}Testnet Â· ready to sign{% elif saved_wallet_address %}Your receiving address is saved, but sending requires Freighter.{% else %}Connect Freighter to send from Push.{% endif %}</p><div><button type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">{% if saved_wallet_address %}Reconnect{% else %}Connect Freighter{% endif %}</button><a href="{% url 'wallet' %}">Open wallet</a></div>{% if saved_wallet_address %}<form method="post" action="{% url 'wallet_disconnect' %}" data-wallet-disconnect{% if not wallet_session_connected %} hidden{% endif %}>{% csrf_token %}<button type="submit">Disconnect from Push</button></form>{% endif %}</div></details>{% endif %}
     </header>
     {% endif %}
     <main id="main">
-      {% if is_staging %}<p class="notice">Staging environment · disposable test accounts and Stellar testnet assets only.</p>{% endif %}
+      {% if is_staging %}<p class="notice">Staging environment Â· disposable test accounts and Stellar testnet assets only.</p>{% endif %}
       {% if staff_is_owner and not can_switch_staff_dashboard %}<nav class="workspace-return" aria-label="Staff workspace switch"><span>{{ staff_portal_role_label }} workspace</span><a class="button small" href="{% url 'staff_entry' %}">Switch workspace</a>{% if not staff_portal_active %}<a class="button secondary small" href="{% url 'staff_dashboard' %}">Open Operations</a>{% else %}<a class="button secondary small" href="{% url 'workspace' %}">Open member workspace</a>{% endif %}</nav>{% endif %}
       {% if messages %}<div aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
       {% if user.is_authenticated and not user.email_verified %}<div class="notice"><strong>Verify your email to unlock Wallet, Messages and work actions.</strong><p>{% if local_email %}Real email delivery is not configured on this local preview yet. The newest code is stored in the private-mail folder.{% else %}Enter the six-digit code sent to {{ user.email }}.{% endif %}</p><a class="link-button" href="{% url 'verify_email' %}">Enter verification code</a></div>{% endif %}
       {% block content %}{% endblock %}
     </main>
-    {% if not user.is_authenticated %}<footer><span>© {% now "Y" %} Push · Scope, delivery and settlement in one record.</span><span><a href="{% url 'home' %}">Home</a> · <a href="{% url 'about' %}">About</a> · <a href="{% url 'product' %}">Product</a> · <a href="{% url 'how_it_works' %}">Rules</a> · <a href="{% url 'documentation' %}">Docs</a> · <a href="{% url 'help' %}">Help</a> · <a href="{% url 'terms' %}">Terms</a> · <a href="{% url 'privacy' %}">Privacy</a> · <a href="{% url 'cookies' %}">Cookies</a> · <a href="{% url 'refunds' %}">Refunds</a> · <a href="{% url 'staff_login' %}">Staff sign in</a> · <a href="{% url 'investors' %}">Investors</a> · <a href="mailto:aghatiseehioghae644@gmail.com">Email</a> · <a href="https://x.com/pushearn_" target="_blank" rel="noopener noreferrer">X · @pushearn_</a> · {{ payment_notice }}</span></footer>{% endif %}
+    {% if not user.is_authenticated %}<footer><span>Â© {% now "Y" %} Push Â· Scope, delivery and settlement in one record.</span><span><a href="{% url 'home' %}">Home</a> Â· <a href="{% url 'about' %}">About</a> Â· <a href="{% url 'product' %}">Product</a> Â· <a href="{% url 'how_it_works' %}">Rules</a> Â· <a href="{% url 'documentation' %}">Docs</a> Â· <a href="{% url 'help' %}">Help</a> Â· <a href="{% url 'terms' %}">Terms</a> Â· <a href="{% url 'privacy' %}">Privacy</a> Â· <a href="{% url 'cookies' %}">Cookies</a> Â· <a href="{% url 'refunds' %}">Refunds</a> Â· <a href="{% url 'staff_login' %}">Staff sign in</a> Â· <a href="{% url 'investors' %}">Investors</a> Â· <a href="mailto:aghatiseehioghae644@gmail.com">Email</a> Â· <a href="https://x.com/pushearn_" target="_blank" rel="noopener noreferrer">X Â· @pushearn_</a> Â· {{ payment_notice }}</span></footer>{% endif %}
   </div>
   {% if user.is_authenticated %}
   <nav class="mobile-dock{% if staff_portal_active %} staff-mobile-dock{% endif %}" aria-label="{% if staff_portal_active %}Operations{% else %}Signed-in{% endif %} navigation">
@@ -152,7 +153,7 @@
   </nav>
   <script src="{% static 'vendor/gsap.min.js' %}" defer></script>
   <script src="{% static 'vendor/ScrollTrigger.min.js' %}" defer></script>
-  <script src="{% static 'app-motion.js' %}?v=20261001-2" defer></script>
+  <script src="{% static 'app-motion.js' %}?v=20261006-1" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
   <script src="{% static 'wallet-connect.js' %}?v=20261005-3" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>

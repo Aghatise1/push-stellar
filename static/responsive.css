@@ -1,0 +1,74 @@
+/* Reflow by available content space, including browser zoom. */
+*,*::before,*::after{box-sizing:border-box}
+:where(main,section,article,aside,form,details,header,footer,nav,div){min-width:0}
+:where(h1,h2,h3,h4,p,li,dd,dt,label,a,strong,small,summary,button){overflow-wrap:anywhere}
+:where(img,video,canvas,iframe){max-width:100%}
+img{height:auto}
+:where(input,select,textarea){max-width:100%;min-width:0}
+:where(button,.button){max-width:100%;white-space:normal;text-align:center}
+:where(.page-heading,.section-heading,.app-section-heading,.job-heading-actions,.profile-actions,.ops-heading,.ops-toolbar){flex-wrap:wrap}
+:where(.section-heading,.app-section-heading)>span{white-space:normal!important}
+:where(.form-layout,.detail-layout){grid-template-columns:repeat(auto-fit,minmax(min(100%,25rem),1fr))}
+:where(.form-layout,.detail-layout)>*{max-width:100%}
+pre{max-width:100%;overflow:auto}
+:where(.profile-media-summary,.candidate-identity)>img{object-fit:cover;flex-shrink:0}
+.candidate-identity img{height:3.25rem}
+.applicant-section{container-type:inline-size;container-name:applicants;overflow:visible}
+.candidate-card{grid-template-columns:minmax(0,1fr);border-radius:inherit}
+.candidate-identity h3,.candidate-identity p{white-space:normal;overflow:visible;text-overflow:clip}
+.candidate-identity p,.candidate-proposal summary small,.candidate-action small{font-size:.8125rem}
+.candidate-proposal summary{flex-wrap:wrap;min-height:44px}
+.candidate-proposal summary span,.candidate-proposal>p{font-size:.9375rem}
+.candidate-action{grid-column:auto;grid-template-columns:minmax(0,1fr);justify-items:stretch;min-width:0}
+.candidate-action form,.candidate-action .button{width:100%}
+.candidate-action small{text-align:left}
+@container applicants (min-width:38rem){
+ .candidate-card{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)}
+ .candidate-action{grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:1rem}
+}
+@container applicants (min-width:62rem){
+ .candidate-card{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr) minmax(0,.65fr)}
+ .candidate-action{grid-column:auto;grid-template-columns:minmax(0,1fr)}
+}
+.app-mode .wallet-record,.app-mode .payments-summary{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+.app-mode .wallet-record dl{grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr))}
+.app-mode .wallet-record dd{margin-inline-start:0;overflow-wrap:anywhere}
+.app-mode .wallet-actions a span,.job-heading-actions .button,.work-next-action{white-space:normal}
+.app-mode .wallet-contract,.app-mode .wallet-hero,.app-mode .balance-panel{grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr))}
+.app-mode .wallet-visual,.motion-stage{max-width:100%;overflow:hidden}
+.app-mode .community-summary{grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))}
+.app-mode .message-hub{grid-template-columns:minmax(0,18rem) minmax(0,1fr)}
+.app-mode .chat-composer{grid-template-columns:minmax(0,1fr) auto}
+:where(.chat-thread,.conversation-list){overscroll-behavior:contain}
+:where(.app-mode .status-bubble,.app-mode .tag){white-space:normal}
+:where(.helptext,.help,.field-help,.candidate-action small){line-height:1.5}
+@media(max-width:60rem){
+ .app-mode .message-hub{grid-template-columns:minmax(0,1fr)}
+ .app-mode .conversation-list{max-height:18rem;overflow:auto}
+}
+@media(max-width:45rem){
+ :where(input,select,textarea){font-size:1rem!important}
+ :where(.button,button,summary){min-height:44px}
+ .app-mode .chat-composer{grid-template-columns:minmax(0,1fr)}
+ .app-mode .mobile-dock{grid-template-columns:repeat(auto-fit,minmax(44px,1fr))!important;bottom:0;padding-bottom:max(.4rem,env(safe-area-inset-bottom));border-radius:0}
+ .app-mode .mobile-dock a{font-size:.6875rem;min-height:3.5rem}
+ .site-header{gap:.5rem}
+ .site-header .brand{flex-shrink:0}
+ .applicant-section-heading{padding:1rem}
+ .candidate-card{padding:1rem;gap:1rem}
+ .app-mode .work-next-action{min-width:0}
+ .app-mode .app-list-row{display:flex;flex-wrap:wrap;gap:.75rem}
+ .app-mode .app-list-row>*{max-width:100%}
+ .app-mode .wallet-command.two-up{grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr))}
+}
+@media(max-height:32rem){.compact-menu nav{max-height:65dvh;overflow-y:auto}.sidebar{overflow-y:auto}}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* Compact metadata remains readable; long labels wrap rather than disappearing. */
+:where(main small,main .helptext,main .help,main .muted){font-size:max(.8125rem,.85em)}
+@media(min-width:45.01rem) and (max-width:66rem){
+ .app-mode .sidebar nav a{gap:.55rem;padding-inline:.6rem;font-size:.875rem}
+ .app-mode .sidebar nav a svg{flex-shrink:0}
+}
