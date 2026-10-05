@@ -36,6 +36,15 @@ def app_context(request):
             job__owner=request.user,status__in=['awaiting_funding','submitted']
         ).count()
         work_attention_count = worker_actions + client_actions
+        saved_wallet_address = request.user.stellar_address
+        connected_wallet_address = request.session.get('wallet_connected_address','')
+        wallet_session_connected = bool(
+            saved_wallet_address and connected_wallet_address == saved_wallet_address
+        )
+    else:
+        saved_wallet_address = ''
+        connected_wallet_address = ''
+        wallet_session_connected = False
     resolved_name = getattr(getattr(request, 'resolver_match', None), 'url_name', None)
     portal_role = staff_role(request.user)
     public_origin = settings.PUSH_ORIGIN.rstrip('/')
@@ -49,6 +58,9 @@ def app_context(request):
             'notification_preview':notification_preview,
             'assigned_active_count':assigned_active_count,
             'work_attention_count':work_attention_count,
+            'saved_wallet_address':saved_wallet_address,
+            'connected_wallet_address':connected_wallet_address,
+            'wallet_session_connected':wallet_session_connected,
             'staff_portal_role':portal_role,
             'staff_portal_role_label':{'owner':'Owner','admin':'Administrator','trust_support':'Trust & Support'}.get(portal_role,''),
             'staff_is_owner':portal_role == 'owner',

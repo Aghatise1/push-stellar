@@ -995,8 +995,11 @@ def _form_error_message(form):
 @verified
 @require_POST
 def wallet_prepare(request):
-    if not request.user.stellar_address:
-        return JsonResponse({'ok':False,'message':'Connect Freighter before preparing a payment.'},status=400)
+    source=request.session.get('wallet_connected_address','')
+    if not source or source != request.user.stellar_address:
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({'ok':False,'message':'Reconnect Freighter before preparing a payment.'},status=400)
     try:
         payload=_json_payload(request)
     except ValueError as exc:
@@ -1030,7 +1033,7 @@ def wallet_prepare(request):
         memo=form.cleaned_data['memo'] or 'Push test payment'
     try:
         prepared=prepare_payment(
-            source=request.user.stellar_address,destination=destination,
+            source=source,destination=destination,
             amount=amount,memo=memo,asset=asset,
         )
     except StellarVerificationError as exc:
@@ -1038,7 +1041,7 @@ def wallet_prepare(request):
     token=secrets.token_urlsafe(24)
     intent={
         'token':token,'created_at':int(timezone.now().timestamp()),
-        'source':request.user.stellar_address,'destination':destination,
+        'source':source,'destination':destination,
         'asset':asset,'amount':str(amount),'memo':memo,
         'transaction_body_digest':prepared['transaction_body_digest'],
         'assignment':str(assignment_item.id) if assignment_item else '',
@@ -1108,7 +1111,10 @@ def wallet_submit(request):
     if int(timezone.now().timestamp())-int(intent.get('created_at',0)) > 300:
         request.session.pop('wallet_payment_intent',None)
         return JsonResponse({'ok':False,'message':'This payment approval expired. Prepare it again.'},status=409)
-    if request.user.stellar_address != intent.get('source'):
+    if (request.session.get('wallet_connected_address','') != intent.get('source')
+            or request.user.stellar_address != intent.get('source')):
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
         return JsonResponse({'ok':False,'message':'The connected Push wallet changed. Reconnect Freighter and prepare the payment again.'},status=409)
     try:
         transaction_hash=submit_signed_payment(
@@ -1182,15 +1188,74 @@ def wallet_connect(request):
         return JsonResponse({'ok':False,'message':'Freighter did not return a valid Stellar public address.'},status=400)
     request.user.stellar_address=address
     request.user.save(update_fields=['stellar_address'])
+    request.session['wallet_connected_address']=address
     return JsonResponse({'ok':True,'message':'Freighter connected on Stellar testnet.','address':address})
 
 
 @verified
 @require_POST
+def wallet_sync(request):
+    try:
+        payload=_json_payload(request)
+    except ValueError as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
+    if not payload.get('connected'):
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({
+            'ok':True,'connected':False,'state':'disconnected',
+            'message':'Freighter is disconnected. Your saved receiving address has not been removed.',
+            'savedAddress':request.user.stellar_address,
+        })
+    address=str(payload.get('address','')).strip()
+    network=str(payload.get('network','')).upper().strip()
+    if network != 'TESTNET':
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({
+            'ok':True,'connected':False,'state':'wrong_network',
+            'message':'Freighter is connected to another network. Switch it to Stellar testnet.',
+            'savedAddress':request.user.stellar_address,'activeAddress':address,
+        })
+    if not valid_account_id(address):
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({'ok':False,'message':'Freighter did not return a valid Stellar public address.'},status=400)
+    if not request.user.stellar_address:
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({
+            'ok':True,'connected':False,'state':'needs_connection',
+            'message':'Approve this wallet once to connect it to Push.',
+            'activeAddress':address,'savedAddress':'',
+        })
+    if address != request.user.stellar_address:
+        request.session.pop('wallet_connected_address',None)
+        request.session.pop('wallet_payment_intent',None)
+        return JsonResponse({
+            'ok':True,'connected':False,'state':'mismatch',
+            'message':'Freighter changed accounts. Reconnect to use the active account in Push.',
+            'activeAddress':address,'savedAddress':request.user.stellar_address,
+        })
+    request.session['wallet_connected_address']=address
+    return JsonResponse({
+        'ok':True,'connected':True,'state':'connected',
+        'message':'Freighter is connected on Stellar testnet.',
+        'activeAddress':address,'savedAddress':request.user.stellar_address,
+    })
+
+
+@verified
+@require_POST
 def wallet_disconnect(request):
-    request.user.stellar_address=''
-    request.user.save(update_fields=['stellar_address'])
-    messages.success(request,'Wallet disconnected from Push. Freighter and its keys were not changed.')
+    request.session.pop('wallet_connected_address',None)
+    request.session.pop('wallet_payment_intent',None)
+    messages.success(request,'Freighter disconnected from Push. Your saved receiving address was retained.')
+    if request.headers.get('Content-Type','').startswith('application/json'):
+        return JsonResponse({
+            'ok':True,'connected':False,'state':'disconnected',
+            'message':'Freighter disconnected from Push.','savedAddress':request.user.stellar_address,
+        })
     return redirect('wallet')
 
 

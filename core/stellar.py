@@ -55,28 +55,23 @@ def payment_uri(*, destination, amount, memo, asset='USDC'):
     return f'web+stellar:pay?{query}'
 
 
-def _get_json(url):
+def _get_json(url, *, not_found_message='That record was not found on Stellar testnet.'):
     request = Request(url,headers={'Accept':'application/json','User-Agent':'Push-Stellar-Prototype/1.0'})
     try:
         with urlopen(request,timeout=8) as response:
             return json.load(response)
     except HTTPError as exc:
         if exc.code == 404:
-            raise StellarVerificationError('That transaction was not found on Stellar testnet.') from exc
+            raise StellarVerificationError(not_found_message) from exc
         raise StellarVerificationError('Stellar testnet could not verify that transaction.') from exc
     except (URLError,TimeoutError,json.JSONDecodeError) as exc:
         raise StellarVerificationError('Stellar testnet is temporarily unavailable. Try verification again shortly.') from exc
 
 
-def account_balances(address):
+def account_balances(address, *, missing_message='This account has not been funded on Stellar testnet yet.'):
     """Return the connected account's native XLM and configured test USDC balances."""
     base = settings.STELLAR_TESTNET_HORIZON.rstrip('/')
-    try:
-        account = _get_json(f'{base}/accounts/{address}')
-    except StellarVerificationError as exc:
-        if 'transaction was not found' in str(exc):
-            raise StellarVerificationError('This account has not been funded on Stellar testnet yet.') from exc
-        raise
+    account = _get_json(f'{base}/accounts/{address}',not_found_message=missing_message)
 
     result = {'xlm': Decimal('0'), 'usdc': Decimal('0'), 'has_usdc_trustline': False}
     for balance in account.get('balances', []):
@@ -140,8 +135,16 @@ def prepare_payment(*, source, destination, amount, memo, asset='XLM'):
         raise StellarVerificationError('Reconnect a valid Stellar testnet wallet before sending.')
     if source == destination:
         raise StellarVerificationError('Choose a recipient other than your connected wallet.')
-    destination_balances = account_balances(destination)
-    source_balances = account_balances(source)
+    source_label=f'{source[:8]}…{source[-6:]}'
+    destination_label=f'{destination[:8]}…{destination[-6:]}'
+    source_balances = account_balances(
+        source,
+        missing_message=f'Your active Freighter account {source_label} is not funded on Stellar testnet.',
+    )
+    destination_balances = account_balances(
+        destination,
+        missing_message=f'The recipient {destination_label} does not exist on Stellar testnet. Fund that address with test XLM first.',
+    )
     try:
         amount_decimal = Decimal(str(amount)).quantize(Decimal('0.0000001'))
     except InvalidOperation as exc:

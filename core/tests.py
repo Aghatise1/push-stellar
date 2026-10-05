@@ -18,7 +18,7 @@ from django.utils import timezone
 from stellar_sdk import Account, Asset, Keypair, Network, TransactionBuilder
 from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
-from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, valid_account_id, validate_signed_payment, verify_payment
+from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, prepare_payment, valid_account_id, validate_signed_payment, verify_payment
 from .email_backend import BrevoEmailBackend
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
@@ -32,6 +32,10 @@ class WorkspaceTests(TestCase):
     def setUp(self):
         self.job=Job.objects.create(owner=self.owner,project='Test Project',title='Design a useful page',description='Brief',deliverables='One accessible page',category='UI/UX Design',budget=400,deadline=timezone.localdate()+timedelta(days=14),moderation_status='approved')
     def login_as(self,user): self.client.force_login(user)
+    def connect_wallet_session(self,address):
+        session=self.client.session
+        session['wallet_connected_address']=address
+        session.save()
     def make_assignment(self,status='awaiting_acceptance'):
         self.job.status='assigned';self.job.save()
         return Assignment.objects.create(job=self.job,worker=self.worker,scope=self.job.deliverables,budget=400,status=status)
@@ -820,6 +824,7 @@ class WorkspaceTests(TestCase):
         source=Keypair.random().public_key
         self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
         self.login_as(self.worker)
+        self.connect_wallet_session(source)
         address=Keypair.random().public_key
         prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'d'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
         response=self.client.post(reverse('wallet_prepare'),data={
@@ -837,6 +842,7 @@ class WorkspaceTests(TestCase):
         self.owner.stellar_address=address;self.owner.save(update_fields=['stellar_address'])
         self.worker.stellar_address=source;self.worker.save(update_fields=['stellar_address'])
         self.login_as(self.worker)
+        self.connect_wallet_session(source)
         prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'e'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
         response=self.client.post(reverse('wallet_prepare'),data={
             'destination':self.owner.email.upper(),'asset':'XLM','amount':'2.5','memo':'Push test',
@@ -875,6 +881,7 @@ class WorkspaceTests(TestCase):
         prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'f'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
         submit.return_value='a'*64
         self.login_as(self.worker)
+        self.connect_wallet_session(source)
         prepared=self.client.post(reverse('wallet_prepare'),data={
             'destination':destination,'asset':'XLM','amount':'1000','memo':'Push test',
         },content_type='application/json').json()
@@ -899,6 +906,7 @@ class WorkspaceTests(TestCase):
         prepare.return_value={'xdr':'unsigned-xdr','transaction_body_digest':'1'*64,'network_passphrase':Network.TESTNET_NETWORK_PASSPHRASE}
         submit.return_value='b'*64
         self.login_as(self.owner)
+        self.connect_wallet_session(owner_address)
         prepared=self.client.post(reverse('wallet_prepare'),data={'assignment':str(item.pk)},content_type='application/json').json()
         response=self.client.post(reverse('wallet_submit'),data={
             'token':prepared['token'],'signedXdr':'signed-xdr',
@@ -919,15 +927,83 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'9999.50 XLM')
         self.assertContains(response,'25.00 USDC')
         balances.assert_called_once_with(address)
-    def test_wallet_disconnect_removes_only_the_saved_public_address(self):
+    def test_wallet_disconnect_ends_session_but_keeps_receiving_address(self):
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
         self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
         self.login_as(self.worker)
+        self.connect_wallet_session(address)
         self.assertContains(self.client.get(reverse('wallet')),'Disconnect')
         self.assertEqual(self.client.get(reverse('wallet_disconnect')).status_code,405)
         response=self.client.post(reverse('wallet_disconnect'))
         self.assertRedirects(response,reverse('wallet'))
-        self.worker.refresh_from_db();self.assertEqual(self.worker.stellar_address,'')
+        self.worker.refresh_from_db();self.assertEqual(self.worker.stellar_address,address)
+        self.assertNotIn('wallet_connected_address',self.client.session)
+
+    def test_wallet_prepare_requires_a_live_freighter_session(self):
+        address=Keypair.random().public_key
+        self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker)
+        response=self.client.post(reverse('wallet_prepare'),data={
+            'destination':Keypair.random().public_key,'asset':'XLM','amount':'1','memo':'Push test',
+        },content_type='application/json')
+        self.assertEqual(response.status_code,400)
+        self.assertIn('Reconnect Freighter',response.json()['message'])
+
+    def test_wallet_prepare_rejects_a_stale_session_after_receiving_address_changes(self):
+        old_address=Keypair.random().public_key
+        self.worker.stellar_address=Keypair.random().public_key
+        self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker)
+        self.connect_wallet_session(old_address)
+        response=self.client.post(reverse('wallet_prepare'),data={
+            'destination':Keypair.random().public_key,'asset':'XLM','amount':'1','memo':'Push test',
+        },content_type='application/json')
+        self.assertEqual(response.status_code,400)
+        self.assertIn('Reconnect Freighter',response.json()['message'])
+        self.assertNotIn('wallet_connected_address',self.client.session)
+
+    def test_prepare_payment_identifies_an_unfunded_source_before_the_recipient(self):
+        source=Keypair.random().public_key;destination=Keypair.random().public_key
+        def missing_account(_address, *, missing_message):
+            raise StellarVerificationError(missing_message)
+        with patch('core.stellar.account_balances',side_effect=missing_account):
+            with self.assertRaisesRegex(StellarVerificationError,'active Freighter account'):
+                prepare_payment(source=source,destination=destination,amount='1',memo='Push test')
+
+    def test_prepare_payment_identifies_a_missing_recipient_separately(self):
+        source=Keypair.random().public_key;destination=Keypair.random().public_key
+        funded={'xlm':Decimal('10'),'usdc':Decimal('0'),'has_usdc_trustline':False}
+        def account_or_missing(address, *, missing_message):
+            if address == source:
+                return funded
+            raise StellarVerificationError(missing_message)
+        with patch('core.stellar.account_balances',side_effect=account_or_missing):
+            with self.assertRaisesRegex(StellarVerificationError,'recipient .* does not exist'):
+                prepare_payment(source=source,destination=destination,amount='1',memo='Push test')
+
+    def test_wallet_sync_clears_stale_connection_and_detects_account_change(self):
+        saved=Keypair.random().public_key;active=Keypair.random().public_key
+        self.worker.stellar_address=saved;self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker);self.connect_wallet_session(saved)
+        disconnected=self.client.post(reverse('wallet_sync'),data={'connected':False},content_type='application/json')
+        self.assertEqual(disconnected.status_code,200)
+        self.assertFalse(disconnected.json()['connected'])
+        self.assertNotIn('wallet_connected_address',self.client.session)
+        changed=self.client.post(reverse('wallet_sync'),data={
+            'connected':True,'address':active,'network':'TESTNET',
+        },content_type='application/json')
+        self.assertEqual(changed.json()['state'],'mismatch')
+        self.worker.refresh_from_db();self.assertEqual(self.worker.stellar_address,saved)
+
+    def test_wallet_sync_restores_matching_testnet_session(self):
+        address=Keypair.random().public_key
+        self.worker.stellar_address=address;self.worker.save(update_fields=['stellar_address'])
+        self.login_as(self.worker)
+        response=self.client.post(reverse('wallet_sync'),data={
+            'connected':True,'address':address,'network':'TESTNET',
+        },content_type='application/json')
+        self.assertTrue(response.json()['connected'])
+        self.assertEqual(self.client.session['wallet_connected_address'],address)
 
     def test_wallet_shows_recorded_and_pending_job_values_separately(self):
         paid=self.make_assignment('paid')
@@ -952,6 +1028,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(connected.status_code,200)
         self.worker.refresh_from_db()
         self.assertEqual(self.worker.stellar_address,address)
+        self.assertEqual(self.client.session['wallet_connected_address'],address)
 
     def test_wallet_connect_uses_render_safe_csrf_meta_token(self):
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'

@@ -91,7 +91,7 @@ class StaffWorkspaceBoundaryMiddleware:
     MEMBER_ROUTES = {
         'workspace','analytics','support','support_ticket','work','assigned_work',
         'activity_status','support_feedback','notifications','notifications_read_all','notification_read',
-        'inbox','conversation','wallet','payments','wallet_connect','profile',
+        'inbox','conversation','wallet','payments','wallet_connect','wallet_sync','profile',
         'jobs','job_detail','public_profile','profile_image','resume_download',
         'job_create','job_edit','job_close','apply','select','withdraw',
         'assignment','assignment_message','assignment_action',
