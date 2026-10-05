@@ -1,5 +1,13 @@
 # Push — Stellar testnet MVP
 
+## Current first-phase changes
+
+Member payments are assignment-only. The wallet retains balances, receiving details and historical transfers, but general email/address transfers are blocked by both preparation and submission endpoints. Explicit Disconnect remains in effect until the member reconnects, even if Freighter still permits the site.
+
+Project messages open after agreement acceptance. Both message endpoints enforce the same rule; completed and cancelled conversations are read-only. Selecting a payment route does not lock funds: active escrow is still disabled.
+
+See `STAGING.md` for hosted staging setup and release gates. `render-staging.yaml` requires separate protected credentials; it does not mean a staging service has been provisioned. `.github/workflows/checks.yml` runs application, wallet-state and contract tests. GitHub branch protection and Render deployment settings require separate configuration.
+
 This folder is the canonical Push project. The original static landing site has been audited and mapped in `ORIGINAL-MIGRATION.md`; system behaviour and authority are defined in `SYSTEM-DESIGN.md` and `PRODUCT-RULES.md`.
 
 This app demonstrates accounts, private-by-default profiles, jobs, applications, a participant-only messaging inbox, earnings summaries, and an assignment from acceptance to payment. **It is not a public launch or production escrow service.** The wallet now builds exact short-lived Stellar testnet transactions, obtains approval in Freighter, submits them to Horizon and records the confirmed hash. Generic USDC and bank/card remain simulation choices. Testnet assets have no monetary value. Push never collects wallet secret keys and has no proprietary token.
