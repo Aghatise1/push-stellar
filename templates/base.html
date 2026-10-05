@@ -33,6 +33,7 @@
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260929-1">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20261005-1">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
+<link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261006-1">
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
@@ -152,7 +153,7 @@
   </nav>
   <script src="{% static 'vendor/gsap.min.js' %}" defer></script>
   <script src="{% static 'vendor/ScrollTrigger.min.js' %}" defer></script>
-  <script src="{% static 'app-motion.js' %}?v=20261001-2" defer></script>
+  <script src="{% static 'app-motion.js' %}?v=20261006-1" defer></script>
   <script src="{% static 'vendor/freighter-api.min.js' %}" defer></script>
   <script src="{% static 'wallet-connect.js' %}?v=20261005-3" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>

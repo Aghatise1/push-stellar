@@ -21,51 +21,7 @@
       if (document.querySelector(selector)) gsap.to(selector, vars);
     }
 
-    if (document.querySelector('.app-reveal')) {
-      gsap.from('.app-reveal', {
-        opacity: 0,
-        y: 12,
-        duration: 0.22,
-        stagger: 0.04,
-        ease: 'power3.out',
-        clearProps: 'transform,opacity'
-      });
-    }
-
-    var roleDashboard = document.querySelector('[data-role-dashboard]');
-    if (roleDashboard) {
-      gsap.from('[data-role-reveal]', {
-        opacity: 0,
-        y: 10,
-        duration: 0.24,
-        ease: 'power3.out',
-        clearProps: 'transform,opacity'
-      });
-      gsap.from('[data-role-card]', {
-        opacity: 0,
-        y: 12,
-        duration: 0.26,
-        stagger: 0.045,
-        delay: 0.05,
-        ease: 'power3.out',
-        clearProps: 'transform,opacity'
-      });
-    }
-
-    if (window.ScrollTrigger) {
-      gsap.registerPlugin(window.ScrollTrigger);
-      gsap.utils.toArray('.scroll-reveal').forEach(function (section) {
-        gsap.from(section, {
-          scrollTrigger: { trigger: section, start: 'top 88%', once: true },
-          opacity: 0,
-          y: 16,
-          duration: 0.26,
-          ease: 'power3.out',
-          clearProps: 'transform,opacity'
-        });
-      });
-    }
-
+    // Task controls render immediately; only decorative diagrams animate.
     var stage = document.querySelector('.motion-stage');
     var flowToken = document.querySelector('.flow-token');
     if (stage && flowToken) {
