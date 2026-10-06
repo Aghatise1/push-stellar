@@ -40,3 +40,7 @@ services:
         value: ''
       - key: PUSH_SOROBAN_ESCROW_ENABLED
         value: false
+      - key: PUSH_TESTNET_ESCROW_ENABLED
+        value: false
+      - key: PUSH_TESTNET_ESCROW_STAFF_CONTRACT
+        sync: false

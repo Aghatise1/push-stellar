@@ -1,3 +1,8 @@
 [data-escrow-room] [hidden] { display: none !important; }
 [data-escrow-room] form + form, [data-escrow-room] details { margin-top: 1.25rem; }
 [data-escrow-room] .agreement-check { margin-block: 1rem; }
+/* Public addresses must wrap without pushing controls beyond the viewport. */
+.wallet-address { overflow-wrap: anywhere; word-break: break-word; display: block; max-width: 100%; }
+
+[data-escrow-room] form { display: grid; gap: .75rem; margin-bottom: 1.25rem; min-width: 0; }
+[data-escrow-room] .moderation-row > * { min-width: 0; }

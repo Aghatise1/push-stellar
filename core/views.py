@@ -33,7 +33,7 @@ from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, prepare_payment, submit_signed_payment, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
 
-TERMS_VERSION='2026-09-25.1'
+TERMS_VERSION='2026-10-06.1'
 logger=logging.getLogger(__name__)
 
 
@@ -836,7 +836,7 @@ def workspace(request):
     worker_assignments=Assignment.objects.filter(worker=request.user)
     verified=Payment.objects.filter(assignment__worker=request.user,simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     simulated=Payment.objects.filter(assignment__worker=request.user,simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
-    pending=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
+    pending=worker_assignments.filter(Q(escrow_required=True) if settings.PUSH_TESTNET_ONLY else Q()).filter(status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     completed=worker_assignments.filter(status='paid').count()
     active=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).count()
     participant_messages=Message.objects.filter(Q(assignment__worker=request.user)|Q(assignment__job__owner=request.user)).distinct()
@@ -844,7 +844,7 @@ def workspace(request):
     return render(request,'workspace.html',{'assignments':assignments,'own_jobs':Job.objects.filter(owner=request.user),
         'applications':Application.objects.filter(worker=request.user).select_related('job'),
         'verified_earnings':verified,'simulated_earnings':simulated,'pending_earnings':pending,
-        'total_earnings':verified+simulated,'completed_count':completed,'active_count':active,
+        'total_earnings':verified if settings.PUSH_TESTNET_ONLY else verified+simulated,'completed_count':completed,'active_count':active,
         'message_count':message_count,'recent_messages':participant_messages.select_related('sender','assignment__job').order_by('-created_at')[:3]})
 
 
@@ -872,7 +872,7 @@ def analytics(request):
             'selection_rate':round(selected_total*100/application_total) if application_total else 0,
             'active':worker_assignments.exclude(status__in=['paid','cancelled']).count(),
             'completed':completed_worker.count(),
-            'recorded_value':completed_worker.exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0,
+            'recorded_value':Payment.objects.filter(assignment__worker=request.user,simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,
         },
         'hiring_metrics':{
             'jobs':posted_jobs.count(),'applications':Application.objects.filter(job__owner=request.user,withdrawn=False).count(),
@@ -965,9 +965,9 @@ def wallet(request):
             balance_error=str(exc)
     form=WalletRequestForm()
     payment_records=Payment.objects.filter(assignment__worker=request.user)
-    recorded_earnings=payment_records.exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    recorded_earnings=payment_records.filter(simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     pending_earnings=Assignment.objects.filter(
-        worker=request.user,status__in=['awaiting_funding','funded','submitted']
+        Q(escrow_required=True) if settings.PUSH_TESTNET_ONLY else Q(),worker=request.user,status__in=['awaiting_funding','funded','submitted']
     ).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'wallet.html',{
         'form':form,'balances':balances,'balance_error':balance_error,
@@ -1014,7 +1014,7 @@ def wallet_prepare(request):
         assignment_item=get_object_or_404(
             Assignment.objects.select_related('job','worker'),pk=assignment_id,job__owner=request.user,
         )
-        if assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+        if settings.PUSH_TESTNET_ONLY or assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
             return JsonResponse({'ok':False,'message':'This assignment is not ready for a Stellar testnet payment.'},status=409)
         if not assignment_item.worker.stellar_address:
             return JsonResponse({'ok':False,'message':'The worker has no Stellar testnet receiving address.'},status=400)
@@ -1061,7 +1061,7 @@ def _record_submitted_transfer(request,intent,transaction_hash):
             assignment_item=Assignment.objects.select_for_update().select_related('job','worker').get(
                 pk=assignment_id,job__owner=request.user,
             )
-            if assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+            if settings.PUSH_TESTNET_ONLY or assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
                 raise StellarVerificationError('This assignment changed before the payment completed. The transaction hash remains available for support review.')
             if (assignment_item.worker.stellar_address != intent['destination']
                     or str(assignment_item.budget) != str(intent['amount'])
@@ -1094,6 +1094,8 @@ def _record_submitted_transfer(request,intent,transaction_hash):
 @verified
 @require_POST
 def wallet_submit(request):
+    if settings.PUSH_TESTNET_ONLY:
+        return JsonResponse({'ok':False,'message':'Direct payment requests are retired. Use the escrow workroom. If an earlier transfer was already broadcast, keep its transaction hash for support reconciliation.'},status=409)
     try:
         payload=_json_payload(request)
     except ValueError as exc:
@@ -1136,9 +1138,9 @@ def payments(request):
     records=Payment.objects.filter(assignment__worker=request.user).select_related('assignment__job')
     network_total=records.filter(simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     simulated_total=records.filter(simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
-    pending=Assignment.objects.filter(worker=request.user,status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
+    pending=Assignment.objects.filter(Q(escrow_required=True) if settings.PUSH_TESTNET_ONLY else Q(),worker=request.user,status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'payments.html',{'payments':records,'verified_earnings':network_total,
-        'simulated_earnings':simulated_total,'total_earnings':network_total+simulated_total,'pending_earnings':pending,'xlm_earnings':records.filter(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,'xlm_pending':Assignment.objects.filter(worker=request.user,escrow_required=True,agreement_snapshot__payment_asset='XLM',status__in=['awaiting_funding','funded','submitted']).aggregate(total=Sum('budget'))['total'] or 0})
+        'simulated_earnings':simulated_total,'total_earnings':network_total if settings.PUSH_TESTNET_ONLY else network_total+simulated_total,'pending_earnings':pending,'xlm_earnings':records.filter(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,'xlm_pending':Assignment.objects.filter(worker=request.user,escrow_required=True,agreement_snapshot__payment_asset='XLM',status__in=['awaiting_funding','funded','submitted']).aggregate(total=Sum('budget'))['total'] or 0})
 
 
 def conversation_list(user):
@@ -1535,7 +1537,7 @@ def select(request,pk):
         }
         assignment = Assignment.objects.create(job=application.job,worker=application.worker,
             scope=application.job.deliverables,budget=application.job.budget,agreement_snapshot=snapshot,
-            escrow_required=bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT))
+            escrow_required=settings.PUSH_TESTNET_ONLY or bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT))
         Event.objects.create(assignment=assignment,actor=request.user,kind='Worker selected')
         notify(application.worker,'selection','You were selected',f'{application.job.owner.display_name} selected you for {application.job.title}.',f'/assignments/{assignment.pk}/')
     messages.success(request,'Worker selected. They must accept the agreed scope before a payment route is selected.')
@@ -1553,6 +1555,8 @@ def assignment(request,pk):
     if item.escrow_required:
         from .escrow_views import workroom
         return workroom(request,item)
+    if settings.PUSH_TESTNET_ONLY:
+        return render(request,'legacy_assignment.html',{'item':item,'is_owner':item.job.owner_id==request.user.pk,'can_convert':item.status in ('awaiting_acceptance','awaiting_funding') and not Payment.objects.filter(assignment=item).exists() and not WalletTransfer.objects.filter(assignment=item).exists()})
     stellar_request = None
     if item.status == 'submitted' and item.payment_method == 'stellar_usdc_testnet' and item.worker.stellar_address:
         memo = assignment_memo(item.id)
@@ -1593,6 +1597,9 @@ def assignment_action(request,pk):
     if item.escrow_required:
         from .escrow_views import agreement_action
         return agreement_action(request,item)
+    if settings.PUSH_TESTNET_ONLY:
+        from .escrow_views import convert_legacy
+        return convert_legacy(request,item)
     form = ActionForm(request.POST)
     if not form.is_valid(): return HttpResponseBadRequest('Invalid action. Return to the assignment and try again.')
     action = form.cleaned_data['action']
@@ -1938,6 +1945,8 @@ def moderate_dispute(request,pk):
     dispute=get_object_or_404(Dispute.objects.select_related('assignment__job','assignment__worker','opened_by'),pk=pk)
     if dispute.assignment.escrow_required:
         return redirect('escrow_detail',pk=dispute.assignment_id)
+    if settings.PUSH_TESTNET_ONLY and request.method=='POST':
+        return HttpResponseBadRequest('Historical simulation disputes cannot create new payment records. Start a new testnet escrow agreement.')
     form=DisputeResolutionForm(request.POST or None)
     sanction_form=SanctionForm(prefix='sanction')
     if request.method == 'POST' and form.is_valid():
@@ -2019,7 +2028,7 @@ def staff_team(request):
         target=User.objects.get(email__iexact=form.cleaned_data['email'])
         actor_role=staff_role(request.user)
         requested_role=form.cleaned_data['role']
-        if actor_role == 'admin' and requested_role in {'owner','admin'}:
+        if actor_role == 'admin' and (requested_role in {'owner','admin'} or staff_role(target) in {'owner','admin'}):
             form.add_error('role','Only an owner can grant owner or administrator access.')
         elif target == request.user and requested_role != actor_role:
             form.add_error('role','Another owner or administrator must change your own operations role.')
@@ -2052,6 +2061,8 @@ def staff_access_update(request,pk):
     if decision == 'approved':
         access.approved_by=request.user;access.approved_at=timezone.now()
     access.save(update_fields=['status','approved_by','approved_at','updated_at'])
+    if decision in ('suspended','revoked') and hasattr(access.user,'escrow_staff_wallet'):
+        messages.warning(request,'Push access is blocked. Also revoke this wallet in Escrow staff access; the contract permission remains until its revocation is confirmed.')
     audit(request.user,'staff.access.updated',access,{'status':decision,'user_id':access.user_id})
     messages.success(request,f'Operations access for {access.user.email} is now {access.get_status_display().lower()}.')
     return redirect('staff_team')

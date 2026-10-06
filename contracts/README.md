@@ -1,4 +1,16 @@
-# Push milestone contract
+# Push testnet contracts
+
+The current escrow implementation is `push-escrow-staff`. It accepts the configured test XLM and official test USDC asset contracts, locks funds before work, and uses individually authorised staff wallets for disputes. `push-escrow` and `push-milestone` remain historical versions; existing agreements keep their original authority.
+
+Build the current version with `stellar contract build --package push-escrow-staff`; test all versions with `cargo test --locked --workspace`.
+
+The staff contract constructor requires `owner`, `xlm` and `usdc` addresses. The owner is fixed for this testnet version. `set_staff(actor, wallet, role)` uses roles 0 (revoked), 1 (reviewer), 2 (administrator); the constructor owner is role 3. Administrators can manage reviewers; only the owner can manage administrators. `resolve(id, reviewer, client_amount, worker_amount)` requires that reviewer's signature and current contract permission, and rejects client/worker conflicts. Every split goes only to the agreement's original wallets.
+
+Public disposable QA evidence, including Django endpoint tests, is in `deployments/testnet-staff-escrow-qa.json`. **That QA owner is not the live Push owner.** Register the real owner's wallet through Operations > Escrow signing access before deploying a distinct live-testnet instance and enabling it. No private key belongs in server settings.
+
+Simulation/direct-payment actions have been retired in the application. New assignments require escrow, and payment controls remain unavailable until the staff contract is configured and activated. Mainnet is unsupported. These contracts have not received an independent security audit. See `../docs/testnet-transition-plan.md` for activation and recovery limitations.
+
+## Historical milestone contract
 
 `push-milestone` is a Soroban testnet contract for one funded freelance milestone. The client creates and funds an agreement, the worker records a delivery hash, and the client can release the exact locked amount. Expired or disputed agreements have explicit refund, claim and arbiter-split paths.
 
@@ -6,7 +18,7 @@ The contract never stores private keys. Every client, worker and arbiter action 
 
 ## Status
 
-The contract is deployed and its create → fund → submit → approve lifecycle has been exercised on Stellar testnet. Deployment evidence is in `deployments/testnet.json`. It has automated contract tests, but it has **not** received an independent security audit. Push therefore publishes it for testnet evaluation while keeping contract-held payments disabled in the web application. The current wallet flow sends test assets directly from Freighter.
+The historical milestone contract is deployed and its create → fund → submit → approve lifecycle was exercised on Stellar testnet. Deployment evidence is in `deployments/testnet.json`. It is retained for historical evaluation, not used for new staff-governed agreements.
 
 ## Build and test
 

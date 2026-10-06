@@ -1,3 +1,4 @@
+from core import escrow_staff
 from django.conf import settings
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
@@ -109,6 +110,10 @@ urlpatterns = [
     path('moderation/invitations/<uuid:pk>/revoke/',views.revoke_invitation,name='revoke_invitation'),
     path('moderation/accounts/<int:pk>/sanction/',views.sanction_account,name='sanction_account'),
     path('moderation/accounts/<int:pk>/sanctions/<int:sanction_pk>/lift/',views.lift_sanction,name='lift_sanction'),
+    path('moderation/escrow-staff/',escrow_staff.panel,name='escrow_staff'),
+    path('moderation/escrow-staff/prepare/',escrow_staff.prepare,name='escrow_staff_prepare'),
+    path('moderation/escrow-staff/submit/',escrow_staff.submit,name='escrow_staff_submit'),
+    path('moderation/escrow-staff/status/',escrow_staff.status,name='escrow_staff_status'),
     path('moderation/team/',views.staff_team,name='staff_team'),
     path('moderation/team/<int:pk>/access/',views.staff_access_update,name='staff_access_update'),
     path('moderation/tickets/',views.operations_tickets,name='operations_tickets'),

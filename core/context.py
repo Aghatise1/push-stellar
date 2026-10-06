@@ -4,7 +4,7 @@ from .models import Assignment, Notification
 from .access import staff_role
 
 STAFF_PORTAL_ROUTES = {
-    'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
+    'escrow_staff', 'staff_entry', 'staff_dashboard', 'owner_dashboard', 'admin_dashboard',
     'trust_support_dashboard', 'moderation', 'staff_invitations',
     'moderate_dispute', 'moderate_job', 'review_waitlist', 'staff_team', 'staff_guide',
     'operations_tickets', 'operations_ticket', 'operations_users',
@@ -53,7 +53,9 @@ def app_context(request):
     public_origin = settings.PUSH_ORIGIN.rstrip('/')
     canonical_path = request.path if request.path.endswith('/') else f'{request.path}/'
     seo_indexable = settings.PUSH_DEPLOYMENT_TIER != 'staging' and not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES
-    return {'payment_notice':'Preview · Stellar testnet and simulated payments only.',
+    return {'payment_notice':'Stellar testnet · Test tokens have no monetary value.',
+            'testnet_only':settings.PUSH_TESTNET_ONLY,
+            'escrow_live':bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT),
             'is_staging':settings.PUSH_DEPLOYMENT_TIER == 'staging',
             'local_email': not settings.EMAIL_DELIVERY_CONFIGURED,
             'google_auth_enabled': settings.GOOGLE_AUTH_ENABLED,

@@ -21,14 +21,15 @@ from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, prepare_payment, valid_account_id, validate_signed_payment, verify_payment
 from .email_backend import BrevoEmailBackend
 
-@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+# Legacy workflow regression coverage. New testnet-only policy is covered separately.
+@override_settings(PUSH_TESTNET_ONLY=False,EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class WorkspaceTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         accepted=timezone.now()
-        cls.owner=User.objects.create_user(username='owner@example.test',email='owner@example.test',password='Independent-cobalt-732!',display_name='Hiring Account',email_verified=True,terms_version='2026-09-25.1',terms_accepted_at=accepted)
-        cls.worker=User.objects.create_user(username='worker@example.test',email='worker@example.test',password='Independent-cobalt-732!',display_name='Worker',email_verified=True,terms_version='2026-09-25.1',terms_accepted_at=accepted)
-        cls.outsider=User.objects.create_user(username='other@example.test',email='other@example.test',password='Independent-cobalt-732!',display_name='Other',email_verified=True,terms_version='2026-09-25.1',terms_accepted_at=accepted)
+        cls.owner=User.objects.create_user(username='owner@example.test',email='owner@example.test',password='Independent-cobalt-732!',display_name='Hiring Account',email_verified=True,terms_version='2026-10-06.1',terms_accepted_at=accepted)
+        cls.worker=User.objects.create_user(username='worker@example.test',email='worker@example.test',password='Independent-cobalt-732!',display_name='Worker',email_verified=True,terms_version='2026-10-06.1',terms_accepted_at=accepted)
+        cls.outsider=User.objects.create_user(username='other@example.test',email='other@example.test',password='Independent-cobalt-732!',display_name='Other',email_verified=True,terms_version='2026-10-06.1',terms_accepted_at=accepted)
     def setUp(self):
         self.job=Job.objects.create(owner=self.owner,project='Test Project',title='Design a useful page',description='Brief',deliverables='One accessible page',category='UI/UX Design',budget=400,deadline=timezone.localdate()+timedelta(days=14),moderation_status='approved')
     def login_as(self,user): self.client.force_login(user)
@@ -984,8 +985,9 @@ class WorkspaceTests(TestCase):
         self.login_as(self.worker)
         response=self.client.get(reverse('wallet'))
         self.assertContains(response,'Job earnings are separate from wallet assets')
-        self.assertContains(response,'$400.00')
-        self.assertContains(response,'$250.00')
+        self.assertContains(response,'0.00 test USDC')
+        self.assertNotContains(response,'400.00 test USDC')
+        self.assertContains(response,'250.00 test USDC')
     def test_freighter_connect_accepts_only_valid_testnet_public_address(self):
         address='GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
         url=reverse('wallet_connect')
@@ -1297,7 +1299,7 @@ class WorkspaceTests(TestCase):
         self.assertRedirects(self.client.get(reverse('work')),reverse('accept_terms'))
         response=self.client.post(reverse('accept_terms'),{'accept_terms':'on'})
         self.assertRedirects(response,reverse('workspace'))
-        self.worker.refresh_from_db();self.assertEqual(self.worker.terms_version,'2026-09-25.1')
+        self.worker.refresh_from_db();self.assertEqual(self.worker.terms_version,'2026-10-06.1')
 
     def test_accepting_assignment_requires_explicit_agreement_confirmation(self):
         item=self.make_assignment();self.login_as(self.worker)

@@ -165,7 +165,7 @@ class EscrowEndpointTests(TestCase):
     def test_old_assignment_keeps_original_workroom(self):
         self.item.escrow_required=False;self.item.save();self.client.force_login(self.owner)
         response=self.client.get(reverse('assignment',args=[self.item.pk]))
-        self.assertTemplateUsed(response,'assignment.html');self.assertNotContains(response,'data-escrow-room')
+        self.assertTemplateUsed(response,'legacy_assignment.html');self.assertNotContains(response,'data-escrow-room')
 
     @override_settings(PUSH_TESTNET_ESCROW_ENABLED=True,PUSH_TESTNET_ESCROW_CONTRACT='Ctest')
     def test_xlm_totals_are_separate_from_dollar_totals(self):
@@ -176,11 +176,11 @@ class EscrowEndpointTests(TestCase):
         self.assertEqual(response.context['verified_earnings'],0)
         self.assertEqual(response.context['xlm_earnings'],100)
         self.assertContains(response,'100 test XLM')
-    def test_disabled_asset_selector_ignores_injected_xlm(self):
+    def test_testnet_asset_selector_accepts_xlm_even_before_activation(self):
         from .forms import JobForm
         form=JobForm({'project':'Test','title':'Test job','category':'UI/UX Design','description':'Brief','deliverables':'File','budget':100,'payment_asset':'XLM','deadline':str(self.job.deadline)})
         self.assertTrue(form.is_valid(),form.errors)
-        self.assertEqual(form.cleaned_data['payment_asset'],'USDC')
+        self.assertEqual(form.cleaned_data['payment_asset'],'XLM')
 
     @override_settings(PUSH_TESTNET_ESCROW_ENABLED=True,PUSH_TESTNET_ESCROW_CONTRACT='Ctest')
     @patch('core.escrow_records.chain.read_agreement')

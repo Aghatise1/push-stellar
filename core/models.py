@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 from django.db.models.functions import Lower
 from django.contrib.auth.models import AbstractUser
@@ -85,7 +86,7 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     @property
     def budget_display(self):
-        return f'{self.budget} test XLM' if self.payment_asset=='XLM' else f'${self.budget}'
+        return f'{self.budget} test {self.payment_asset}' if settings.PUSH_TESTNET_ONLY or self.payment_asset=='XLM' else f'${self.budget}'
 
     class Meta:
         ordering = ['-created_at']
@@ -177,6 +178,7 @@ class Payment(models.Model):
     def amount_display(self):
         if self.method in ('escrow_xlm','escrow_usdc'):
             return f"{self.amount} test {self.method.removeprefix('escrow_').upper()}"
+        if not self.simulated and self.network=='stellar_testnet': return f'{self.amount} test USDC'
         return f'${self.amount}'
 
 class WalletTransfer(models.Model):
@@ -388,6 +390,7 @@ class DocumentationArticle(models.Model):
 
 
 class EscrowAgreement(models.Model):
+    staff_governed = models.BooleanField(default=False)
     assignment = models.OneToOneField(Assignment,on_delete=models.PROTECT,related_name='escrow')
     reviewer = models.ForeignKey(User,on_delete=models.PROTECT,related_name='escrow_reviews')
     contract = models.CharField(max_length=56)
@@ -421,5 +424,28 @@ class EscrowTransaction(models.Model):
     tx_hash = models.CharField(max_length=64,unique=True)
     state = models.CharField(max_length=16,default='prepared')
     payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True,blank=True)
+
+
+class EscrowStaffWallet(models.Model):
+    user = models.OneToOneField(User,on_delete=models.PROTECT,related_name='escrow_staff_wallet')
+    address = models.CharField(max_length=56,unique=True)
+    verified_at = models.DateTimeField(auto_now_add=True)
+
+
+class EscrowStaffOperation(models.Model):
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    actor = models.ForeignKey(User,on_delete=models.PROTECT,related_name='escrow_staff_operations')
+    target = models.ForeignKey(User,on_delete=models.PROTECT,related_name='escrow_access_operations')
+    action = models.CharField(max_length=16)
+    contract = models.CharField(max_length=56,blank=True)
+    source = models.CharField(max_length=56)
+    wallet = models.CharField(max_length=56)
+    role = models.PositiveSmallIntegerField(default=0)
+    prepared_xdr = models.TextField()
+    signed_xdr = models.TextField(blank=True)
+    tx_hash = models.CharField(max_length=64,unique=True)
+    state = models.CharField(max_length=16,default='prepared')
     created_at = models.DateTimeField(auto_now_add=True)
     confirmed_at = models.DateTimeField(null=True,blank=True)

@@ -1,0 +1,78 @@
+{
+  "contract": "CC5WR27CDIUL2LKH45HUZARDTZAY4MXJXTYNVRNRXCJZBWYFOQA2VNX3",
+  "network": "testnet",
+  "purpose": "disposable QA only; not live owner configuration",
+  "transactions": [
+    {
+      "action": "grant support",
+      "hash": "010ace0ca90f24e4fcf8ed2bebad939ff275eeb5a8244e8aabd0db3aebed98f3"
+    },
+    {
+      "action": "XLM fund",
+      "hash": "a52110f88e8709a57e3804b5befe3c89530a002ec6b4cedaeef0d1446aeb009f"
+    },
+    {
+      "action": "XLM submit",
+      "hash": "7e7bf0e4812c5fd2a61043624b8a077cbf9a1094beca249a459b24e6e4751920"
+    },
+    {
+      "action": "XLM approve",
+      "hash": "952ba2b079f29cd286e6a71063404c494419b54daee598446aa35b4a41abd814"
+    },
+    {
+      "action": "USDC fund",
+      "hash": "338242033ab79b2d31a564229188f3086509368151fa30b966180c958270f839"
+    },
+    {
+      "action": "USDC dispute",
+      "hash": "1bf205cd414a4dd08a13ab301972212bc74190ac878f8bd4a20edf2f44d78618"
+    },
+    {
+      "action": "revoke support",
+      "hash": "828ca85d5ed201c96bd3ee0e6c74b996b880142faac320458cdf9e38150c0660"
+    },
+    {
+      "action": "restore support",
+      "hash": "0cec77094577559089df3fabd24040c4763ef42da28012fc3e95488f21145668"
+    },
+    {
+      "action": "USDC support split",
+      "hash": "95ec0acbb1266545bdaf2228a893c94fb7b60ae3556b3cb59dcb8796cda3a8bf"
+    }
+  ],
+  "wasm_sha256": "bf6b6e976e27d3bc97d3a5adf8567166609948d1aa9f3efaca2f5174f7e60659",
+  "deployment_transaction": "8feeb6d6486c80c466de3e71567ec474b161af37d45a69617a8471aad7226203",
+  "http_verification": [
+    {
+      "action": "fund",
+      "hash": "90a87e00f27467581e2fedd1a9a550495a09c1a51152434899e0df4e9ccc24f9",
+      "asset": "XLM"
+    },
+    {
+      "action": "submit",
+      "hash": "beff8fc5ec76ad7a99d823f023602199627b5ca9612d79f01b2b179355730a4d",
+      "asset": "XLM"
+    },
+    {
+      "action": "approve",
+      "hash": "fb8cba5d43a8ed30f1c10686815a532e2341d2e7e890dcd733fcf3181e7140a8",
+      "asset": "XLM"
+    },
+    {
+      "action": "fund",
+      "hash": "1b838a0fa00985444a3e0a2d8bee7ffddde1172b89f361bcf57162449fa1645f",
+      "asset": "USDC"
+    },
+    {
+      "action": "dispute",
+      "hash": "d7419623270dfa740b984444b226a3394543cc9ed3d1fbc737888401f4f3b8a6",
+      "asset": "USDC"
+    },
+    {
+      "action": "resolve",
+      "hash": "d7d67b2e12d2138494ef9dc54ee678974526c1b452f857117e0d22823f4b34bc",
+      "asset": "USDC"
+    }
+  ],
+  "warning": "Disposable QA owner. Do not configure this contract as the live Push staff authority."
+}

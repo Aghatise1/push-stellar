@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Escrow staff access{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'escrow.css' %}">{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="tag">Owner · Admin · Trust &amp; Support</span><h1>Escrow staff access</h1><p class="lead">Use your own wallet to sign dispute decisions. Push never asks for your secret key.</p></div><a class="button secondary" href="{% url 'wallet' %}">Connect wallet</a></div>
+<div class="notice">There are two permissions: your approved Push staff role and your wallet’s contract permission. Suspending a Push account blocks access here immediately. An owner or authorised admin must also sign its on-chain revocation to remove direct contract access.</div>
+<section data-escrow-room data-prepare="{% url 'escrow_staff_prepare' %}" data-submit="{% url 'escrow_staff_submit' %}">
+{% csrf_token %}
+<h2>Your verified wallet</h2>
+{% if registered %}<p>{{ request.user.email }}</p><code class="wallet-address">{{ registered.address }}</code><p>Wallet ownership verified. Changing your normal receiving address does not change this staff signing wallet.</p>
+{% else %}<form data-escrow-action="prove"><p>First connect Freighter on testnet. This signature proves ownership; it does not send a transaction or transfer tokens.</p><label for="staff-wallet">Your Stellar public wallet address</label><input id="staff-wallet" name="wallet" minlength="56" maxlength="56" required placeholder="G…" autocomplete="off"><button class="button">Verify my wallet in Freighter</button></form>{% endif %}
+{% if not contract %}<p class="notice">The staff escrow contract has not been activated. Wallet registration is available; contract grants and settlements remain unavailable.</p>{% endif %}
+<h2>Staff wallets</h2>
+{% for wallet in wallets %}<article class="moderation-row"><div><strong>{{ wallet.user.display_name }}</strong><p>{{ wallet.user.email }}</p><code class="wallet-address">{{ wallet.address }}</code><p>Wallet registered. Check the contract for its current permission.</p><button class="button secondary small" type="button" data-staff-check="{{ wallet.pk }}" data-endpoint="{% url 'escrow_staff_status' %}">Check on-chain access</button></div>
+{% if manager and wallet.user != request.user %}<form data-escrow-action="set_staff"><input type="hidden" name="target" value="{{ wallet.user.pk }}"><label for="role-{{ wallet.pk }}">Contract permission</label><select id="role-{{ wallet.pk }}" name="role"><option value="0">Revoke permission</option><option value="1">Trust &amp; Support reviewer</option>{% if staff_portal_role == 'owner' %}<option value="2">Administrator</option>{% endif %}</select><button class="button"{% if not contract %} disabled{% endif %}>Review change in Freighter</button></form>{% endif %}</article>{% empty %}<p>No staff wallets registered yet.</p>{% endfor %}
+<p>Only an owner can grant administrator permission. An administrator can grant or revoke reviewer permission. Staff cannot settle jobs in which they are the client or worker. Dispute settlements can only send funds to the agreed client and worker wallets.</p>
+{% for operation in operations %}<p>{{ operation.created_at }} · {{ operation.action }} · {{ operation.target.email }} <button class="button secondary small" type="button" data-escrow-check="{{ operation.pk }}">Check pending request</button></p>{% endfor %}
+<p data-escrow-status role="status" aria-live="polite"></p><button class="button secondary" data-escrow-retry hidden>Check transaction status</button>
+</section>
+{% if manager %}<a href="{% url 'staff_team' %}">Manage Push staff roles</a>{% endif %}
+{% endblock %}
+{% block extra_scripts %}<script src="{% static 'escrow.js' %}" defer></script><script src="{% static 'escrow-staff.js' %}" defer></script>{% endblock %}
