@@ -496,8 +496,8 @@ class WorkspaceTests(TestCase):
         self.assertNotContains(self.client.get(reverse('admin_dashboard')), 'Open member workspace')
         self.assertEqual(self.client.get(reverse('owner_dashboard')).status_code, 403)
         self.client.logout();self.grant_staff(self.owner,'owner');self.login_as(self.owner)
-        self.assertContains(self.client.get(reverse('workspace')),'Staff workspace switch')
-        self.assertContains(self.client.get(reverse('owner_dashboard')),'Open member workspace')
+        self.assertRedirects(self.client.get(reverse('workspace')),reverse('staff_dashboard'),fetch_redirect_response=False)
+        self.assertNotContains(self.client.get(reverse('owner_dashboard')),'Open member workspace')
 
     def test_operations_pages_use_a_staff_specific_mobile_dock(self):
         self.grant_staff(self.owner,'admin');self.login_as(self.owner)

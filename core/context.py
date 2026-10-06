@@ -50,6 +50,10 @@ def app_context(request):
         wallet_session_connected = False
     resolved_name = getattr(getattr(request, 'resolver_match', None), 'url_name', None)
     portal_role = staff_role(request.user)
+    if portal_role:
+        saved_wallet_address=request.session.get('staff_wallet_selected_address','')
+        connected_wallet_address=request.session.get('staff_wallet_connected_address','')
+        wallet_session_connected=bool(connected_wallet_address and connected_wallet_address==saved_wallet_address)
     public_origin = settings.PUSH_ORIGIN.rstrip('/')
     canonical_path = request.path if request.path.endswith('/') else f'{request.path}/'
     seo_indexable = settings.PUSH_DEPLOYMENT_TIER != 'staging' and not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES

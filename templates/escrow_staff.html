@@ -2,13 +2,13 @@
 {% block title %}Escrow staff access{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{% static 'escrow.css' %}">{% endblock %}
 {% block content %}
-<div class="page-heading"><div><span class="tag">Owner · Admin · Trust &amp; Support</span><h1>Escrow staff access</h1><p class="lead">Use your own wallet to sign dispute decisions. Push never asks for your secret key.</p></div><a class="button secondary" href="{% url 'wallet' %}">Connect wallet</a></div>
+<div class="page-heading"><div><span class="tag">Owner · Admin · Trust &amp; Support</span><h1>Escrow staff access</h1><p class="lead">Use your own wallet to sign dispute decisions. Push never asks for your secret key.</p></div><button type="button" class="button secondary" data-wallet-connect data-wallet-endpoint="{% url 'staff_wallet_connect' %}">Connect staff wallet</button></div>
 <div class="notice">There are two permissions: your approved Push staff role and your wallet’s contract permission. Suspending a Push account blocks access here immediately. An owner or authorised admin must also sign its on-chain revocation to remove direct contract access.</div>
 <section data-escrow-room data-prepare="{% url 'escrow_staff_prepare' %}" data-submit="{% url 'escrow_staff_submit' %}">
 {% csrf_token %}
 <h2>Your verified wallet</h2>
 {% if registered %}<p>{{ request.user.email }}</p><code class="wallet-address">{{ registered.address }}</code><p>Wallet ownership verified. Changing your normal receiving address does not change this staff signing wallet.</p>
-{% else %}<form data-escrow-action="prove"><p>First connect Freighter on testnet. This signature proves ownership; it does not send a transaction or transfer tokens.</p><label for="staff-wallet">Your Stellar public wallet address</label><input id="staff-wallet" name="wallet" minlength="56" maxlength="56" required placeholder="G…" autocomplete="off"><button class="button">Verify my wallet in Freighter</button></form>{% endif %}
+{% else %}<form data-escrow-action="prove"><p>First connect Freighter on testnet. This signature proves ownership; it does not send a transaction or transfer tokens.</p><label for="staff-wallet">Your Stellar public wallet address</label><input id="staff-wallet" name="wallet" value="{{ connected_wallet_address }}" minlength="56" maxlength="56" required placeholder="G…" autocomplete="off"><button class="button">Verify my wallet in Freighter</button></form>{% endif %}
 {% if not contract %}<p class="notice">The staff escrow contract has not been activated. Wallet registration is available; contract grants and settlements remain unavailable.</p>{% endif %}
 <h2>Staff wallets</h2>
 {% for wallet in wallets %}<article class="moderation-row"><div><strong>{{ wallet.user.display_name }}</strong><p>{{ wallet.user.email }}</p><code class="wallet-address">{{ wallet.address }}</code><p>Wallet registered. Check the contract for its current permission.</p><button class="button secondary small" type="button" data-staff-check="{{ wallet.pk }}" data-endpoint="{% url 'escrow_staff_status' %}">Check on-chain access</button></div>

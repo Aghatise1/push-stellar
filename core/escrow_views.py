@@ -127,7 +127,7 @@ def prepare(request,pk):
             action=str(data.get('action',''))
             payload=action_payload(item,agreement,request.user,action,data)
             source=(request.user.escrow_staff_wallet.address if agreement.staff_governed else agreement.reviewer_address) if action=='resolve' else agreement.worker_address if request.user.pk==item.worker_id else agreement.client_address
-            if request.session.get('wallet_connected_address')!=source:
+            if request.session.get('staff_wallet_connected_address' if action=='resolve' else 'wallet_connected_address')!=source:
                 raise StellarVerificationError('Connect the exact wallet recorded in this agreement.')
             if action=='resolve' and agreement.staff_governed and chain.registry_role(agreement.contract,source)==0:
                 raise StellarVerificationError('Your wallet has no active contract permission. An owner or administrator must grant access first.')
@@ -158,7 +158,7 @@ def submit(request,pk):
         if record.state=='confirmed':return completion(item,record)
         if record.state not in ('prepared','pending'):raise StellarVerificationError('This transaction is closed. Refresh the workroom.')
         if record.state=='prepared':
-            if request.session.get('wallet_connected_address')!=record.source:raise StellarVerificationError('Reconnect the agreement wallet.')
+            if request.session.get('staff_wallet_connected_address' if record.action=='resolve' else 'wallet_connected_address')!=record.source:raise StellarVerificationError('Reconnect the agreement wallet.')
             if timezone.now()-record.created_at>timedelta(minutes=5):
                 if reconcile(record):return completion(item,record)
                 raise StellarVerificationError('The request is past its approval window. Check status again once the testnet ledger has caught up.')

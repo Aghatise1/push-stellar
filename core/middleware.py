@@ -87,11 +87,11 @@ class AppSecurityMiddleware:
 
 
 class StaffWorkspaceBoundaryMiddleware:
-    """Keep approved non-owner staff accounts in Operations, even with direct URLs."""
+    """Keep approved staff accounts in Operations, even with direct URLs."""
     MEMBER_ROUTES = {
         'workspace','analytics','support','support_ticket','work','assigned_work',
         'activity_status','support_feedback','notifications','notifications_read_all','notification_read',
-        'inbox','conversation','wallet','payments','wallet_connect','wallet_sync','profile',
+        'inbox','conversation','wallet','payments','wallet_connect','wallet_sync','wallet_disconnect','wallet_prepare','wallet_submit','profile',
         'jobs','job_detail','public_profile','profile_image','resume_download',
         'job_create','job_edit','job_close','apply','select','withdraw',
         'assignment','assignment_message','assignment_action',
@@ -109,6 +109,6 @@ class StaffWorkspaceBoundaryMiddleware:
         from django.shortcuts import redirect
         from .access import staff_role
         name=getattr(request.resolver_match,'url_name',None)
-        if name in self.MEMBER_ROUTES and staff_role(request.user) in {'admin','trust_support'}:
+        if name in self.MEMBER_ROUTES and staff_role(request.user) in {'owner','admin','trust_support'}:
             return redirect('staff_dashboard')
         return None
