@@ -46,7 +46,7 @@ jobs:
           --health-cmd "pg_isready -U push_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      PUSH_DATABASE_URL: postgresql://push_ci:push_ci@localhost:5432/push_ci
+      PUSH_DATABASE_URL: postgresql://push_ci:push_ci@localhost:5432/push_ci?sslmode=disable
       PUSH_ENV: development
       PUSH_SECRET_KEY: disposable-ci-only-not-a-deployment-secret
     steps:

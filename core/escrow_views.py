@@ -67,7 +67,9 @@ def agreement_action(request,item):
             if governed:
                 contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
                 if not contract: return HttpResponseBadRequest('The staff escrow contract must be configured before funding can be enabled.')
-                root_address=chain.registry_owner(contract)
+                try: root_address=chain.registry_owner(contract)
+                except Exception:
+                    return HttpResponseBadRequest('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
                 root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
                 if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
                     return HttpResponseBadRequest('The contract owner must register and verify their staff wallet first.')
