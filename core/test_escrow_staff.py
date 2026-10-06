@@ -141,7 +141,7 @@ class EscrowConcurrencyTests(TransactionTestCase):
     def test_concurrent_funding_requests_prepare_only_one_transaction(self,build):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Barrier
-        from django.db import close_old_connections
+        from django.db import close_old_connections, connections
         from django.test import Client
         from datetime import timedelta
         from stellar_sdk import Account, TransactionBuilder
@@ -162,7 +162,7 @@ class EscrowConcurrencyTests(TransactionTestCase):
                 c=Client();c.force_login(User.objects.get(pk=client.pk));session=c.session;session['wallet_connected_address']=signer.public_key;session.save()
                 ready.wait(timeout=10)
                 return c.post(reverse('escrow_prepare',args=[item.pk]),{'action':'fund'},content_type='application/json').status_code
-            finally: close_old_connections()
+            finally: connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as executor:
             results=list(executor.map(lambda _:request(),range(2)))
         self.assertEqual(sorted(results),[200,400])
