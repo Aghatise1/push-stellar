@@ -56,7 +56,7 @@
     <div class="app-section-heading"><div><span>Active work</span><h2>Assignments</h2></div><strong>{{ assignments|length }}</strong></div>
     <div class="app-list">
       {% for item in assignments %}
-        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.project }} · {% if item.worker_id == user.pk %}Working{% else %}Hiring{% endif %}</small></span><span class="row-amount">${{ item.budget }}</span><span class="row-status">{{ item.get_status_display }}</span><span class="row-arrow">→</span></a>
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.project }} · {% if item.worker_id == user.pk %}Working{% else %}Hiring{% endif %}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="row-status">{{ item.get_status_display }}</span><span class="row-arrow">→</span></a>
       {% empty %}
         <div class="app-empty"><div class="empty-illustration" aria-hidden="true"><span></span><i></i><b></b></div><h3>Your next project will appear here.</h3><p>Browse clear briefs, apply, and keep the resulting work record in one place.</p><a class="button" href="{% url 'jobs' %}">Browse work</a></div>
       {% endfor %}

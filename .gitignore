@@ -12,3 +12,5 @@ private-backups/
 
 .local/
 .runtime-venv/
+
+contracts/contracts/push-escrow/test_snapshots/

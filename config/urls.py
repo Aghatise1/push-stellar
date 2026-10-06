@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
-from core import views
+from core import views, escrow_views
 
 handler403 = 'core.views.staff_permission_denied'
 handler400 = 'core.errors.bad_request'
@@ -93,6 +93,9 @@ urlpatterns = [
     path('applications/<uuid:pk>/withdraw/',views.withdraw,name='withdraw'),
     path('jobs/<uuid:pk>/apply/',views.apply,name='apply'),
     path('applications/<uuid:pk>/select/',views.select,name='select'),
+    path('escrow/<uuid:pk>/',escrow_views.detail,name='escrow_detail'),
+    path('escrow/<uuid:pk>/prepare/',escrow_views.prepare,name='escrow_prepare'),
+    path('escrow/<uuid:pk>/submit/',escrow_views.submit,name='escrow_submit'),
     path('assignments/<uuid:pk>/',views.assignment,name='assignment'),
     path('assignments/<uuid:pk>/messages/',views.assignment_message,name='assignment_message'),
     path('assignments/<uuid:pk>/action/',views.assignment_action,name='assignment_action'),

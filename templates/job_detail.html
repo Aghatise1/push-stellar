@@ -12,7 +12,7 @@
     <p class="lead">{{ job.project }}</p>
     {% if can_edit %}<a href="{% url 'job_edit' job.pk %}">Edit this brief</a>{% endif %}
   </div>
-  <div class="job-heading-actions"><div class="large-budget">${{ job.budget }}<small>Illustrative USD budget</small></div><button class="button secondary" type="button" data-copy-target="#job-share-url" data-copied-label="Job link copied">Copy job link</button></div>
+  <div class="job-heading-actions"><div class="large-budget">{{ job.budget_display }}<small>{% if job.payment_asset == 'XLM' %}Fixed test-token amount{% else %}Illustrative USD budget{% endif %}</small></div><button class="button secondary" type="button" data-copy-target="#job-share-url" data-copied-label="Job link copied">Copy job link</button></div>
 </div>
 <div class="detail-layout">
   <div>

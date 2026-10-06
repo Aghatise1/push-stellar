@@ -74,7 +74,8 @@ class Job(models.Model):
         'Content Writing','Customer Support','Data & Analytics','Graphic Design','Marketing & Growth',
         'Mobile Development','Operations','Photography','Product Management','Research','Sales',
         'Social Media','Translation','UI/UX Design','Video Editing','Virtual Assistance','Web Development','Web3 & Blockchain']])
-    budget = models.PositiveIntegerField(help_text='Illustrative USD budget. No funds collected.')
+    payment_asset = models.CharField(max_length=4,choices=[('USDC','Test USDC'),('XLM','Test XLM')],default='USDC')
+    budget = models.PositiveIntegerField(help_text='Fixed number of selected testnet tokens, not a live currency conversion.')
     deadline = models.DateField()
     status = models.CharField(max_length=20,default='open',choices=[('open','Open'),('assigned','Assigned'),('completed','Completed'),('closed','Closed')])
     demo = models.BooleanField(default=False)
@@ -82,6 +83,10 @@ class Job(models.Model):
         ('approved','Approved'),('review','Needs review'),('removed','Removed')])
     moderation_notes = models.TextField(max_length=1000,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    @property
+    def budget_display(self):
+        return f'{self.budget} test XLM' if self.payment_asset=='XLM' else f'${self.budget}'
+
     class Meta:
         ordering = ['-created_at']
         constraints = [models.CheckConstraint(condition=models.Q(budget__gt=0),name='positive_budget')]
@@ -113,11 +118,18 @@ class Assignment(models.Model):
         ('bank_card','Bank / card simulation'),
         ('stellar_usdc_testnet','Stellar USDC testnet'),
     ])
+    escrow_required = models.BooleanField(default=False)
     agreement_snapshot = models.JSONField(default=dict,blank=True)
     client_response_due = models.DateTimeField(null=True,blank=True)
     revisions_used = models.PositiveSmallIntegerField(default=0)
     accepted_terms_at = models.DateTimeField(null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    @property
+    def budget_display(self):
+        if self.escrow_required:
+            return f"{self.budget} test {self.agreement_snapshot.get('payment_asset',self.job.payment_asset)}"
+        return f'${self.budget}'
+
     @property
     def can_send_messages(self):
         return self.status in {'awaiting_funding','funded','submitted','disputed'}
@@ -160,6 +172,12 @@ class Payment(models.Model):
     network = models.CharField(max_length=20,blank=True)
     transaction_hash = models.CharField(max_length=64,blank=True,null=True,unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def amount_display(self):
+        if self.method in ('escrow_xlm','escrow_usdc'):
+            return f"{self.amount} test {self.method.removeprefix('escrow_').upper()}"
+        return f'${self.amount}'
 
 class WalletTransfer(models.Model):
     """Confirmed outbound testnet transfers signed by the member's own wallet."""
@@ -367,3 +385,41 @@ class DocumentationArticle(models.Model):
     updated_at=models.DateTimeField(auto_now=True)
     class Meta:
         ordering=['title']
+
+
+class EscrowAgreement(models.Model):
+    assignment = models.OneToOneField(Assignment,on_delete=models.PROTECT,related_name='escrow')
+    reviewer = models.ForeignKey(User,on_delete=models.PROTECT,related_name='escrow_reviews')
+    contract = models.CharField(max_length=56)
+    agreement_id = models.CharField(max_length=64,unique=True)
+    client_address = models.CharField(max_length=56)
+    worker_address = models.CharField(max_length=56)
+    reviewer_address = models.CharField(max_length=56)
+    asset = models.CharField(max_length=4)
+    token_address = models.CharField(max_length=56)
+    amount = models.PositiveBigIntegerField()
+    deadline = models.PositiveBigIntegerField()
+    review_seconds = models.PositiveIntegerField()
+    revision_limit = models.PositiveSmallIntegerField()
+    chain_status = models.CharField(max_length=20,default='Unfunded')
+    review_until = models.PositiveBigIntegerField(default=0)
+    funded_hash = models.CharField(max_length=64,blank=True)
+    settlement_hash = models.CharField(max_length=64,blank=True)
+    worker_paid = models.PositiveBigIntegerField(default=0)
+    client_refunded = models.PositiveBigIntegerField(default=0)
+    accepted_at = models.DateTimeField(null=True,blank=True)
+    xlm_acknowledged = models.BooleanField(default=False)
+
+class EscrowTransaction(models.Model):
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    escrow = models.ForeignKey(EscrowAgreement,on_delete=models.PROTECT,related_name='transactions')
+    actor = models.ForeignKey(User,on_delete=models.PROTECT)
+    action = models.CharField(max_length=24)
+    source = models.CharField(max_length=56)
+    prepared_xdr = models.TextField()
+    signed_xdr = models.TextField(blank=True)
+    tx_hash = models.CharField(max_length=64,unique=True)
+    state = models.CharField(max_length=16,default='prepared')
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True,blank=True)

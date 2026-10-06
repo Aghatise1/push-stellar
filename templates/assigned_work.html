@@ -18,7 +18,7 @@
     <div class="section-heading"><div><h2>Needs my action</h2><p>Open the workroom to accept an agreement or submit your delivery.</p></div><span>{{ needs_action|length }} waiting</span></div>
     <div class="app-list">
       {% for item in needs_action %}
-        <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }} · {% if item.status == 'awaiting_acceptance' %}You were selected{% else %}Ready for delivery{% endif %}</small></span><span class="row-amount">${{ item.budget }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
+        <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }} · {% if item.status == 'awaiting_acceptance' %}You were selected{% else %}Ready for delivery{% endif %}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
       {% empty %}
         <div class="record-empty"><strong>You have no actions waiting.</strong><span>Newly assigned jobs and delivery requests will be highlighted here.</span><a href="{% url 'jobs' %}">Find work</a></div>
       {% endfor %}
@@ -29,7 +29,7 @@
     <div class="section-heading"><div><h2>In progress</h2><p>Jobs waiting for the client, payment route, review, or a dispute decision.</p></div><span>{{ in_progress|length }} active</span></div>
     <div class="app-list">
       {% for item in in_progress %}
-        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
       {% empty %}<div class="record-empty"><strong>No work is waiting.</strong><span>Accepted jobs move here while another participant has the next step.</span><a href="{% url 'work' %}">View work hub</a></div>{% endfor %}
     </div>
   </section>
@@ -38,7 +38,7 @@
     <div class="section-heading"><div><h2>Finished</h2><p>Completed and cancelled agreements remain available as a permanent record.</p></div><span>{{ finished|length }} recorded</span></div>
     <div class="app-list">
       {% for item in finished %}
-        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot complete-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+        <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot complete-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>{{ item.job.owner.display_name }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
       {% empty %}<div class="record-empty"><strong>No completed work yet.</strong><span>Approved and closed jobs will stay here for your records.</span><a href="{% url 'jobs' %}">Browse opportunities</a></div>{% endfor %}
     </div>
   </section>
