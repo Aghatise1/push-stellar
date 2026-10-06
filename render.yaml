@@ -49,3 +49,7 @@ services:
         value: CBHGI6TOJMIUPHDQ6BY27YII3VLLYDDSAQ7U3PXUIG5QJ3GSXZRYUT2A
       - key: PUSH_SOROBAN_ESCROW_ENABLED
         value: false
+      - key: PUSH_TESTNET_ESCROW_ENABLED
+        value: false
+      - key: PUSH_TESTNET_ESCROW_STAFF_CONTRACT
+        sync: false
