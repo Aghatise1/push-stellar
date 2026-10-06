@@ -66,6 +66,9 @@
     if (address) address.textContent = active || saved || 'No saved receiving address';
     if (message) message.textContent = result.message || (connected ? 'Testnet · ready to sign' : 'Reconnect Freighter to send.');
     if (disconnect) disconnect.hidden = !connected;
+    document.querySelectorAll('[data-wallet-disconnect]').forEach(function (node) { node.hidden = !connected; });
+    document.querySelectorAll('[data-staff-connect-control]').forEach(function (node) { node.hidden = connected; });
+    document.querySelectorAll('[data-staff-wallet-status]').forEach(function (node) { node.textContent = connected ? 'Connected · ' + active : 'Disconnected'; });
   }
 
   async function apiResult(response) {
@@ -90,7 +93,10 @@
     throw new Error('The wallet service is temporarily unavailable. Refresh the page and try again.');
   }
 
+  var connectionBusy = false;
   async function connectWallet(button) {
+    if (connectionBusy) return;
+    connectionBusy = true;
     var buttons = document.querySelectorAll('[data-wallet-connect]');
     buttons.forEach(function (item) {
       item.disabled = true;
@@ -146,11 +152,19 @@
         throw new Error(result.message || 'Push could not save this wallet.');
       }
 
+      if (result.requiresApproval) {
+        showStatus('Approve the staff connection in Freighter. This proof transfers no tokens.');
+        var signed = await window.freighterApi.signTransaction(result.xdr, {networkPassphrase:result.networkPassphrase,address:result.source});
+        if (signed.error || !signed.signedTxXdr) throw new Error('Connection approval cancelled. Staff wallet remains disconnected.');
+        result = await postJson(endpoint, {address:addressResult.address,network:networkResult.network,signedXdr:signed.signedTxXdr});
+      }
+      renderWalletState(result);
       showStatus(result.message, 'success');
       window.setTimeout(function () { window.location.reload(); }, 700);
     } catch (error) {
       showStatus(errorMessage(error, 'Wallet connection failed. Try again from Freighter.'), 'error');
     } finally {
+      connectionBusy = false;
       buttons.forEach(function (item) {
         item.disabled = false;
         item.removeAttribute('aria-busy');
@@ -159,6 +173,7 @@
   }
 
   async function syncWallet(options) {
+    if (connectionBusy) return null;
     var shell = walletShell();
     if (!shell || !shell.dataset.walletSyncEndpoint) return null;
     var payload = {connected: false};

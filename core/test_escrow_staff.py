@@ -169,10 +169,19 @@ class EscrowConcurrencyTests(TransactionTestCase):
         self.assertEqual(EscrowTransaction.objects.count(),1);self.assertEqual(build.call_count,1)
 
 class StaffConnectionTests(StaffWalletTests):
+    def connect_staff(self,body):
+        response=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
+        self.assertTrue(response.json()['requiresApproval'])
+        self.assertNotIn('staff_wallet_connected_address',self.client.session)
+        envelope=TransactionEnvelope.from_xdr(response.json()['xdr'],NETWORK)
+        self.assertEqual(envelope.transaction.sequence,0)
+        envelope.sign(self.signer)
+        return self.client.post(reverse('staff_wallet_connect'),{**body,'signedXdr':envelope.to_xdr()},content_type='application/json')
+
     def test_staff_connection_is_separate_and_disconnect_stays_disconnected(self):
         self.client.force_login(self.support)
         body={'address':self.signer.public_key,'network':'TESTNET','connected':True}
-        response=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
+        response=self.connect_staff(body)
         self.assertEqual(response.status_code,200)
         self.support.refresh_from_db()
         self.assertEqual(self.support.stellar_address,'')
@@ -199,6 +208,27 @@ class StaffConnectionTests(StaffWalletTests):
     def test_network_and_account_change_clear_connection(self):
         self.client.force_login(self.owner)
         body={'address':self.signer.public_key,'network':'TESTNET','connected':True}
-        self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
+        self.connect_staff(body)
         body['network']='PUBLIC'
         self.assertFalse(self.client.post(reverse('staff_wallet_sync'),body,content_type='application/json').json()['connected'])
+
+    def test_reconnection_requires_fresh_signature_and_rejects_replay(self):
+        self.client.force_login(self.owner)
+        body={'address':self.signer.public_key,'network':'TESTNET'}
+        prepared=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json').json()
+        envelope=TransactionEnvelope.from_xdr(prepared['xdr'],NETWORK);envelope.sign(self.signer)
+        signed={**body,'signedXdr':envelope.to_xdr()}
+        self.assertEqual(self.client.post(reverse('staff_wallet_connect'),signed,content_type='application/json').status_code,200)
+        self.client.post(reverse('staff_wallet_disconnect'),{},content_type='application/json')
+        self.assertEqual(self.client.post(reverse('staff_wallet_connect'),signed,content_type='application/json').status_code,400)
+        self.assertFalse(self.client.post(reverse('staff_wallet_sync'),{**body,'connected':True},content_type='application/json').json()['connected'])
+        self.assertTrue(self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json').json()['requiresApproval'])
+        self.assertEqual(self.client.post(reverse('staff_wallet_connect'),signed,content_type='application/json').status_code,400)
+
+    def test_connection_signature_from_wrong_wallet_is_rejected(self):
+        self.client.force_login(self.owner)
+        body={'address':self.signer.public_key,'network':'TESTNET'}
+        prepared=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json').json()
+        envelope=TransactionEnvelope.from_xdr(prepared['xdr'],NETWORK);envelope.sign(Keypair.random())
+        self.assertEqual(self.client.post(reverse('staff_wallet_connect'),{**body,'signedXdr':envelope.to_xdr()},content_type='application/json').status_code,400)
+        self.assertNotIn('staff_wallet_connected_address',self.client.session)

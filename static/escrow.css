@@ -6,3 +6,6 @@
 
 [data-escrow-room] form { display: grid; gap: .75rem; margin-bottom: 1.25rem; min-width: 0; }
 [data-escrow-room] .moderation-row > * { min-width: 0; }
+
+[data-staff-connect-control][hidden], [data-wallet-disconnect][hidden] { display: none !important; }
+[data-staff-wallet-status] { overflow-wrap: anywhere; }
