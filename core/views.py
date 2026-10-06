@@ -50,7 +50,7 @@ def health(request):
             cursor.fetchone()
     except Exception:
         return JsonResponse({'ok':False},status=503)
-    payload={'ok':True,'service':'push','network':'stellar-testnet'}
+    payload={'ok':True,'service':'push','network':'stellar-testnet','escrow_enabled':bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT)}
     if settings.PUSH_RELEASE:
         payload['release']=settings.PUSH_RELEASE
     response=JsonResponse(payload)
@@ -834,9 +834,9 @@ def resend(request):
 def workspace(request):
     assignments = Assignment.objects.filter(Q(worker=request.user)|Q(job__owner=request.user)).select_related('job','worker')
     worker_assignments=Assignment.objects.filter(worker=request.user)
-    verified=Payment.objects.filter(assignment__worker=request.user,simulated=False).aggregate(total=Sum('amount'))['total'] or 0
-    simulated=Payment.objects.filter(assignment__worker=request.user,simulated=True).aggregate(total=Sum('amount'))['total'] or 0
-    pending=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).aggregate(total=Sum('budget'))['total'] or 0
+    verified=Payment.objects.filter(assignment__worker=request.user,simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    simulated=Payment.objects.filter(assignment__worker=request.user,simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    pending=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     completed=worker_assignments.filter(status='paid').count()
     active=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).count()
     participant_messages=Message.objects.filter(Q(assignment__worker=request.user)|Q(assignment__job__owner=request.user)).distinct()
@@ -872,7 +872,7 @@ def analytics(request):
             'selection_rate':round(selected_total*100/application_total) if application_total else 0,
             'active':worker_assignments.exclude(status__in=['paid','cancelled']).count(),
             'completed':completed_worker.count(),
-            'recorded_value':completed_worker.aggregate(total=Sum('budget'))['total'] or 0,
+            'recorded_value':completed_worker.exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0,
         },
         'hiring_metrics':{
             'jobs':posted_jobs.count(),'applications':Application.objects.filter(job__owner=request.user,withdrawn=False).count(),
@@ -965,10 +965,10 @@ def wallet(request):
             balance_error=str(exc)
     form=WalletRequestForm()
     payment_records=Payment.objects.filter(assignment__worker=request.user)
-    recorded_earnings=payment_records.aggregate(total=Sum('amount'))['total'] or 0
+    recorded_earnings=payment_records.exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     pending_earnings=Assignment.objects.filter(
         worker=request.user,status__in=['awaiting_funding','funded','submitted']
-    ).aggregate(total=Sum('budget'))['total'] or 0
+    ).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'wallet.html',{
         'form':form,'balances':balances,'balance_error':balance_error,
         'recorded_earnings':recorded_earnings,'pending_earnings':pending_earnings,
@@ -1014,7 +1014,7 @@ def wallet_prepare(request):
         assignment_item=get_object_or_404(
             Assignment.objects.select_related('job','worker'),pk=assignment_id,job__owner=request.user,
         )
-        if assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+        if assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
             return JsonResponse({'ok':False,'message':'This assignment is not ready for a Stellar testnet payment.'},status=409)
         if not assignment_item.worker.stellar_address:
             return JsonResponse({'ok':False,'message':'The worker has no Stellar testnet receiving address.'},status=400)
@@ -1061,7 +1061,7 @@ def _record_submitted_transfer(request,intent,transaction_hash):
             assignment_item=Assignment.objects.select_for_update().select_related('job','worker').get(
                 pk=assignment_id,job__owner=request.user,
             )
-            if assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
+            if assignment_item.escrow_required or assignment_item.status != 'submitted' or assignment_item.payment_method != 'stellar_usdc_testnet':
                 raise StellarVerificationError('This assignment changed before the payment completed. The transaction hash remains available for support review.')
             if (assignment_item.worker.stellar_address != intent['destination']
                     or str(assignment_item.budget) != str(intent['amount'])
@@ -1134,11 +1134,11 @@ def wallet_submit(request):
 @verified
 def payments(request):
     records=Payment.objects.filter(assignment__worker=request.user).select_related('assignment__job')
-    network_total=records.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0
-    simulated_total=records.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0
-    pending=Assignment.objects.filter(worker=request.user,status__in=['awaiting_funding','funded','submitted']).aggregate(total=Sum('budget'))['total'] or 0
+    network_total=records.filter(simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    simulated_total=records.filter(simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    pending=Assignment.objects.filter(worker=request.user,status__in=['awaiting_funding','funded','submitted']).exclude(escrow_required=True,agreement_snapshot__payment_asset='XLM').aggregate(total=Sum('budget'))['total'] or 0
     return render(request,'payments.html',{'payments':records,'verified_earnings':network_total,
-        'simulated_earnings':simulated_total,'total_earnings':network_total+simulated_total,'pending_earnings':pending})
+        'simulated_earnings':simulated_total,'total_earnings':network_total+simulated_total,'pending_earnings':pending,'xlm_earnings':records.filter(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,'xlm_pending':Assignment.objects.filter(worker=request.user,escrow_required=True,agreement_snapshot__payment_asset='XLM',status__in=['awaiting_funding','funded','submitted']).aggregate(total=Sum('budget'))['total'] or 0})
 
 
 def conversation_list(user):
@@ -1513,6 +1513,10 @@ def apply(request,pk):
 @verified
 @require_POST
 def select(request,pk):
+    if settings.PUSH_TESTNET_ESCROW_ENABLED:
+        from .escrow import require_enabled
+        try:require_enabled()
+        except StellarVerificationError as exc:return HttpResponseBadRequest(str(exc))
     application = get_object_or_404(Application.objects.select_related('job','worker'),pk=pk,job__owner=request.user)
     with transaction.atomic():
         # All applicant changes first lock the same job via an update. This also
@@ -1527,10 +1531,11 @@ def select(request,pk):
             'description':application.job.description,'deliverables':application.job.deliverables,
             'acceptance_criteria':application.job.acceptance_criteria,'budget':application.job.budget,
             'deadline':application.job.deadline.isoformat(),'revision_limit':application.job.revision_limit,
-            'response_days':application.job.response_days,
+            'response_days':application.job.response_days,'payment_asset':application.job.payment_asset,
         }
         assignment = Assignment.objects.create(job=application.job,worker=application.worker,
-            scope=application.job.deliverables,budget=application.job.budget,agreement_snapshot=snapshot)
+            scope=application.job.deliverables,budget=application.job.budget,agreement_snapshot=snapshot,
+            escrow_required=bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT))
         Event.objects.create(assignment=assignment,actor=request.user,kind='Worker selected')
         notify(application.worker,'selection','You were selected',f'{application.job.owner.display_name} selected you for {application.job.title}.',f'/assignments/{assignment.pk}/')
     messages.success(request,'Worker selected. They must accept the agreed scope before a payment route is selected.')
@@ -1545,6 +1550,9 @@ def participant_assignment(request,pk):
 @verified
 def assignment(request,pk):
     item = participant_assignment(request,pk)
+    if item.escrow_required:
+        from .escrow_views import workroom
+        return workroom(request,item)
     stellar_request = None
     if item.status == 'submitted' and item.payment_method == 'stellar_usdc_testnet' and item.worker.stellar_address:
         memo = assignment_memo(item.id)
@@ -1582,6 +1590,9 @@ def assignment_message(request,pk):
 @require_POST
 def assignment_action(request,pk):
     item = participant_assignment(request,pk)
+    if item.escrow_required:
+        from .escrow_views import agreement_action
+        return agreement_action(request,item)
     form = ActionForm(request.POST)
     if not form.is_valid(): return HttpResponseBadRequest('Invalid action. Return to the assignment and try again.')
     action = form.cleaned_data['action']
@@ -1688,7 +1699,7 @@ def moderation(request):
         'can_moderate':staff_role(request.user) in {'owner','admin','trust_support'},
         'metrics':{'open_disputes':disputes.exclude(status='resolved').count(),
                    'jobs':Job.objects.count(),'assignments':Assignment.objects.count(),
-                   'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
+                   'recorded_value':Payment.objects.exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,
                    'tickets':SupportTicket.objects.exclude(status__in=['resolved','closed']).count(),
                    'community_reports':community_reports.count(),
                    'email_failures':EmailDelivery.objects.filter(status='failed').count()},
@@ -1787,8 +1798,8 @@ def operations_user(request,pk):
     target=get_object_or_404(User,pk=pk)
     assignments=Assignment.objects.filter(Q(worker=target)|Q(job__owner=target)).select_related('job','worker')[:20]
     worker_payments=Payment.objects.filter(assignment__worker=target)
-    verified_testnet=worker_payments.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0
-    simulated_value=worker_payments.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0
+    verified_testnet=worker_payments.filter(simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
+    simulated_value=worker_payments.filter(simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     return render(request,'operations_user.html',{
         'target':target,'assignments':assignments,'sanction_form':SanctionForm(prefix='sanction'),
         'completed_work_count':Assignment.objects.filter(worker=target,status='paid').count(),
@@ -1823,7 +1834,7 @@ def operations_payments(request):
     return render(request,'operations_payments.html',{
         'payments':payments.order_by('-created_at')[:100],
         'disputes':Dispute.objects.select_related('assignment__job','opened_by').order_by('status','-created_at')[:100],
-        'recorded_value':Payment.objects.aggregate(total=Sum('amount'))['total'] or 0,
+        'recorded_value':Payment.objects.exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,
         'can_see_finance':role in {'owner','admin'},
     })
 
@@ -1925,6 +1936,8 @@ def revoke_invitation(request,pk):
 @staff_only('owner','admin','trust_support')
 def moderate_dispute(request,pk):
     dispute=get_object_or_404(Dispute.objects.select_related('assignment__job','assignment__worker','opened_by'),pk=pk)
+    if dispute.assignment.escrow_required:
+        return redirect('escrow_detail',pk=dispute.assignment_id)
     form=DisputeResolutionForm(request.POST or None)
     sanction_form=SanctionForm(prefix='sanction')
     if request.method == 'POST' and form.is_valid():

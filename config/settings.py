@@ -224,3 +224,7 @@ LOGGING = {
         'core': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }
+
+# Disabled until testnet integration validation and release configuration.
+PUSH_TESTNET_ESCROW_ENABLED = os.environ.get('PUSH_TESTNET_ESCROW_ENABLED','false').lower() == 'true'
+PUSH_TESTNET_ESCROW_CONTRACT = os.environ.get('PUSH_TESTNET_ESCROW_CONTRACT','').strip()

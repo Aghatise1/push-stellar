@@ -1,0 +1,3 @@
+[data-escrow-room] [hidden] { display: none !important; }
+[data-escrow-room] form + form, [data-escrow-room] details { margin-top: 1.25rem; }
+[data-escrow-room] .agreement-check { margin-block: 1rem; }

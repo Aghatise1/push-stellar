@@ -34,6 +34,7 @@
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20261005-1">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
 <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261006-1">
+  {% block extra_head %}{% endblock %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>

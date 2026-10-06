@@ -23,7 +23,7 @@
         <div class="subsection-heading"><div><h3>Needs my action</h3><p>Accept an agreement or submit your delivery.</p></div><b class="{% if needs_action %}attention-count{% endif %}">{{ needs_action|length }}</b></div>
         <div class="app-list">
           {% for item in needs_action %}
-          <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }} · {% if item.status == 'awaiting_acceptance' %}You were selected{% else %}Ready for delivery{% endif %}</small></span><span class="row-amount">${{ item.budget }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
+          <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }} · {% if item.status == 'awaiting_acceptance' %}You were selected{% else %}Ready for delivery{% endif %}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
           {% empty %}<div class="record-empty"><strong>Nothing needs your action.</strong><span>New selections and delivery steps will be highlighted here.</span><a href="{% url 'jobs' %}">Find work</a></div>{% endfor %}
         </div>
       </section>
@@ -31,7 +31,7 @@
         <div class="subsection-heading"><div><h3>In progress</h3><p>Accepted work waiting on delivery, review or settlement.</p></div><b>{{ in_progress|length }}</b></div>
         <div class="app-list">
           {% for item in in_progress %}
-          <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+          <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
           {% empty %}<div class="record-empty"><strong>No work in progress.</strong><span>Accepted jobs move here while delivery or review is underway.</span><a href="{% url 'jobs' %}">Browse jobs</a></div>{% endfor %}
         </div>
       </section>
@@ -39,7 +39,7 @@
         <div class="subsection-heading"><div><h3>Finished</h3><p>Completed and cancelled agreements stay available as records.</p></div><b>{{ finished|length }}</b></div>
         <div class="app-list">
           {% for item in finished %}
-          <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot complete-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+          <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot complete-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
           {% empty %}<div class="record-empty"><strong>No finished jobs yet.</strong><span>Approved and closed jobs will remain here for your records.</span><a href="{% url 'jobs' %}">Find work</a></div>{% endfor %}
         </div>
       </section>
@@ -61,7 +61,7 @@
     <div class="section-heading"><div><span class="section-kicker">Hiring view</span><h2>People I hired</h2><p>Workers you selected, with the agreement and delivery status for each job.</p></div><span>{{ hiring|length }} hired</span></div>
     <div class="app-list">
       {% for item in hiring %}
-      <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot{% if item.status == 'awaiting_funding' or item.status == 'submitted' %} attention-dot{% endif %}"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Worker: {{ item.worker.display_name }}</small></span><span class="row-amount">${{ item.budget }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
+      <a class="app-list-row" href="{% url 'assignment' item.pk %}"><span class="status-dot{% if item.status == 'awaiting_funding' or item.status == 'submitted' %} attention-dot{% endif %}"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Worker: {{ item.worker.display_name }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="status-bubble">{{ item.get_status_display }}</span></a>
       {% empty %}<div class="record-empty"><strong>No workers selected yet.</strong><span>Open one of your posted jobs, review its applicants and select a worker.</span><a href="{% url 'work' %}?view=posted">View posted jobs</a></div>{% endfor %}
     </div>
   </section>
@@ -71,7 +71,7 @@
     <div class="section-heading"><div><span class="section-kicker">Hiring view</span><h2>Jobs I posted</h2><p>Your published briefs and the applications waiting on each one.</p></div><span>{{ posted|length }} posted</span></div>
     <div class="app-list">
       {% for job in posted %}
-      <a class="app-list-row" href="{% url 'job_detail' job.pk %}"><span class="status-dot{% if job.application_count and job.status == 'open' %} attention-dot{% endif %}"></span><span class="row-copy"><strong>{{ job.title }}</strong><small>{{ job.project }} · {{ job.application_count }} application{{ job.application_count|pluralize }}</small></span><span class="row-amount">${{ job.budget }}</span><span class="status-bubble {{ job.moderation_status }}">{{ job.get_moderation_status_display }} · {{ job.get_status_display }}</span></a>
+      <a class="app-list-row" href="{% url 'job_detail' job.pk %}"><span class="status-dot{% if job.application_count and job.status == 'open' %} attention-dot{% endif %}"></span><span class="row-copy"><strong>{{ job.title }}</strong><small>{{ job.project }} · {{ job.application_count }} application{{ job.application_count|pluralize }}</small></span><span class="row-amount">{{ job.budget_display }}</span><span class="status-bubble {{ job.moderation_status }}">{{ job.get_moderation_status_display }} · {{ job.get_status_display }}</span></a>
       {% empty %}<div class="record-empty"><strong>No jobs posted yet.</strong><span>Publish a clear brief so suitable workers can find and apply to it.</span><a href="{% url 'job_create' %}">Post a job</a></div>{% endfor %}
     </div>
   </section>

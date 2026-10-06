@@ -123,7 +123,7 @@ class WorkspaceTests(TestCase):
     def test_public_and_auth_pages_render(self):
         health=self.client.get(reverse('health'))
         self.assertEqual(health.status_code,200)
-        self.assertEqual(health.json(),{'ok':True,'service':'push','network':'stellar-testnet'})
+        self.assertEqual(health.json(),{'ok':True,'service':'push','network':'stellar-testnet','escrow_enabled':False})
         self.assertEqual(health['Cache-Control'],'no-store')
         for name in ['home','product','how_it_works','privacy','documentation','waitlist','invite_redeem','login','password_reset','password_reset_done','password_reset_complete']:
             with self.subTest(name=name): self.assertEqual(self.client.get(reverse(name)).status_code,200)

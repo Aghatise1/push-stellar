@@ -1,0 +1,70 @@
+{
+  "network": "testnet",
+  "contractId": "CC4FLJNQ5RREKO4H7J77MECTW7WZXDL3GFCQ3BMRYFGE3M4BITED7PZD",
+  "wasmSha256": "b3e80fce1e82b6858e23ed10f6dd1746d6d1b622fc4825e21990ecb1cfdae036",
+  "uploadTransaction": "c31123ba78669f7b45bbe40d03beae9a0e7bc465b06454cc799c6e0261c75329",
+  "deployTransaction": "558f2a7138c03f11f2bb79f5221decacf70bd52e777b5c560f9632bf57e20517",
+  "status": "Contract deployed for isolated testnet verification. Web integration disabled. Not independently audited.",
+  "verification": [
+    {
+      "contract": "CC4FLJNQ5RREKO4H7J77MECTW7WZXDL3GFCQ3BMRYFGE3M4BITED7PZD",
+      "agreement_id": "32facf27b002427e95da174fc978f6b905e3ba4c6da644f1a83dea6a19f22b01",
+      "network": "testnet",
+      "asset": "XLM",
+      "amount": 1,
+      "transactions": [
+        {
+          "action": "fund",
+          "hash": "b133f59b2638b72f2d26a6e5c08cc20f9f709ac82a20b256802272be808eef51",
+          "status": [
+            "Funded"
+          ]
+        },
+        {
+          "action": "submit",
+          "hash": "f7e3fa544f0532d772dde260a8ff90b7aee1aabf8fc6f067e582a8276aef1ee1",
+          "status": [
+            "Submitted"
+          ]
+        },
+        {
+          "action": "approve",
+          "hash": "0c0bc4063970ef29850eb23d586231c5a6eae6ad9b87caf62b0805947d45dd73",
+          "status": [
+            "Released"
+          ]
+        }
+      ]
+    },
+    {
+      "contract": "CC4FLJNQ5RREKO4H7J77MECTW7WZXDL3GFCQ3BMRYFGE3M4BITED7PZD",
+      "agreement_id": "d345cfac629646d6ad7bc502db5c8b31cc4ecd88fdd94360bb195b6e98df16c5",
+      "network": "testnet",
+      "asset": "XLM",
+      "amount": 1,
+      "transactions": [
+        {
+          "action": "fund",
+          "hash": "29d88bbfce3353553987bdbedeaa9d8b27f942cff6c0f12384d57a85c1ef3ca2",
+          "status": [
+            "Funded"
+          ]
+        },
+        {
+          "action": "dispute",
+          "hash": "f829943378d259e901f94bc1f705123720c29957aa87af141b071cd4cf7e7fa7",
+          "status": [
+            "Disputed"
+          ]
+        },
+        {
+          "action": "resolve",
+          "hash": "2175a71cec41459e7103d1dc617ba60d2177ea08878aa9f3b334743dbdf1e116",
+          "status": [
+            "Resolved"
+          ]
+        }
+      ]
+    }
+  ]
+}

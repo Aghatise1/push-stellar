@@ -91,8 +91,8 @@ def report_data(role, days=30):
     finance=None
     if role in {'owner','admin'}:
         period_payments=payments.filter(created_at__date__gte=start,created_at__date__lte=today)
-        finance={'verified_testnet':period_payments.filter(simulated=False).aggregate(total=Sum('amount'))['total'] or 0,
-                 'simulated':period_payments.filter(simulated=True).aggregate(total=Sum('amount'))['total'] or 0}
+        finance={'verified_testnet':period_payments.filter(simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0,
+                 'simulated':period_payments.filter(simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0}
     feedback=TicketFeedback.objects.filter(created_at__date__gte=start,created_at__date__lte=today)
     feedback_total=feedback.count()
     feedback_good=feedback.filter(rating__gte=4).count()

@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordResetForm
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -241,7 +242,7 @@ class ProfileForm(forms.ModelForm):
 class JobForm(forms.ModelForm):
     class Meta:
         model = Job
-        fields = ['project','title','category','description','deliverables','acceptance_criteria','budget','deadline','revision_limit','response_days']
+        fields = ['project','title','category','description','deliverables','acceptance_criteria','budget','payment_asset','deadline','revision_limit','response_days']
         widgets = {'deadline':forms.DateInput(attrs={'type':'date'}),'description':forms.Textarea(attrs={'rows':4}),
                    'deliverables':forms.Textarea(attrs={'rows':4}),'acceptance_criteria':forms.Textarea(attrs={'rows':4})}
         labels = {'acceptance_criteria':'How will successful delivery be judged?',
@@ -259,15 +260,24 @@ class JobForm(forms.ModelForm):
                       'response_days':'After delivery, the record shows when the client response is due.'}
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
+        self.fields['payment_asset'].required=False
+        if not (settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT):
+            self.fields['payment_asset'].widget=forms.HiddenInput()
+            self.fields['payment_asset'].disabled=True
+        else:
+            self.fields['budget'].help_text='Fixed whole-token amount in the selected testnet asset. Network fees are additional. Testnet tokens have no monetary value.'
+            self.fields['payment_asset'].help_text='XLM has a variable market price; the agreed token amount stays fixed. The worker must acknowledge this before accepting. Test USDC and test XLM have no monetary value.'
         self.fields['revision_limit'].required=False
         self.fields['response_days'].required=False
+    def clean_payment_asset(self):
+        return self.cleaned_data.get('payment_asset') or 'USDC'
     def clean_deadline(self):
         value = self.cleaned_data['deadline']
         if value < timezone.localdate(): raise forms.ValidationError('Choose today or a future deadline.')
         return value
     def clean_budget(self):
         value = self.cleaned_data['budget']
-        if not 1 <= value <= 1000000: raise forms.ValidationError('Enter a budget between 1 and 1,000,000 USD.')
+        if not 1 <= value <= 1000000: raise forms.ValidationError('Enter a budget between 1 and 1,000,000 whole tokens.')
         return value
     def clean_revision_limit(self):
         value=self.cleaned_data.get('revision_limit')
