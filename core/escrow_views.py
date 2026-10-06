@@ -24,7 +24,9 @@ def reviewers(item):
 
 def accessible(request,pk):
     item=get_object_or_404(Assignment.objects.select_related('job__owner','worker'),pk=pk,escrow_required=True)
-    if request.user.pk in (item.worker_id,item.job.owner_id):return item
+    if request.user.pk in (item.worker_id,item.job.owner_id):
+        if staff_role(request.user): raise PermissionError('Use a separate customer account for freelance work.')
+        return item
     agreement=EscrowAgreement.objects.filter(assignment=item).first()
     if agreement and can_review(request.user,agreement):return item
     raise PermissionError('Only participants and authorised dispute staff can access this escrow.')
