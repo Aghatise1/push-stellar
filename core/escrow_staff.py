@@ -76,8 +76,8 @@ def prepare(request):
                 permission(actor,target,role)
                 source=get_object_or_404(EscrowStaffWallet,user=actor).address
                 wallet=get_object_or_404(EscrowStaffWallet,user=target).address
-                if request.session.get('wallet_connected_address')!=source:
-                    raise StellarVerificationError('Connect your verified staff wallet first from the Wallet page.')
+                if request.session.get('staff_wallet_connected_address')!=source:
+                    raise StellarVerificationError('Connect your verified staff wallet from Escrow staff access.')
                 if EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state__in=['prepared','pending']).exists():
                     raise StellarVerificationError('Check your pending permission change before preparing another.')
                 envelope=chain.build_staff(contract,source,wallet,role)
@@ -133,7 +133,7 @@ def submit(request):
         permission(request.user,record.target,record.role)
         if record.state=='prepared':
             if timezone.now()-record.created_at>timedelta(minutes=5): raise StellarVerificationError('Approval expired. Check status after the ledger catches up.')
-            if request.session.get('wallet_connected_address')!=record.source: raise StellarVerificationError('Reconnect your registered staff wallet.')
+            if request.session.get('staff_wallet_connected_address')!=record.source: raise StellarVerificationError('Reconnect your registered staff wallet.')
             envelope=chain.validate_signature(record,data.get('signedXdr'))
             with transaction.atomic():
                 locked=EscrowStaffOperation.objects.select_for_update().get(pk=record.pk)
@@ -164,3 +164,32 @@ def status(request):
 
 def done():
     return JsonResponse({'ok':True,'message':'Confirmed. Use Check on-chain access to verify the current permission.','redirectUrl':reverse('escrow_staff')})
+
+
+@staff_only('owner','admin','trust_support')
+@require_POST
+def wallet_connection(request, operation):
+    try:
+        eligible(request.user)
+        data=request_payload(request)
+        key='staff_wallet_connected_address'
+        saved=request.session.get('staff_wallet_selected_address','')
+        if operation=='disconnect':
+            request.session.pop(key,None)
+            request.session['staff_wallet_disconnected']=True
+        else:
+            address=str(data.get('address','')).strip()
+            valid=valid_account_id(address) and str(data.get('network','')).upper()=='TESTNET'
+            if operation=='connect':
+                if not valid: raise StellarVerificationError('Connect a valid Stellar testnet wallet in Freighter.')
+                request.session['staff_wallet_selected_address']=saved=address
+                request.session.pop('staff_wallet_disconnected',None)
+                request.session[key]=address
+            elif valid and data.get('connected') and address==saved and not request.session.get('staff_wallet_disconnected'):
+                request.session[key]=address
+            else:
+                request.session.pop(key,None)
+        active=request.session.get(key,'')
+        return JsonResponse({'ok':True,'connected':bool(active),'state':'connected' if active else 'disconnected','activeAddress':active,'savedAddress':saved,'address':active,'message':'Staff wallet connected on testnet. Settlement still requires your signature.' if active else 'Staff wallet disconnected. Reconnect Freighter to sign.'})
+    except (StellarVerificationError,ValueError) as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)

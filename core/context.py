@@ -50,6 +50,10 @@ def app_context(request):
         wallet_session_connected = False
     resolved_name = getattr(getattr(request, 'resolver_match', None), 'url_name', None)
     portal_role = staff_role(request.user)
+    if portal_role:
+        saved_wallet_address=request.session.get('staff_wallet_selected_address','')
+        connected_wallet_address=request.session.get('staff_wallet_connected_address','')
+        wallet_session_connected=bool(connected_wallet_address and connected_wallet_address==saved_wallet_address)
     public_origin = settings.PUSH_ORIGIN.rstrip('/')
     canonical_path = request.path if request.path.endswith('/') else f'{request.path}/'
     seo_indexable = settings.PUSH_DEPLOYMENT_TIER != 'staging' and not request.user.is_authenticated and resolved_name in PUBLIC_INDEX_ROUTES
@@ -71,7 +75,7 @@ def app_context(request):
             'staff_portal_role':portal_role,
             'staff_portal_role_label':{'owner':'Owner','admin':'Administrator','trust_support':'Trust & Support'}.get(portal_role,''),
             'staff_is_owner':portal_role == 'owner',
-            'staff_portal_active':bool(portal_role and resolved_name in STAFF_PORTAL_ROUTES),
+            'staff_portal_active':bool(portal_role),
             'seo_indexable':seo_indexable,
             'canonical_url':f'{public_origin}{canonical_path}',
             'seo_image_url':f'{public_origin}{settings.STATIC_URL}images/push-social-card-v3.png'}

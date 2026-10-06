@@ -167,3 +167,38 @@ class EscrowConcurrencyTests(TransactionTestCase):
             results=list(executor.map(lambda _:request(),range(2)))
         self.assertEqual(sorted(results),[200,400])
         self.assertEqual(EscrowTransaction.objects.count(),1);self.assertEqual(build.call_count,1)
+
+class StaffConnectionTests(StaffWalletTests):
+    def test_staff_connection_is_separate_and_disconnect_stays_disconnected(self):
+        self.client.force_login(self.support)
+        body={'address':self.signer.public_key,'network':'TESTNET','connected':True}
+        response=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
+        self.assertEqual(response.status_code,200)
+        self.support.refresh_from_db()
+        self.assertEqual(self.support.stellar_address,'')
+        self.assertNotIn('wallet_connected_address',self.client.session)
+        self.assertEqual(self.client.session['staff_wallet_connected_address'],self.signer.public_key)
+        self.assertContains(self.client.get(reverse('escrow_staff')),reverse('staff_wallet_connect'))
+        self.client.post(reverse('staff_wallet_disconnect'),{},content_type='application/json')
+        result=self.client.post(reverse('staff_wallet_sync'),body,content_type='application/json')
+        self.assertFalse(result.json()['connected'])
+
+    def test_customers_cannot_connect_staff_wallet_or_open_staff_panel(self):
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(reverse('staff_wallet_connect'),{},content_type='application/json').status_code,403)
+        self.assertEqual(self.client.get(reverse('escrow_staff')).status_code,403)
+
+    def test_all_staff_are_blocked_from_customer_wallet_and_workspace(self):
+        for person in (self.owner,self.admin,self.support):
+            self.client.force_login(person)
+            for route in ('workspace','wallet','wallet_connect','wallet_submit'):
+                response=self.client.post(reverse(route)) if route.startswith('wallet_') else self.client.get(reverse(route))
+                self.assertEqual(response.status_code,302)
+                self.assertEqual(response.url,reverse('staff_dashboard'))
+
+    def test_network_and_account_change_clear_connection(self):
+        self.client.force_login(self.owner)
+        body={'address':self.signer.public_key,'network':'TESTNET','connected':True}
+        self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
+        body['network']='PUBLIC'
+        self.assertFalse(self.client.post(reverse('staff_wallet_sync'),body,content_type='application/json').json()['connected'])
