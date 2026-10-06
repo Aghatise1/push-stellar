@@ -14,8 +14,8 @@
     <article class="balance-panel app-reveal">
       <div class="balance-copy">
         <span class="balance-label">Total recorded earnings</span>
-        <strong class="hero-balance"><sup>$</sup>{{ total_earnings }}<small>.00</small></strong>
-        <p>Testnet and simulated payments are separated below so the record stays clear.</p>
+        <strong class="hero-balance">{{ total_earnings }}<small> test USDC</small></strong>
+        <p>Confirmed testnet USDC settlements. Historical simulations are excluded.</p>
         <div class="wallet-actions" aria-label="Payment actions">
           <a href="{% url 'wallet' %}#send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-5z"/></svg><span>Pay for work</span></a>
           <a href="{% url 'wallet' %}#receive"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></svg><span>Receive</span></a>
@@ -47,9 +47,9 @@
       <a class="panel-link" href="{% url 'inbox' %}">Open messages <span>→</span></a>
     </article>{% else %}<article class="messages-panel app-reveal"><div class="panel-title"><h2>Your first workroom</h2></div><p>After a selected worker accepts the agreement, both participants can discuss delivery in a private project conversation.</p><a class="panel-link" href="{% url 'work' %}">Review your work <span>→</span></a></article>{% endif %}
 
-    <article class="metric-card app-reveal"><span>Available record</span><strong>${{ verified_earnings }}<small>.00</small></strong><p>Verified testnet earnings</p></article>
-    <article class="metric-card app-reveal"><span>Simulation record</span><strong>${{ simulated_earnings }}<small>.00</small></strong><p>Demonstration payments</p></article>
-    <article class="metric-card signal app-reveal"><span>Pending work</span><strong>${{ pending_earnings }}<small>.00</small></strong><p>{{ active_count }} active assignment{{ active_count|pluralize }}</p></article>
+    <article class="metric-card app-reveal"><span>Available record</span><strong>{{ verified_earnings }}<small> test USDC</small></strong><p>Verified testnet earnings</p></article>
+    <article class="metric-card app-reveal"><span>Completed work</span><strong>{{ completed_count }}</strong><p>See payment history for confirmed tokens</p></article>
+    <article class="metric-card signal app-reveal"><span>Pending work</span><strong>{{ pending_earnings }}<small> test USDC</small></strong><p>{{ active_count }} active assignment{{ active_count|pluralize }}</p></article>
   </section>
 
   <section class="work-section scroll-reveal">

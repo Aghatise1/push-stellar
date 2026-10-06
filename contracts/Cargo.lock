@@ -1262,6 +1262,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "push-escrow-staff"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "push-milestone"
 version = "0.1.0"
 dependencies = [

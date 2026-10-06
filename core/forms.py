@@ -261,7 +261,7 @@ class JobForm(forms.ModelForm):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.fields['payment_asset'].required=False
-        if not (settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT):
+        if not settings.PUSH_TESTNET_ONLY and not (settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT):
             self.fields['payment_asset'].widget=forms.HiddenInput()
             self.fields['payment_asset'].disabled=True
         else:
@@ -333,6 +333,11 @@ class ActionForm(forms.Form):
         ('bank_card','Bank / card simulation'),
         ('stellar_usdc_testnet','Stellar USDC testnet'),
     ])
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        if settings.PUSH_TESTNET_ONLY:
+            self.fields['payment_method'].choices=[('','Use the escrow workroom')]
+
     transaction_hash = forms.RegexField(regex=r'^[0-9a-fA-F]{64}$',required=False,max_length=64)
     note = forms.CharField(required=False,max_length=500)
     accept_terms = forms.BooleanField(required=False)

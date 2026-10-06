@@ -5,6 +5,13 @@ from .stellar import StellarVerificationError
 
 
 def can_review(user,agreement):
+    if getattr(agreement,'staff_governed',False):
+        from .models import EscrowStaffWallet
+        item=agreement.assignment
+        if user.pk in (item.job.owner_id,item.worker_id): return False
+        wallet=EscrowStaffWallet.objects.filter(user=user).first()
+        return bool(wallet and wallet.address not in (agreement.client_address,agreement.worker_address)
+                    and user.is_active and user.email_verified and has_staff_access(user,{'owner','admin','trust_support'}))
     return user.pk==agreement.reviewer_id and has_staff_access(user,{'owner','admin','trust_support'})
 
 

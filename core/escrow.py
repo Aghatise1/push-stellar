@@ -13,7 +13,7 @@ SCALE = 10_000_000
 
 
 def require_enabled():
-    if not settings.PUSH_TESTNET_ESCROW_ENABLED or not settings.PUSH_TESTNET_ESCROW_CONTRACT:
+    if not settings.PUSH_TESTNET_ESCROW_ENABLED or not (settings.PUSH_TESTNET_ESCROW_CONTRACT or settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT):
         raise StellarVerificationError('Testnet escrow is not enabled on this deployment yet.')
     if settings.STELLAR_TESTNET_SOROBAN_RPC.rstrip('/') != RPC or settings.STELLAR_TESTNET_USDC_ISSUER != ISSUER:
         raise StellarVerificationError('Escrow requires the fixed official Stellar testnet configuration.')
@@ -36,6 +36,20 @@ def digest(payload):
 
 def build(agreement,action,source,payload):
     rpc=server()
+    if action=='fund':
+        from .stellar import account_balances
+        balances=account_balances(source,missing_message='The client wallet is not funded on Stellar testnet. Fund it with test XLM first.')
+        if balances['xlm']<=0: raise StellarVerificationError('The client needs test XLM for network fees and account reserves.')
+        if agreement.asset=='USDC':
+            if not balances['has_usdc_trustline']:
+                raise StellarVerificationError('The client wallet needs a trustline for the supported test USDC issuer.')
+            if balances['usdc']<agreement.amount:
+                raise StellarVerificationError('The client does not have enough supported test USDC. Test XLM does not fund a USDC agreement.')
+            receiving=account_balances(agreement.worker_address,missing_message='The worker wallet must be funded with test XLM before escrow can begin.')
+            if not receiving['has_usdc_trustline']:
+                raise StellarVerificationError('The worker must add the supported test USDC trustline before funding, so settlement can reach their wallet.')
+        elif balances['xlm']<=agreement.amount:
+            raise StellarVerificationError('The client needs the agreed test XLM amount plus extra XLM for fees and account reserves.')
     aid=scval.to_bytes(bytes.fromhex(agreement.agreement_id))
     method=action
     args=[aid]
@@ -46,7 +60,9 @@ def build(agreement,action,source,payload):
     elif action == 'submit': args += [scval.to_bytes(digest(payload))]
     elif action == 'dispute':
         method='open_dispute';args += [scval.to_address(source)]
-    elif action == 'resolve': args += [scval.to_int128(payload['client_amount']*SCALE),scval.to_int128(payload['worker_amount']*SCALE)]
+    elif action == 'resolve':
+        if getattr(agreement,'staff_governed',False): args += [scval.to_address(source)]
+        args += [scval.to_int128(payload['client_amount']*SCALE),scval.to_int128(payload['worker_amount']*SCALE)]
     elif action not in ('approve','revise','refund_expired','claim_expired'):
         raise StellarVerificationError('Unsupported escrow operation.')
     envelope=(TransactionBuilder(rpc.load_account(source),NETWORK,base_fee=100)
@@ -88,3 +104,32 @@ def read_agreement(agreement,rpc=None):
     if any(str(data[k].address)!=v for k,v in expected.items()) or data['amount']!=agreement.amount*SCALE:
         raise StellarVerificationError('On-chain escrow terms do not match the accepted agreement.')
     return data
+
+
+def registry_owner(contract,rpc=None):
+    rpc=rpc or server()
+    entry=rpc.get_contract_data(contract,xdr.SCVal(xdr.SCValType.SCV_LEDGER_KEY_CONTRACT_INSTANCE))
+    if not entry: raise StellarVerificationError('Staff escrow contract is unavailable.')
+    value=xdr.LedgerEntryData.from_xdr(entry.xdr).contract_data.val
+    for pair in value.instance.storage.sc_map:
+        if scval.to_native(pair.key)==['Owner']:
+            return scval.to_native(pair.val).address
+    raise StellarVerificationError('This contract does not expose the expected staff authority.')
+
+
+def registry_role(contract,address,rpc=None):
+    rpc=rpc or server()
+    if address==registry_owner(contract,rpc): return 3
+    key=scval.to_vec([scval.to_symbol('Staff'),scval.to_address(address)])
+    entry=rpc.get_contract_data(contract,key)
+    return int(scval.to_native(xdr.LedgerEntryData.from_xdr(entry.xdr).contract_data.val)) if entry else 0
+
+
+def build_staff(contract,source,wallet,role):
+    rpc=server()
+    args=[scval.to_address(source),scval.to_address(wallet),scval.to_uint32(role)]
+    envelope=(TransactionBuilder(rpc.load_account(source),NETWORK,base_fee=100)
+        .append_invoke_contract_function_op(contract,'set_staff',args).set_timeout(300).build())
+    prepared=rpc.prepare_transaction(envelope)
+    if prepared.transaction.fee>SCALE: raise StellarVerificationError('Network fee exceeds 1 test XLM.')
+    return prepared

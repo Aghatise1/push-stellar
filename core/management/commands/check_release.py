@@ -65,6 +65,22 @@ class Command(BaseCommand):
             except Exception as exc:
                 failures.append(f'Database readiness failed: {type(exc).__name__}.')
 
+        if settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ONLY:
+            from core import escrow as chain
+            from core.models import EscrowStaffWallet
+            from core.access import staff_role
+            try:
+                require(bool(settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT),
+                        'Staff-governed escrow contract configured.', 'New testnet escrow requires the staff-governed contract.')
+                if not options['skip_database'] and settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT:
+                    owner=chain.registry_owner(settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT)
+                    wallet=EscrowStaffWallet.objects.select_related('user').filter(address=owner).first()
+                    require(bool(wallet and wallet.user.is_active and wallet.user.email_verified and staff_role(wallet.user)=='owner'),
+                            'Contract owner has verified their own Push staff wallet.',
+                            'Register the actual Push owner wallet before enabling escrow; QA wallet identities are not live authority.')
+            except Exception as exc:
+                failures.append(f'Escrow owner readiness failed: {type(exc).__name__}.')
+
         if options['live_stellar']:
             try:
                 response = _get_json(settings.STELLAR_TESTNET_HORIZON.rstrip('/'))
