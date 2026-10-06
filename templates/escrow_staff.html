@@ -2,7 +2,15 @@
 {% block title %}Escrow staff access{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{% static 'escrow.css' %}">{% endblock %}
 {% block content %}
-<div class="page-heading"><div><span class="tag">Owner · Admin · Trust &amp; Support</span><h1>Escrow staff access</h1><p class="lead">Use your own wallet to sign dispute decisions. Push never asks for your secret key.</p></div><button type="button" class="button secondary" data-wallet-connect data-wallet-endpoint="{% url 'staff_wallet_connect' %}">Connect staff wallet</button></div>
+<div class="page-heading"><div><span class="tag">Owner · Admin · Trust &amp; Support</span><h1>Escrow staff access</h1><p class="lead">Use your own wallet to sign dispute decisions. Push never asks for your secret key.</p></div><button type="button" class="button secondary" data-staff-connect-control{% if wallet_session_connected %} hidden{% endif %} data-wallet-connect data-wallet-endpoint="{% url 'staff_wallet_connect' %}">Connect staff wallet</button></div>
+<section aria-label="Wallet status" class="guidance-panel">
+<p data-wallet-status role="status" aria-live="polite"></p>
+<p><strong>Freighter connection:</strong> <span data-staff-wallet-status>{% if wallet_session_connected %}Connected · {{ connected_wallet_address }}{% else %}Disconnected{% endif %}</span></p>
+<form method="post" action="{% url 'staff_wallet_disconnect' %}" data-wallet-disconnect{% if not wallet_session_connected %} hidden{% endif %}>{% csrf_token %}<button class="button secondary" type="submit">Disconnect staff wallet</button></form>
+<p><strong>Ownership verification:</strong> {% if registered %}Verified — saved proof of ownership, not a live connection.{% else %}Not verified{% endif %}</p>
+<p><strong>Escrow activation:</strong> {% if escrow_live %}Enabled on testnet{% else %}Not activated — funding and settlement unavailable.{% endif %}</p>
+<p>Connecting requires a fresh approval in Freighter. This proof is never broadcast and transfers no tokens. Disconnect ends your Push signing session; Freighter may retain Push in its approved sites.</p>
+</section>
 <div class="notice">There are two permissions: your approved Push staff role and your wallet’s contract permission. Suspending a Push account blocks access here immediately. An owner or authorised admin must also sign its on-chain revocation to remove direct contract access.</div>
 <section data-escrow-room data-prepare="{% url 'escrow_staff_prepare' %}" data-submit="{% url 'escrow_staff_submit' %}">
 {% csrf_token %}

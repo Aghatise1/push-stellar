@@ -176,16 +176,30 @@ def wallet_connection(request, operation):
         saved=request.session.get('staff_wallet_selected_address','')
         if operation=='disconnect':
             request.session.pop(key,None)
+            request.session.pop('staff_wallet_challenge',None)
             request.session['staff_wallet_disconnected']=True
         else:
             address=str(data.get('address','')).strip()
             valid=valid_account_id(address) and str(data.get('network','')).upper()=='TESTNET'
             if operation=='connect':
                 if not valid: raise StellarVerificationError('Connect a valid Stellar testnet wallet in Freighter.')
+                proof=request.session.get('staff_wallet_challenge')
+                if not data.get('signedXdr'):
+                    request.session.pop(key,None)
+                    request.session['staff_wallet_disconnected']=True
+                    envelope=(TransactionBuilder(Account(address,-1),chain.NETWORK,base_fee=100)
+                        .append_manage_data_op('Push staff connection',secrets.token_bytes(32)).set_timeout(300).build())
+                    request.session['staff_wallet_challenge']={'hash':envelope.hash_hex(),'address':address,'user':request.user.pk,'expires':timezone.now().timestamp()+300}
+                    return JsonResponse({'ok':True,'requiresApproval':True,'xdr':envelope.to_xdr(),'source':address,'networkPassphrase':chain.NETWORK})
+                if not proof or proof['user']!=request.user.pk or proof['address']!=address or proof['expires']<timezone.now().timestamp():
+                    raise StellarVerificationError('Connection approval expired. Connect again.')
+                from types import SimpleNamespace
+                chain.validate_signature(SimpleNamespace(tx_hash=proof['hash'],source=address),data['signedXdr'])
+                request.session.pop('staff_wallet_challenge',None)
                 request.session['staff_wallet_selected_address']=saved=address
                 request.session.pop('staff_wallet_disconnected',None)
                 request.session[key]=address
-            elif valid and data.get('connected') and address==saved and not request.session.get('staff_wallet_disconnected'):
+            elif valid and data.get('connected') and address==saved and request.session.get(key)==address and not request.session.get('staff_wallet_disconnected'):
                 request.session[key]=address
             else:
                 request.session.pop(key,None)

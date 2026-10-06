@@ -23,6 +23,7 @@ function harness(initialConnected, result) {
   };
   const document = {
     cookie:'',
+    querySelectorAll(){return [];},
     querySelector(selector) {
       if(selector==='[data-wallet-shell]') return shell;
       if(selector==='meta[name="csrf-token"]') return {content:'test-csrf'};
