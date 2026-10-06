@@ -75,7 +75,7 @@
       <strong>{{ user.display_name }}</strong>
       <small>{{ user.email }}</small>
       <a class="quiet-link" href="{% url 'account_settings' %}">Account settings</a>
-      {% if not staff_portal_active or staff_is_owner %}<a class="quiet-link" href="{% url 'profile' %}">Edit profile</a>{% endif %}
+      {% if not staff_portal_active %}<a class="quiet-link" href="{% url 'profile' %}">Edit profile</a>{% endif %}
       <a class="quiet-link" href="{% url 'help' %}">Help centre</a>
       <a class="quiet-link" href="{% url 'documentation' %}">Documentation</a>
       <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button">Sign out</button></form>
