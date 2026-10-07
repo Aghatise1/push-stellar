@@ -212,3 +212,58 @@ class EscrowEndpointTests(TestCase):
         self.item.refresh_from_db();self.assertEqual(self.item.status,'funded')
         self.assertEqual(server.return_value.send_transaction.call_count,1)
         self.assertEqual(self.item.events.count(),1)
+
+
+@override_settings(PUSH_TESTNET_ONLY=True,PUSH_TESTNET_ESCROW_ENABLED=True,PUSH_TESTNET_ESCROW_STAFF_CONTRACT='Ctest')
+class WalletSetupRecoveryTests(TestCase):
+    setUp=EscrowEndpointTests.setUp
+    person=EscrowEndpointTests.person
+
+    def connect(self,user):
+        self.client.force_login(user)
+        response=self.client.post(reverse('wallet_connect'),{'address':user.stellar_address,'network':'TESTNET'},content_type='application/json')
+        self.assertEqual(response.status_code,200)
+
+    def configure(self):
+        return self.client.post(reverse('assignment_action',args=[self.item.pk]),{'action':'configure'})
+
+    def assert_inline(self,response,text):
+        self.assertEqual(response.status_code,400)
+        self.assertTemplateUsed(response,'escrow_assignment.html')
+        self.assertContains(response,text,status_code=400)
+        self.assertContains(response,'Connect my testnet wallet',status_code=400)
+        self.assertEqual(EscrowAgreement.objects.count(),0)
+        self.assertEqual(EscrowTransaction.objects.count(),0)
+
+    def test_disconnected_client_gets_inline_recovery(self):
+        self.client.force_login(self.owner)
+        self.assert_inline(self.configure(),'Your wallet is disconnected')
+
+    def test_missing_worker_wallet_names_the_person_who_must_connect(self):
+        self.worker.stellar_address='';self.worker.save()
+        self.connect(self.owner)
+        self.assert_inline(self.configure(),'The worker has not saved a valid wallet')
+
+    def test_shared_wallet_remains_blocked(self):
+        self.worker.stellar_address=self.owner.stellar_address;self.worker.save()
+        self.connect(self.owner)
+        self.assert_inline(self.configure(),'using the same wallet')
+
+    @patch('core.escrow_views.chain.token_address',return_value='token')
+    @patch('core.escrow_views.chain.registry_owner')
+    def test_separate_wallet_connections_recover_configuration_and_acceptance(self,registry,token):
+        from .models import EscrowStaffWallet
+        StaffAccess.objects.create(user=self.reviewer,role='owner',status='approved')
+        EscrowStaffWallet.objects.create(user=self.reviewer,address=self.reviewer.stellar_address)
+        registry.return_value=self.reviewer.stellar_address
+        self.connect(self.worker)
+        self.connect(self.owner)
+        self.assertEqual(self.configure().status_code,302)
+        agreement=EscrowAgreement.objects.get(assignment=self.item)
+        self.assertEqual(agreement.client_address,self.owner.stellar_address)
+        self.assertEqual(agreement.worker_address,self.worker.stellar_address)
+        self.connect(self.worker)
+        result=self.client.post(reverse('assignment_action',args=[self.item.pk]),{'action':'accept','accept_terms':'on','accept_xlm':'on'})
+        self.assertEqual(result.status_code,302)
+        self.item.refresh_from_db();self.assertEqual(self.item.status,'awaiting_funding')
+        self.assertEqual(EscrowTransaction.objects.count(),0)
