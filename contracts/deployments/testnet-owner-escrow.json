@@ -1,0 +1,37 @@
+{
+  "contract": "CADSA472PKFYMYPU2PNTFIRXPYJYDW2SWRTD762D4KEIHH27D7EGCBWD",
+  "network": "testnet",
+  "purpose": "owner-controlled testnet pilot; disposable QA agreements",
+  "transactions": [
+    {
+      "action": "XLM fund",
+      "hash": "2a94125ebfb6d713a13fcc56367dda874772a1d5d15c0c2070ffa015678625bc"
+    },
+    {
+      "action": "XLM submit",
+      "hash": "d03174b157cff48917fff4dab9a3d5536a4939ce010379e210cf7a010a9e34fa"
+    },
+    {
+      "action": "XLM approve",
+      "hash": "8ba029a0dac5e82e59c371f1259c5004ffb924f69a9ebe9a9bbd4cf285ebd170"
+    },
+    {
+      "action": "USDC fund",
+      "hash": "a6409f4584e80138d7c77b832e4b3b2708ccd633ce5dfce9f8ef81bc2cca11f2"
+    },
+    {
+      "action": "USDC submit",
+      "hash": "1dce3307c2aacf1ca0d6bfb591eceec2721e7e3cefc256f064fbfd1efa9e7bda"
+    },
+    {
+      "action": "USDC approve",
+      "hash": "4ad6ffd1bf5f0013f68baf232359069bd3d3adb2b1c34311465965304f7eaa26"
+    }
+  ],
+  "owner": "GAOLY6ZLXM4V5NOFFHWX7QYNZR4MECF2AECJSHBDFBFEG4T4OZOTQZTR",
+  "wasm_sha256": "bf6b6e976e27d3bc97d3a5adf8567166609948d1aa9f3efaca2f5174f7e60659",
+  "deployment_transaction": "08de638cd93b3105ee436a255afa8f762ab60c2f24a60e98335457c313155a25",
+  "initial_staff": "Only the verified owner; disposable deployer and QA support have no registry permissions",
+  "activation": "Configured in Render; verify health and build readiness checks before reporting active",
+  "limitations": "Actual owner dispute signing must be exercised by the owner in Freighter; no owner secret is held by Push or deployment tooling."
+}

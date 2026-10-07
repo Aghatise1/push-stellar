@@ -50,7 +50,7 @@ def health(request):
             cursor.fetchone()
     except Exception:
         return JsonResponse({'ok':False},status=503)
-    payload={'ok':True,'service':'push','network':'stellar-testnet','escrow_enabled':bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT)}
+    payload={'ok':True,'service':'push','network':'stellar-testnet','escrow_enabled':bool(settings.PUSH_TESTNET_ESCROW_ENABLED and (settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT if settings.PUSH_TESTNET_ONLY else settings.PUSH_TESTNET_ESCROW_CONTRACT))}
     if settings.PUSH_RELEASE:
         payload['release']=settings.PUSH_RELEASE
     response=JsonResponse(payload)

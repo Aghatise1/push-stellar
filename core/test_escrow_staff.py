@@ -232,3 +232,9 @@ class StaffConnectionTests(StaffWalletTests):
         envelope=TransactionEnvelope.from_xdr(prepared['xdr'],NETWORK);envelope.sign(Keypair.random())
         self.assertEqual(self.client.post(reverse('staff_wallet_connect'),{**body,'signedXdr':envelope.to_xdr()},content_type='application/json').status_code,400)
         self.assertNotIn('staff_wallet_connected_address',self.client.session)
+
+    @override_settings(PUSH_TESTNET_ONLY=True,PUSH_TESTNET_ESCROW_ENABLED=True,PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55,PUSH_TESTNET_ESCROW_CONTRACT='')
+    def test_health_reports_staff_contract_activation(self):
+        self.assertTrue(self.client.get('/healthz/').json()['escrow_enabled'])
+        with override_settings(PUSH_TESTNET_ESCROW_ENABLED=False):
+            self.assertFalse(self.client.get('/healthz/').json()['escrow_enabled'])
