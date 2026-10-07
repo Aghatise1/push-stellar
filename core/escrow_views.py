@@ -32,9 +32,24 @@ def accessible(request,pk):
     raise PermissionError('Only participants and authorised dispute staff can access this escrow.')
 
 
-def workroom(request,item):
+def wallet_setup_problem(request,item,agreement=None):
+    client=agreement.client_address if agreement else item.job.owner.stellar_address
+    worker=agreement.worker_address if agreement else item.worker.stellar_address
+    if not valid_account_id(client): return 'The client has not saved a valid wallet. The client must connect Freighter on Stellar testnet before preparing the agreement.'
+    if not valid_account_id(worker): return 'The worker has not saved a valid wallet. Ask the worker to sign in to their own Push account and connect Freighter on Stellar testnet, then refresh this workroom.'
+    if client==worker: return 'The client and worker are using the same wallet. Each person needs a different Stellar testnet wallet. Connect a different wallet before preparing the agreement.'
+    expected=client if request.user.pk==item.job.owner_id else worker
+    if request.user.pk in (item.job.owner_id,item.worker_id) and request.session.get('wallet_connected_address')!=expected:
+        return 'Your wallet is disconnected or does not match this agreement. Connect the wallet shown below in Freighter on Stellar testnet.'
+    return ''
+
+
+def workroom(request,item,error='',status=200):
     agreement=EscrowAgreement.objects.filter(assignment=item).first()
     return render(request,'escrow_assignment.html',{
+        'workroom_error':error,'wallet_setup_problem':wallet_setup_problem(request,item,agreement),
+        'client_wallet':agreement.client_address if agreement else item.job.owner.stellar_address,
+        'worker_wallet':agreement.worker_address if agreement else item.worker.stellar_address,
         'item':item,'escrow':agreement,'is_owner':request.user.pk==item.job.owner_id,
         'is_worker':request.user.pk==item.worker_id,'is_reviewer':bool(agreement and can_review(request.user,agreement)),
         'reviewers':reviewers(item),'submission_form':SubmissionForm(),'message_form':MessageForm(),
@@ -44,7 +59,7 @@ def workroom(request,item):
         'now_timestamp':int(timezone.now().timestamp()),
         'delivery_due':datetime.fromtimestamp(agreement.deadline,tz=dt_timezone.utc) if agreement else None,
         'review_due':datetime.fromtimestamp(agreement.review_until,tz=dt_timezone.utc) if agreement and agreement.review_until else None,
-    })
+    },status=status)
 
 
 @verified
@@ -54,27 +69,31 @@ def detail(request,pk):
 
 
 def agreement_action(request,item):
+    def workroom_error(message):
+        return workroom(request,item,error=message,status=400)
     try:chain.require_enabled()
-    except StellarVerificationError as exc:return HttpResponseBadRequest(str(exc))
+    except StellarVerificationError as exc:return workroom_error(str(exc))
     action=request.POST.get('action')
     with transaction.atomic():
         item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
         agreement=EscrowAgreement.objects.filter(assignment=item).first()
-        if item.status!='awaiting_acceptance' and action!='cancel':return HttpResponseBadRequest('Use the wallet-authorised escrow controls.')
+        if item.status!='awaiting_acceptance' and action!='cancel':return workroom_error('Use the wallet-authorised escrow controls.')
         if action=='configure' and request.user.pk==item.job.owner_id and not agreement:
             try:chain.require_enabled()
-            except StellarVerificationError as exc:return HttpResponseBadRequest(str(exc))
+            except StellarVerificationError as exc:return workroom_error(str(exc))
+            problem=wallet_setup_problem(request,item)
+            if problem: return workroom_error(problem)
             contract=settings.PUSH_TESTNET_ESCROW_CONTRACT
             governed=settings.PUSH_TESTNET_ONLY
             if governed:
                 contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
-                if not contract: return HttpResponseBadRequest('The staff escrow contract must be configured before funding can be enabled.')
+                if not contract: return workroom_error('The staff escrow contract must be configured before funding can be enabled.')
                 try: root_address=chain.registry_owner(contract)
                 except Exception:
-                    return HttpResponseBadRequest('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
+                    return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
                 root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
                 if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
-                    return HttpResponseBadRequest('The contract owner must register and verify their staff wallet first.')
+                    return workroom_error('The contract owner must register and verify their staff wallet first.')
                 reviewer=root.user
                 reviewer_address=root.address
             else:
@@ -83,9 +102,9 @@ def agreement_action(request,item):
             source=request.session.get('wallet_connected_address','')
             addresses=[source,item.worker.stellar_address,reviewer_address]
             if source!=item.job.owner.stellar_address or not all(valid_account_id(v) for v in addresses) or addresses[0]==addresses[1] or (not governed and len(set(addresses))!=3):
-                return HttpResponseBadRequest('Connect your wallet. Client and worker need distinct valid testnet wallets.')
+                return workroom_error('Connect your wallet. Client and worker need distinct valid testnet wallets.')
             deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
-            if deadline<=timezone.now().timestamp():return HttpResponseBadRequest('The delivery deadline has passed.')
+            if deadline<=timezone.now().timestamp():return workroom_error('The delivery deadline has passed.')
             snapshot=item.agreement_snapshot;asset=snapshot.get('payment_asset',item.job.payment_asset)
             EscrowAgreement.objects.create(assignment=item,reviewer=reviewer,contract=contract,staff_governed=governed,
                 agreement_id=hashlib.sha256(('push-escrow:'+str(item.pk)).encode()).hexdigest(),client_address=source,
@@ -94,18 +113,18 @@ def agreement_action(request,item):
                 revision_limit=int(snapshot.get('revision_limit',item.job.revision_limit)))
         elif action=='accept' and request.user.pk==item.worker_id and agreement:
             if not agreement.staff_governed and not can_review(agreement.reviewer,agreement):
-                return HttpResponseBadRequest('The assigned reviewer is no longer authorised. Cancel this unfunded agreement and prepare new terms.')
+                return workroom_error('The assigned reviewer is no longer authorised. Cancel this unfunded agreement and prepare new terms.')
             if not request.POST.get('accept_terms') or (agreement.asset=='XLM' and not request.POST.get('accept_xlm')):
-                return HttpResponseBadRequest('Accept the agreement and the XLM notice when applicable.')
+                return workroom_error('Accept the agreement and the XLM notice when applicable.')
             if request.session.get('wallet_connected_address')!=agreement.worker_address:
-                return HttpResponseBadRequest('Connect the worker wallet named in this agreement.')
+                return workroom_error('Connect the worker wallet named in this agreement.')
             agreement.accepted_at=timezone.now();agreement.xlm_acknowledged=agreement.asset=='XLM';agreement.save()
             item.accepted_terms_at=agreement.accepted_at;item.status='awaiting_funding';item.save(update_fields=['accepted_terms_at','status'])
         elif action=='cancel' and request.user.pk in (item.worker_id,item.job.owner_id) and item.status in ('awaiting_acceptance','awaiting_funding'):
             if agreement and (agreement.chain_status!='Unfunded' or agreement.transactions.filter(state__in=['prepared','pending']).exists()):
-                return HttpResponseBadRequest('Check any prepared or pending transaction before cancellation.')
+                return workroom_error('Check any prepared or pending transaction before cancellation.')
             item.status='cancelled';item.save(update_fields=['status'])
-        else:return HttpResponseBadRequest('This action is unavailable. Refresh the workroom.')
+        else:return workroom_error('This action is unavailable. Refresh the workroom.')
         Event.objects.create(assignment=item,actor=request.user,kind=action,note='Testnet escrow agreement terms')
     return redirect('escrow_detail',pk=item.pk)
 
