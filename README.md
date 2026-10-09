@@ -1,20 +1,18 @@
-# Push — Stellar testnet MVP
+# Push: Stellar testnet MVP
 
-## Current first-phase changes
+## Current implementation
 
-Member payments are assignment-only. The wallet retains balances, receiving details and historical transfers, but general email/address transfers are blocked by both preparation and submission endpoints. Explicit Disconnect remains in effect until the member reconnects, even if Freighter still permits the site.
+Push coordinates freelance briefs, applications, private workrooms and contract escrow using test XLM and test USDC. New assignments use the staff governed Soroban escrow flow. Legacy simulation records are historical; they are not real deposits or customer revenue. General wallet transfers are blocked in the current assignment only flow.
 
-Project messages open after agreement acceptance. Both message endpoints enforce the same rule; completed and cancelled conversations are read-only. Selecting a payment route does not lock funds: active escrow is still disabled.
+The client signs funding after worker acceptance. The worker signs delivery, the client signs release, and authorised staff sign disputed settlements. Push never stores private wallet keys. Staff and customer signing sessions are separate. Contract authority is separate from the saved proof of wallet ownership.
 
-See `STAGING.md` for hosted staging setup and release gates. `render-staging.yaml` requires separate protected credentials; it does not mean a staging service has been provisioned. `.github/workflows/checks.yml` runs application, wallet-state and contract tests. GitHub branch protection and Render deployment settings require separate configuration.
+The pilot was previously activated on Render. Confirm current health and configuration before demonstrations. Mainnet is not supported by this release. Test assets have no monetary value. Recorded QA is not an independent security audit or proof of a complete Freighter browser test.
 
-This folder is the canonical Push project. The original static landing site has been audited and mapped in `ORIGINAL-MIGRATION.md`; system behaviour and authority are defined in `SYSTEM-DESIGN.md` and `PRODUCT-RULES.md`.
+Start with [current documentation](docs/README.md), [architecture](docs/ecosystem.md), [wallet operation](docs/testnet-escrow.md), [acceptance checks](docs/pilot-acceptance.md) and [security readiness](docs/security-readiness.md). Older planning files describe historical phases and must not override current implementation evidence.
 
-This app demonstrates accounts, private-by-default profiles, jobs, applications, a participant-only messaging inbox, earnings summaries, and an assignment from acceptance to payment. **It is not a public launch or production escrow service.** The wallet now builds exact short-lived Stellar testnet transactions, obtains approval in Freighter, submits them to Horizon and records the confirmed hash. Generic USDC and bank/card remain simulation choices. Testnet assets have no monetary value. Push never collects wallet secret keys and has no proprietary token.
+The pilot uses invitations. The intended future mainnet platform is publicly accessible subject to review and launch decisions. The founder owns the funding roadmap; no sprint budget or 30 day plan is defined by this documentation update.
 
-A Soroban milestone contract is also included under `contracts/`, with deployment and complete lifecycle evidence for testnet. Contract-held payments remain feature-gated because the contract has not received an independent security audit; the active web flow remains a direct, non-custodial wallet payment.
-
-The current Stellar testnet pilot is invite-only so participation can be controlled and reviewed while the workflow is tested safely. That restriction applies to the pilot rather than the intended mainnet product, which is designed for public access with human profile review to improve marketplace trust.
+See STAGING.md for staging setup. A staging configuration file is not evidence that a staging service has been provisioned.
 
 ## Open the preview
 

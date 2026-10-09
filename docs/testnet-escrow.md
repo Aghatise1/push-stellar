@@ -1,35 +1,37 @@
-# Disabled testnet escrow integration
+# Wallets and testnet escrow
 
-This release connects the new workroom and named staff-review workflow, but defaults `PUSH_TESTNET_ESCROW_ENABLED` to false and the contract setting to empty. It does not enable escrow on the public site or support mainnet. Existing assignments retain their original flow; the migration defaults `escrow_required` to false.
+Current staff governed implementation, updated 9 October 2026. This replaces the earlier disabled integration guide. Configuration controls availability; never infer activation from a saved address.
 
-## Implemented
+## Three separate states
 
-- New assignments use escrow only when explicitly configured and enabled. An incomplete enabled configuration blocks selection rather than silently selecting a simulated payment route.
-- Client selects a non-participant, approved owner/admin/Trust & Support reviewer with a distinct public testnet wallet. Worker sees the pinned wallets, reviewer, amount, asset and terms before acceptance. XLM requires a separate price acknowledgement.
-- The client signs atomic contract creation and funding. Application state advances only after successful ledger confirmation; insufficient funds do not unlock work.
-- Worker signs delivery, client signs release or bounded revision; either participant can dispute. The pinned reviewer signs a full release, refund or whole-token split. Existing moderator simulation and direct-payment endpoints cannot settle escrow assignments.
-- Separate review period starts with delivery; revision creates a fresh delivery window. Contract enforces overdue-delivery refund and post-review worker claim. Disputed funds cannot use normal release/expiry routes.
-- Exact prepared envelope and expected wallet signature are checked. Signed requests are stored before broadcast; retries reuse the same hash. Expired requests are cleared only when RPC history covers the whole possible inclusion period. Uncertain results remain blocked.
-- Job selector supports test USDC or XLM behind the feature flag. XLM records are labelled explicitly and excluded from dollar-labelled aggregates; the payment page shows separate XLM totals.
+1. Connection is the current Push signing session. Disconnect ends that session; Freighter may retain its site permission separately.
+2. Ownership verification is a saved signed proof linking a staff wallet to an account. It survives disconnect and does not mean currently connected.
+3. Contract activation and permission determine whether the configured escrow is available and a staff wallet may act. Verification alone does not grant permission.
 
-## Verified
+Staff reconnect requires a fresh signed proof checked locally, never broadcast. Push never requests private keys or recovery phrases. Staff and customer wallet sessions are separate. Staff use separate customer accounts for freelance work.
 
-Public evidence is in `contracts/deployments/testnet-escrow.json`. A disposable 1-test-XLM agreement completed funding, delivery and release through the application's builder/signature validator and deployed contract. A second completed funding, dispute and reviewer-authorised full refund. CLI identities remained local and ignored; no signing secrets were added to the application or repository.
+## Funding and settlement
 
-Application tests cover role separation, disabled routes, worker acknowledgement, exact signature matching, failed/pending transactions, idempotent confirmation, legacy settlement isolation, expiry-history coverage and separate token totals. Contract tests cover insufficient balance rollback, missing authorisation, duplicate payout protection, disputes, refunds, review periods and revisions.
+New testnet assignments use escrow with separate participant wallets and test XLM or test USDC. The client signs funding after agreement acceptance. Acceptance alone cannot debit a wallet. Only confirmed chain evidence advances the funding state.
 
-## Required before enabling the shared testnet pilot
+The worker signs delivery. The client signs release or a permitted revision. Staff do not approve routine payments. Contract disputes block ordinary release until an authorised staff wallet resolves the case. Settlement can only pay the original participant wallets. Expiry refund and claim paths require an authorised signed transaction and contract timing checks; time alone does not move tokens.
 
-1. Exercise test USDC end to end with the official configured testnet issuer and funded disposable accounts, including trustline/receiving-limit failures.
-2. Exercise the actual Freighter browser approval/cancellation flow end to end. The recorded live checks used CLI signatures from disposable wallets; they are not evidence of a tested browser extension flow.
-3. Nominate an eligible staff reviewer and confirm their public wallet and availability. The disposable QA arbiter is not a production staff appointment.
-4. Validate migrations, concurrent requests and rollback on a separate staging database; exercise unavailable RPC and delayed confirmation recovery.
-5. Establish recovery for externally advanced contract state, stale RPC history, archived contract storage and unavailable reviewer keys. The application currently blocks these uncertain cases for manual reconciliation rather than guessing payment outcomes.
-6. Review the security implications of staff access: revoking app access prevents signing through Push but does not revoke an address already pinned in an on-chain agreement. A reviewed key-management/recovery policy is required.
-7. Confirm public product/help/terms copy accurately describes the enabled pilot. This disabled release does not claim active public escrow.
+Wallet addresses are pinned to the agreement. Changing a profile cannot change a funded agreement. Cancel and prepare a new unfunded agreement if its wallets are incorrect.
 
-Only after these checks should a controlled testnet deployment set `PUSH_TESTNET_ESCROW_CONTRACT` to the verified contract and explicitly enable the flag. Check `/healthz/` for the effective flag and release. Never configure a mainnet RPC or real assets.
+## Staff authority
 
-## Before mainnet
+App role, active account, verified email, wallet proof and chain permission all matter. Owner is role 3, administrator role 2, reviewer role 1 and revoked role 0. Only the owner grants administrator authority. Administrators manage reviewers. Participants cannot review their own agreements.
 
-Independent contract/application security review, legal review of escrow and dispute authority, reviewed terms, operational monitoring, storage lifetime/recovery, reviewer key governance and incident procedures are required. No platform fee or fee recipient has been specified or implemented. No automatic migration of existing assignments is provided. This contract prototype is not independently audited.
+App suspension blocks application access. Removing chain authority requires a separately signed revocation. Owner rotation is not implemented. Staff wallet replacement is not automatic. A recovery procedure must not be claimed until implemented and tested.
+
+## Configuration and evidence
+
+Testnet only mode uses PUSH_TESTNET_ESCROW_ENABLED and PUSH_TESTNET_ESCROW_STAFF_CONTRACT. Defaults remain conservative. The deployed staff contract is recorded in contracts/deployments/testnet-owner-escrow.json with owner and XLM/USDC lifecycle hashes. Earlier deployment files are historical evidence.
+
+The pilot was previously enabled on Render. Recheck /healthz/ and deployment settings before a demonstration; this document is not a live health check. Never use mainnet assets in the pilot.
+
+## Verification limits
+
+Recorded QA transactions used command line signatures. Actual owner dispute signing and complete Freighter browser acceptance remain outstanding. See [acceptance checks](pilot-acceptance.md). Uncertain submissions remain pending for reconciliation and must not be blindly replaced or marked paid.
+
+See [security readiness](security-readiness.md) before real money use. No platform fee or staff compensation system is specified here.

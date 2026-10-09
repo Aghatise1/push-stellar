@@ -1,0 +1,22 @@
+/* Product guides share a readable measure without changing application screens. */
+.push-reading{max-width:72rem;margin-inline:auto}
+body.site-mode:has(.push-reading)::before{display:none}
+.push-reading .page-heading{padding-bottom:2rem;border-bottom:1px solid var(--line);gap:2rem;align-items:flex-start}
+.push-reading h1{font-size:clamp(2.5rem,5vw,4.5rem);line-height:1.08;letter-spacing:-.03em;max-width:19ch;text-wrap:balance}
+.push-reading h2{font-size:clamp(1.6rem,3vw,2.25rem);line-height:1.2;letter-spacing:-.025em;text-wrap:balance}
+.push-reading h3{font-size:1.15rem;line-height:1.35}
+.push-reading p,.push-reading li{font-size:1rem;line-height:1.7;max-width:70ch}
+.push-reading .lead{font-size:clamp(1.1rem,2vw,1.3rem);max-width:55ch}
+.push-reading>section{margin-block:3rem 4rem}
+.push-reading .rule-grid{gap:0 2rem}
+.push-reading .rule{padding:1.5rem 0;border-left:0}
+.push-reading .rule p{margin-bottom:0}
+.push-reading ol{padding-left:1.4rem;max-width:70ch}
+.push-reading li{padding-left:.5rem;margin-bottom:1rem}
+.push-reading li::marker{font-weight:650;color:var(--forest)}
+.push-reading .docs-grid{margin-top:3rem}
+.push-reading .docs-grid>a{border-radius:12px;padding:1.5rem}
+.push-reading a:focus-visible{outline:3px solid var(--forest);outline-offset:5px}
+.push-reading :where(p,h1,h2,h3,a,li){overflow-wrap:anywhere}
+.push-reading .button{min-height:44px;white-space:normal}
+@media(max-width:40rem){.push-reading .page-heading{display:block}.push-reading .page-heading>.button{margin-top:1.5rem}.push-reading .rule-grid{grid-template-columns:1fr}.push-reading>section{margin-block:2.5rem 3rem}.push-reading .section-heading{flex-wrap:wrap;gap:1rem}}
