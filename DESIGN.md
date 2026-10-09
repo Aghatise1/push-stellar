@@ -277,7 +277,7 @@ Motion is coordinated by static/landing-cinematic.js. Native scrolling drives he
 
 A fixed Pause motion / Resume motion button controls these enhancements and reports its state with aria-pressed. Pausing resets scroll transforms, stops the orbit and restores the gallery's vertical layout. Reduced-motion preference disables the orbit animation, removes image and lettering transforms, uses the vertical gallery and hides the redundant motion button. Without JavaScript, content remains visible, the gallery stacks and the orbit stays paused. The former single hero entrance is no longer the current motion design.
 
-The film retains its original source and uses a browser-compatible derivative with native controls, inline playback, a poster and preload none. It never autoplays; the script pauses it when the page becomes hidden or it leaves view. Native details/summary FAQ controls work without JavaScript. Film frames use contain fitting rather than cropping.
+The film preserves its original source and uses a silent H.264 looping derivative with its audio stream removed. It has no native player controls and starts automatically when visible, with inline playback, a poster and preload none. Reduced motion, the page pause control, hidden tabs and leaving view pause playback. Desktop uses full section width with a centred 16:9 crop; phones retain the complete 4:3 composition. Native details/summary FAQ controls work without JavaScript.
 
 ### Do's and Don'ts
 

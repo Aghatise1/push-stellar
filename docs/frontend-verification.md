@@ -28,3 +28,7 @@ Before the cinematic replacement, product, documentation and work-rules pages we
 Verification used a local Django build and demonstration fixtures. It does not establish compatibility with every browser, device or network condition. The six-rule layout, three-scene gallery, orbit and closing lettering are presentation features, not evidence that wallet or settlement acceptance is complete. The no-JavaScript layout is supported by the implementation; the recorded motion-state checks should not be treated as a separate full no-JavaScript browser audit.
 
 Deployment verification is pending for this release. No live wallet was connected or signed, and no on-chain payment flow was accepted as part of this frontend check. Freighter and escrow acceptance, independent security review and any production-readiness decision remain separate work. The product remains a voluntary Stellar testnet pilot with no real money. No 30-day roadmap is presented on this home.
+
+## Silent loop follow up
+
+The film now uses a video only H.264 derivative with no audio stream. Browser checks at 1280 and 390 pixels confirmed automatic muted playback, loop enabled, no native controls, no horizontal overflow and a full section width video. The page motion control paused playback. Desktop uses a centred 16:9 crop; mobile keeps the complete 4:3 frame. The original source remains preserved. The earlier native player observations above describe the previous release.
