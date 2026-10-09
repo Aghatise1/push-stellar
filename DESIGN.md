@@ -16,6 +16,11 @@ colors:
   warning: "#f0e7d1"
   danger: "#f2dfd8"
   focus: "#176b54"
+  cinema-ink: "#101110"
+  cinema-paper: "#f2eee5"
+  cinema-accent: "#ff8066"
+  cinema-muted: "#c3c3b9"
+  cinema-line: "#454640"
   white: "#fff"
   forest-hover: "#0e2d24"
   rail-active: "#242a26"
@@ -23,6 +28,18 @@ colors:
   rail-text: "#c7c8c0"
   rail-focus: "#ff9a80"
 typography:
+  cinema-display:
+    fontFamily: "'Instrument Sans', sans-serif"
+    fontSize: "clamp(3.4rem, 7vw, 6.5rem)"
+    fontWeight: 600
+    lineHeight: .99
+    letterSpacing: "-.035em"
+  cinema-headline:
+    fontFamily: "'Instrument Sans', sans-serif"
+    fontSize: "clamp(2.6rem, 5.7vw, 5.5rem)"
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: "-.035em"
   display:
     fontFamily: "'Instrument Sans', sans-serif"
     fontSize: "clamp(4rem, 8vw, 6rem)"
@@ -96,6 +113,8 @@ components:
 
 **Creative North Star: "The architectural tender dossier"**
 
+This is the application system. The public home page has a separately approved charcoal, ivory and coral cinematic world, documented below; its tokens are prefixed `cinema-`. The home extension does not change workrooms, reporting, forms, staff screens or public reading pages.
+
 An architectural tender dossier translated into software: precise briefs, numbered stages, strong typographic hierarchy and paper-like neutral surfaces. A dark ink rail anchors the workspace; a controlled vermilion signal marks the identity and key structural moments. Forest-green actions remain deliberately functional.
 
 The result is mature, legible and procedural. Fine rules organise evidence and stages; flat surfaces keep the document itself prominent. Glass and black-hole visual effects are excluded. Push is still a working name. This record describes the shipped local build, not a production launch approval.
@@ -133,7 +152,7 @@ Sand and muted terracotta distinguish notice and error surfaces. Retain explicit
 
 Locally served Instrument Sans provides regular and semibold faces with font-display swap. The sans-serif fallback remains available. There is no display/body family split.
 
-- **Display:** The home headline has a narrow measure (10ch), balanced wrapping and the display scale above. On mobile it uses clamp(3.4rem, 17vw, 5rem).
+- **Display:** The original dossier-style introduction has a narrow measure (10ch), balanced wrapping and the display scale above. On mobile it uses clamp(3.4rem, 17vw, 5rem).
 - **Headline:** General page headings use a maximum measure (15ch), tight line-height and a bottom margin (1.5rem).
 - **Title:** Section headings use the title scale. Smaller headings use 1.04rem with line-height 1.35.
 - **Body:** Paragraphs are limited to 70ch with pretty wrapping. Lead text uses clamp(1.05rem, 1.5vw, 1.3rem), line-height 1.5 and a 48ch measure; the introductory lead is 1.2rem.
@@ -145,7 +164,7 @@ Locally served Instrument Sans provides regular and semibold faces with font-dis
 
 Desktop navigation is a fixed rail (17.25rem) with padding (2.15rem 1.75rem 1.5rem). The content shell offsets by that width. The top bar is 4.5rem tall. Main content is centred at a maximum width (90rem), with responsive vertical and horizontal padding and 7rem bottom clearance.
 
-The home introduction pairs a larger headline column with a smaller copy/action column (1.4fr to .6fr; copy minimum 16rem). Process stages form four ruled columns. Principles use three columns, while product rules use two. These are observed surface compositions, not requirements for every screen.
+The dossier-style introduction pairs a larger headline column with a smaller copy/action column (1.4fr to .6fr; copy minimum 16rem). Process stages form four ruled columns. Principles use three columns, while product rules use two. These are observed surface compositions, not requirements for every screen.
 
 Job rows align category, flexible title, budget and action in four columns (7rem, flexible, 10rem, 5rem). Forms and detail screens use a two-to-one grid with a secondary minimum (14rem) and responsive gap. Form content caps at 44rem; authentication at 30rem. Workspace shortcuts use three equal ruled segments.
 
@@ -187,7 +206,7 @@ Tags are non-interactive bordered labels on deeper paper. Notices have a compact
 
 ### Focus and motion
 
-Keyboard focus uses a .1875rem outline with a .25rem offset; the rail substitutes its lighter focus colour. A skip link appears on keyboard focus. Buttons and navigation use short state transitions; records move only on interaction. No looping animation is present. Reduced-motion preference removes transitions and smooth scrolling.
+Keyboard focus uses a .1875rem outline with a .25rem offset; the rail substitutes its lighter focus colour. A skip link appears on keyboard focus. Buttons and navigation use short state transitions; records move only on interaction. No looping animation is present in these application components. Reduced-motion preference removes transitions and smooth scrolling. The public home has its own motion behaviour below.
 
 ## Do's and Don'ts
 
@@ -221,3 +240,50 @@ a denominator. Exact daily figures remain available as an accessible table.
 Use 7/30/90-day controls, 44px targets, responsive two-column count cards and
 single-column phone charts. Motion is limited to a 180ms entrance and button
 feedback; respect reduced motion. Reporting must work without JavaScript.
+
+## Public home: photographic editorial world (9 October 2026)
+
+This home-only world implements the approved charcoal, ivory and coral direction, layered photography and scroll-driven scenes. Application guidance above remains authoritative elsewhere. Product, rules and documentation pages continue to use public-reading.css; workrooms, reporting, forms and staff screens retain the dossier system.
+
+### Overview
+
+The sequence is a photographic hero with an orbiting motif, layered purpose photographs, the retained Push film, six operating rules alongside the actual interface, a three-scene gallery, a light payment explanation, FAQ and a coral closing invitation with oversized moving lettering. There is no 30-day roadmap. Illustration supplies atmosphere; the sample interface and explicit product copy supply evidence.
+
+### Colors
+
+The effective home tokens are charcoal ink #101110, warm ivory #f2eee5, coral accent #ff8066, muted text #c3c3b9 and divider #454640. Purpose uses #141513, film #1d1e1a, journey #0f1111 and talent #191a17. Payment uses warm paper #e9e3d6. The close uses coral #dc593f with dark text and a dark primary action. The shared footer retains its subdued existing light-text and divider treatment.
+
+**The Home Boundary Rule.** Apply this direction only to the public home and its scoped shell. Keep the application's forest task actions, reporting palette and paper work records unchanged.
+
+### Typography
+
+Locally served Instrument Sans remains shared. The hero uses clamp(3.4rem, 7vw, 6.5rem), line-height .99 and a 15ch measure. General headings use the cinema-headline role; purpose increases to clamp(3.7rem, 8vw, 7.5rem). The hero wordmark uses clamp(6rem, 16vw, 15rem). Gallery titles use clamp(2.8rem, 5vw, 5rem). Decorative closing lettering uses clamp(5rem, 15vw, 17rem), reducing to 22vw below 851px, and is hidden from assistive technology. Phone headings and safe long-text wrapping remain explicitly sized in the responsive rules.
+
+### Layout and photographic depth
+
+Full-width sections use generous responsive gutters and vertical spacing. The purpose section layers two rotated rectangular photographs behind a large heading and an opaque dark copy panel. Photo shadows and text shadows support this composition; application panels do not acquire these effects. The hero photograph sits behind a dark overlay and uses cover cropping. All decorative overflow remains clipped within the composition.
+
+The journey pairs a sticky sample workroom screenshot with six numbered rules: agree the work, fund the agreement, deliver with evidence, approve settlement, keep your keys and check the record. Alternating rule offsets and small circular photo fragments add rhythm. The screenshot is explicitly labelled as demonstration accounts and sample data. Below 851px, the journey stacks and the screenshot becomes static; below 481px, rule offsets disappear.
+
+The three gallery scenes cover design, collaboration and craft. Above 850px, with motion enabled, a 280svh section holds a sticky viewport beneath the header while ordinary page scrolling translates the three panels horizontally. Phones, paused motion, reduced motion and the no-JavaScript fallback use a vertical sequence of all three scenes. Do not hide content behind the motion enhancement.
+
+The payment explanation retains three ruled steps, a conceptual escrow illustration and explicit testnet limitations. These stack on phones. The coral close combines the invitation and contact links with large decorative lettering.
+
+### Components and motion
+
+Primary home actions use coral with dark text, a 48px minimum height and 2px corners; hover uses #ffa48e. Secondary links and FAQ summaries retain 44px targets. Visible focus outlines use the accent on dark surfaces and dark outlines on light or coral surfaces.
+
+Motion is coordinated by static/landing-cinematic.js. Native scrolling drives hero fading and parallax, gentle offset movement in the purpose photos, desktop gallery translation and scene drift. The closing PUSH FORWARD ticker uses two identical groups for a continuous 32 second right to left loop while visible. Section headers and rule items receive a one-time 550ms reveal on entering view. The decorative hero orbit carries text nodes IDEA and WORK, with counter rotation keeping labels upright. It turns over 30 seconds while the hero is in view; page visibility pauses it. It remains a smaller motif on phones. Film and payment sections use a one time five strip shutter reveal of 650ms with 40ms stagger. Explicit focal points preserve the subjects when images crop for phones. The workroom image links to the operating rules and is labelled as a demonstration image, not live wallet controls.
+
+A fixed Pause motion / Resume motion button controls these enhancements and reports its state with aria-pressed. Pausing resets scroll transforms, stops the orbit and restores the gallery's vertical layout. Reduced-motion preference disables the orbit animation, removes image and lettering transforms, uses the vertical gallery and hides the redundant motion button. Without JavaScript, content remains visible, the gallery stacks and the orbit stays paused. The former single hero entrance is no longer the current motion design.
+
+The film retains its original source and uses a browser-compatible derivative with native controls, inline playback, a poster and preload none. It never autoplays; the script pauses it when the page becomes hidden or it leaves view. Native details/summary FAQ controls work without JavaScript. Film frames use contain fitting rather than cropping.
+
+### Do's and Don'ts
+
+- Do retain the layered photographs, six rules, three distinct gallery scenes and oversized closing lettering as one coherent home composition.
+- Do preserve illustrative-image and sample-data labels; generated scenes are not customer endorsements or transaction proof.
+- Do preserve visitor control of motion and film playback, and a readable vertical fallback.
+- Do keep testnet, voluntary testing and no-real-money copy beside relevant invitations and payment explanations.
+- Don't extend this palette or decorative motion into the working application without a separate decision.
+- Don't imply deployment, live wallet acceptance or mainnet readiness from local visual completion.

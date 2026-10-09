@@ -3,84 +3,52 @@
 {% block title %}Push{% endblock %}
 {% block meta_description %}Keep freelance briefs, delivery, messages and settlement evidence together with Push.{% endblock %}
 {% block structured_data %}<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Push","url":"{{ canonical_url }}","description":"A clear work record for briefs, delivery, messages and settlement evidence."},{"@type":"WebApplication","name":"Push","url":"{{ canonical_url }}","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"A freelance work coordination and settlement-record product currently operating through a controlled Stellar testnet pilot."}]}</script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'landing-cinematic.css' %}?v=20261009-3">{% endblock %}
 {% block content %}
-<section class="intro" data-reveal>
-  <div class="intro-visual-column">
-    <h1>Good work needs a record.</h1>
-    <div class="settlement-orbit" aria-hidden="true">
-      <span class="settlement-track track-outer"></span>
-      <span class="settlement-track track-inner"></span>
-      <span class="orbit-carrier carrier-idea"><span class="orbit-face idea-face">IDEA</span></span>
-      <span class="orbit-carrier carrier-work"><span class="orbit-face work-face">WORK</span></span>
-      <span class="orbit-carrier carrier-usdc"><span class="orbit-face usdc-face"><img src="{% static 'images/usdc.png' %}" alt=""></span></span>
-      <span class="orbit-core">PUSH</span>
-    </div>
-  </div>
-  <div class="intro-copy">
-    <p class="lead">Push keeps the brief, the delivery and the payment trail in one place—so independent work does not depend on scattered messages and vague promises.</p>
-    <div class="actions"><a class="button" href="{% url 'waitlist' %}">Join as a tester</a><a class="button secondary" href="{% url 'login' %}">Tester sign in</a></div>
-    <p class="intro-meta">Invite-only testing for Web3 teams and independent talent. Testing is voluntary and unpaid. Testnet tokens have no real monetary value. No earnings or rewards are promised.</p>
-  </div>
+<div class="push-cinema">
+<button class="cinema-motion-control" type="button" aria-pressed="false" hidden>Pause motion</button>
+<section class="cinema-hero" aria-labelledby="hero-title">
+ <img class="cinema-scene" src="{% static 'images/push-studio-night.webp' %}" width="1672" height="941" fetchpriority="high" alt="Illustrative creative studio at night">
+ <div class="cinema-hero-copy"><h1 id="hero-title">Your skills.<br><em>Real possibilities.</em></h1><p>One place for freelance work, clear agreements and Stellar settlement.</p><div class="cinema-actions"><a class="cinema-button" href="{% url 'waitlist' %}">Join the testnet pilot</a><a class="cinema-link" href="#product">Explore Push</a></div></div>
+ <div class="cinema-orbit" aria-hidden="true"><div class="cinema-orbit-track"><span><i>IDEA</i></span><span><i>WORK</i></span></div><b>WORK<br>IN MOTION</b></div>
+ <div class="cinema-hero-foot"><span class="cinema-wordmark" aria-hidden="true">push.</span><p>Invitation only testnet pilot.<br>Voluntary testing. No real money.</p><a href="#film">Watch the Push film</a></div>
 </section>
-<div class="landing-record-rail" data-reveal aria-label="Push work record stages">
-  <span><b>01</b> Brief recorded</span><span><b>02</b> Terms accepted</span><span><b>03</b> Work delivered</span><span><b>04</b> Settlement verified</span><i aria-hidden="true"></i>
+<section class="cinema-purpose cinema-pad" id="product">
+ <div class="cinema-purpose-art" aria-hidden="true"><img class="purpose-print purpose-print-one" src="{% static 'images/push-workshop.webp' %}" width="1672" height="941" loading="lazy" alt=""><img class="purpose-print purpose-print-two" src="{% static 'images/push-maker.webp' %}" width="1672" height="941" loading="lazy" alt=""></div>
+ <h2>Value starts<br>with what<br><em>you can do.</em></h2>
+ <div class="cinema-purpose-copy"><p class="cinema-statement">A skill becomes a brief.<br>A brief becomes work.<br>Work deserves a clear agreement.</p><p>Freelance work is scattered across job boards, messages and payment tools. Push brings the scope, conversation, delivery evidence and payment status into one shared record.</p><a class="cinema-link" href="{% url 'product' %}">Explore the product</a></div>
+</section>
+<section class="cinema-film cinema-pad" id="film" aria-labelledby="film-title"><div class="cinema-shutter" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+ <div class="cinema-section-head"><h2 id="film-title">See the idea<br>in motion.</h2><p>The Push film.<br>Play when you are ready.</p></div>
+ <video controls playsinline preload="none" poster="{% static 'images/landing-film-poster.webp' %}" aria-label="Push introductory film" aria-describedby="film-description"><source src="{% static 'video/landing-story-web.mp4' %}" type="video/mp4">Your browser cannot play this video. <a href="{% static 'video/landing-story-web.mp4' %}">Open the film</a>.</video>
+ <p id="film-description" class="cinema-caption">An introduction to the idea behind Push. The current product is a testnet pilot; test assets have no monetary value.</p>
+</section>
+<section class="cinema-journey cinema-pad" id="how-it-works">
+ <div class="cinema-section-head"><h2>The work changes.<br>The rules stay clear.</h2><a class="cinema-link" href="{% url 'how_it_works' %}">Read the operating rules</a></div>
+ <div class="cinema-journey-layout"><figure class="cinema-product-screen"><a class="cinema-preview-link" href="{% url 'how_it_works' %}" aria-label="Read how the Push workroom works"><img src="{% static 'images/push-workroom-preview.webp' %}" width="1200" height="900" loading="lazy" alt="Push workroom interface with a sample assignment"></a><figcaption>Demonstration image. <a href="{% url 'how_it_works' %}">Explore the workroom rules</a>. Wallet controls operate inside your signed in workroom.</figcaption></figure>
+ <ol class="cinema-steps"><li><span>01</span><div><h3>Agree the work.</h3><p>Choose a worker and accept a clear scope, asset, amount and deadline.</p></div></li><li><span>02</span><div><h3>Fund the agreement.</h3><p>The client approves the testnet escrow deposit in Freighter. Wait for confirmation before work begins.</p></div></li><li><span>03</span><div><h3>Deliver with evidence.</h3><p>Keep files, messages and revisions beside the original agreement.</p></div></li><li><span>04</span><div><h3>Approve settlement.</h3><p>The client signs release. If there is a dispute, authorised staff review the evidence and sign the decision.</p></div></li><li><span>05</span><div><h3>Keep your keys.</h3><p>Push never requests a private key or recovery phrase. Your wallet signs the actions you approve.</p></div></li><li><span>06</span><div><h3>Check the record.</h3><p>A request is not a payment. Push waits for the matching testnet transaction before recording settlement.</p></div></li></ol></div>
+</section>
+<section class="cinema-talent" id="opportunities">
+ <div class="cinema-pad"><h2>Behind every skill,<br><em>someone making it happen.</em></h2><p>Illustrative scenes of independent work. Not customer endorsements.</p></div>
+ <div class="cinema-gallery" aria-label="Independent work gallery"><div class="cinema-gallery-window"><div class="cinema-gallery-track">
+ <figure class="cinema-gallery-panel"><img src="{% static 'images/push-studio-night.webp' %}" width="1672" height="941" loading="lazy" alt="Illustrative designer working at a tablet in a night studio"><figcaption><span>01 / DESIGN</span><h3>A thought.<br>Made visible.</h3><p>Interfaces, identities and the details that bring an idea to life.</p></figcaption></figure>
+ <figure class="cinema-gallery-panel"><img src="{% static 'images/push-workshop.webp' %}" width="1672" height="941" loading="lazy" alt="Illustrative creative collaborators reviewing work at a table"><figcaption><span>02 / COLLABORATION</span><h3>Different skills.<br>One shared brief.</h3><p>Keep the conversation and delivery beside what everyone agreed.</p></figcaption></figure>
+ <figure class="cinema-gallery-panel"><img src="{% static 'images/push-maker.webp' %}" width="1672" height="941" loading="lazy" alt="Illustrative maker building a model in a studio"><figcaption><span>03 / CRAFT</span><h3>Show the work.<br>Keep the evidence.</h3><p>Design, development, writing, community and operations.</p></figcaption></figure>
+ </div></div></div>
+ <div class="cinema-pad cinema-board"><h3>Explore the testnet pilot</h3><div class="job-list">{% for job in jobs %}{% include 'job_row.html' %}{% empty %}<p>Pilot assignments stay inside the private test. Join the waitlist to help test the work journey. No paid employment is promised.</p>{% endfor %}</div><a class="cinema-button" href="{% url 'waitlist' %}">Request access</a></div>
+</section>
+<section class="cinema-payment cinema-pad" id="settlement"><div class="cinema-shutter" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+ <div class="cinema-section-head"><h2>Your wallet.<br>A clear payment path.</h2><p>Powered by Stellar testnet.<br>Test XLM and test USDC.</p></div>
+ <ol class="cinema-payment-path"><li><span>01</span><h3>Client wallet</h3><p>You approve the deposit in Freighter.</p></li><li><span>02</span><h3>Contract escrow</h3><p>Tokens stay in the contract until a permitted release or refund.</p></li><li><span>03</span><h3>Agreed recipient</h3><p>Settlement follows the contract decision and is verified on chain.</p></li></ol>
+ <figure class="cinema-settlement-art"><img src="{% static 'images/push-work-bridge.webp' %}" width="1536" height="1024" loading="lazy" alt="Concept illustration of an agreement linked to a protected token chamber"><figcaption>Concept illustration. Payment status comes from verified transactions.</figcaption></figure><div class="cinema-payment-notes"><p>Accepting work does not automatically debit a wallet. Routine payments do not need staff approval. Disputes do.</p><p>Push never asks for private keys or recovery phrases. Test assets have no monetary value. Mainnet payments are not available.</p></div><a class="cinema-link" href="{% url 'documentation' %}">Understand the wallet and escrow system</a>
+</section>
+<section class="cinema-questions cinema-pad" aria-labelledby="questions-title"><div><h2 id="questions-title">Before<br>you begin.</h2><a class="cinema-link" href="{% url 'documentation' %}">Read the documentation</a></div><div class="push-answers">
+<details><summary>Can I earn real money in this pilot?</summary><p>No. Participation is voluntary testing with test XLM and test USDC. These tokens have no monetary value.</p></details>
+<details><summary>Does connecting my wallet move money?</summary><p>No. Connecting establishes a signing session. A transfer requires a separate approval in your wallet.</p></details>
+<details><summary>Who handles a disagreement?</summary><p>Authorised staff review the assignment evidence. A permitted staff wallet must sign the settlement, which can only send funds to the agreed participant wallets.</p></details>
+<details><summary>Is Push ready for mainnet?</summary><p>No. Complete wallet acceptance testing and independent security review remain outstanding. Mainnet and real money payments are not part of this pilot.</p></details>
+</div></section>
+<section class="cinema-close cinema-pad" id="investors"><div class="cinema-marquee" aria-hidden="true"><div class="cinema-marquee-track"><span class="cinema-marquee-group"><span>PUSH FORWARD.</span><span>PUSH FORWARD.</span></span><span class="cinema-marquee-group"><span>PUSH FORWARD.</span><span>PUSH FORWARD.</span></span></div></div><h2>Good work<br>starts <em>somewhere.</em></h2><div class="cinema-close-bottom"><div class="cinema-actions"><a class="cinema-button" href="{% url 'waitlist' %}">Join the testnet pilot</a><a class="cinema-link" href="{% url 'investors' %}">The ecosystem story</a></div><a class="cinema-link" href="mailto:push@pushearn.xyz">push@pushearn.xyz</a></div></section>
 </div>
-<section class="landing-film" data-reveal>
-  <div class="landing-film-frame">
-    <video data-story-video autoplay muted loop playsinline preload="metadata" aria-hidden="true">
-      <source src="{% static 'video/landing-story.mp4' %}" type="video/mp4">
-    </video>
-    <span class="film-index">01 / THE RELATIONSHIP</span>
-  </div>
-  <div class="landing-film-copy">
-    <p class="eyebrow">Built around people</p>
-    <h2>People do the work. Push keeps the record.</h2>
-    <p>A clear brief moves between a client and independent talent. The agreement, delivery and settlement stay connected while the people remain in control.</p>
-    <a class="text-action" href="#how-it-works">Follow the work journey ↓</a>
-  </div>
-</section>
-<section class="landing-product landing-anchor-section" id="product" aria-labelledby="product-heading" data-reveal>
-  <div class="section-heading">
-    <div><p class="eyebrow">The product</p><h2 id="product-heading">One workspace. One reliable trail.</h2></div>
-    <a href="{% url 'product' %}">Explore the full product</a>
-  </div>
-  <div class="product-ledger" data-stagger>
-    <article><span>01</span><h3>A brief everyone can trust</h3><p>Scope, budget and deadline are agreed before work begins, then preserved when applications arrive.</p></article>
-    <article><span>02</span><h3>A workroom for the actual work</h3><p>Messages, files, decisions and revisions stay beside the assignment instead of disappearing across apps.</p></article>
-    <article><span>03</span><h3>A payment record with evidence</h3><p>Settlement links the completed work to its payment route and verifiable reference.</p></article>
-  </div>
-</section>
-<section id="how-it-works" class="landing-anchor-section" data-reveal>
-  <div class="section-heading"><h2>How work moves</h2><a href="{% url 'how_it_works' %}">Read the complete rules</a></div>
-  <div class="workflow-collage" data-parallax aria-hidden="true"><img src="{% static 'images/work-journey-collage.png' %}" alt=""></div>
-  <div class="process" data-stagger>
-    <article><strong>01 · Brief</strong><h3>Set the terms</h3><p>Outcome, deliverables, budget and deadline are visible before anyone applies.</p></article>
-    <article><strong>02 · Agreement</strong><h3>Select and accept</h3><p>The chosen worker accepts a preserved copy of the scope before work begins.</p></article>
-    <article><strong>03 · Delivery</strong><h3>Submit against scope</h3><p>Files, links, revisions and decisions remain attached to the assignment.</p></article>
-    <article><strong>04 · Settlement</strong><h3>Approve with evidence</h3><p>Completion records the chosen payment route and its verifiable reference.</p></article>
-  </div>
-</section>
-<section id="opportunities" class="landing-anchor-section" data-reveal>
-  <div class="section-heading"><h2>Tester opportunity board</h2><a href="{% url 'waitlist' %}">Request access</a></div>
-  <div class="talent-collage" data-parallax aria-hidden="true"><img src="{% static 'images/independent-talent-collage.png' %}" alt=""></div>
-  <div class="job-list">{% for job in jobs %}{% include 'job_row.html' %}{% empty %}<div class="empty"><h3>Real opportunities stay inside the private test.</h3><p>Join the waitlist to post jobs, apply and test the complete work record.</p><a href="{% url 'waitlist' %}">Join the testing waitlist</a></div>{% endfor %}</div>
-</section>
-<section class="principles" data-reveal data-stagger>
-  <div><h3>Terms cannot quietly move</h3><p>A brief becomes read-only once the first application arrives, preserving what applicants considered.</p></div>
-  <div><h3>Private until published</h3><p>Profiles stay private by default, and proposals remain between the worker and hiring account.</p></div>
-  <div><h3>Evidence before status</h3><p>Push records actual workflow events and verified testnet settlement references, never invented reputation.</p></div>
-</section>
-<section id="investors" class="landing-investors landing-anchor-section" data-reveal>
-  <div class="landing-investor-copy">
-    <p class="eyebrow">For investors and ecosystem partners</p>
-    <h2>Independent work is global. Its trust layer should be portable.</h2>
-    <p>Push is building a clear record between a brief and its settlement: who agreed, what was delivered and how payment was completed. The current build proves the workflow on Stellar testnet.</p>
-    <div class="actions"><a class="button" href="{% url 'investors' %}">See the investor story</a><a class="investor-contact" href="mailto:aghatiseehioghae644@gmail.com">Email the founder ↗</a><a class="investor-contact" href="https://x.com/pushearn_" target="_blank" rel="noopener noreferrer">X · @pushearn_ ↗</a></div>
-  </div>
-  <div class="landing-handshake" aria-hidden="true">
-    <img src="{% static 'images/paper-handshake-v2.png' %}" alt="">
-    <span>BRIEF</span><span>SETTLED</span>
-  </div>
-</section>
 {% endblock %}
-{% block extra_scripts %}<script src="{% static 'home-motion.js' %}?v=20261006-1" defer></script>{% endblock %}
+{% block extra_scripts %}<script src="{% static 'landing-cinematic.js' %}?v=20261009-3" defer></script>{% endblock %}

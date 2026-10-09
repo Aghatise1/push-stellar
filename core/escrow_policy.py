@@ -1,4 +1,4 @@
-"""Pure permission and payload validation for the disabled testnet escrow flow."""
+"""Pure permission and payload validation for the configurable testnet escrow flow."""
 from .access import has_staff_access
 from .forms import SubmissionForm
 from .stellar import StellarVerificationError
