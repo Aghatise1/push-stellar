@@ -32,6 +32,8 @@ Create or refresh the two verified showcase identities and their representative 
 ..\..\work\push-venv\Scripts\python.exe manage.py seed_showcase --rotate-passwords
 ```
 
+The seeded showcase contains historical simulation data for inspecting the interface. It does not demonstrate a funded escrow. Create a fresh agreement and use separate testnet wallets for the current payment workflow.
+
 The command writes the random passwords to `private-demo-credentials.txt`. That file is ignored by version control. Use the **Atise** account to inspect the worker experience and the **Demo Studio** account to inspect the hiring experience. The command cannot run when `PUSH_ENV=production`.
 
 Google sign-in appears only when both OAuth credentials are configured. The production client must authorise `https://pushearn.xyz` and its exact callback; follow `GOOGLE-OAUTH-SETUP.md`. Secrets belong in the ignored `.env` file or the deployment secret manager.
@@ -56,14 +58,17 @@ The start script applies local database migrations and starts a development serv
 
 1. Create a hiring account with a unique test email and a password of at least 12 characters. Avoid real customer data in this preview.
 2. Local development writes email to `private-mail` instead of sending it. Open the newest file there in a text editor, copy its verification link into the browser, and confirm the address. These files contain private, temporary account links; never publish them.
-3. Publish a job with a scope, illustrative USD budget and deadline.
-4. Use a separate browser profile or sign out, create a second worker account, verify it, and apply to the job.
-5. As the hiring account, select the application. As the worker, accept the scope.
-6. Use the private assignment thread to discuss the work. Only the selected worker and hiring account can read or send these messages.
-7. From **Wallet**, connect a Freighter wallet set to Stellar testnet. Push stores only the public G-address; it never receives a secret key or recovery phrase. The profile form remains available for manually entering a public testnet address during local testing.
-8. As the hiring account, select simulated USDC, simulated bank/card, or Stellar testnet USDC. The Stellar route requires the worker to have a public testnet G-address connected.
-9. As the worker, submit notes and an optional work link. The hiring account can request revisions or approve. For Stellar testnet, Push prepares the exact test-USDC transaction and Freighter shows the recipient, amount and memo before approval. Push validates the signed transaction, submits it to Horizon and records the confirmed hash. An existing matching transaction can still be verified manually.
-10. Both participants can raise a dispute before approval; disputes freeze the preview workflow. Cancellation is available before the route is confirmed.
+3. Publish a job with a clear scope, deliverables, exact test XLM or test USDC amount and deadline. Test assets have no monetary value.
+4. Use a separate account and browser profile for the worker. Verify that account and apply to the job.
+5. Each participant connects their own Freighter wallet on Stellar testnet. The client and worker must have different valid wallet addresses. Push never requests private keys or recovery phrases.
+6. The client selects the worker. Prepare and review the agreement, including scope, asset, amount, deadlines and participant wallets. The worker accepts. Acceptance alone does not debit a wallet; accepted wallet addresses remain pinned to the agreement.
+7. With testnet escrow enabled and the configured contract available, the client reviews and signs funding in Freighter. The contract receives the agreed test tokens. Begin work only after Push records confirmed funding on Stellar. If submission is uncertain, check its status before retrying.
+8. Use the private workroom for messages and delivery evidence. The worker submits the delivery and signs the contract delivery action.
+9. The client reviews the work and signs release or a permitted revision. Routine release transfers the escrowed tokens to the agreed worker wallet without staff approval. Push updates payment status after confirmation.
+10. Either participant may open a dispute in an eligible funded or submitted state. Ordinary release is blocked. Authorised staff with contract permission can sign a release, refund or split restricted to the original participant wallets. Staff cannot resolve their own work.
+11. Unfunded cancellation and expiry refund or claim paths follow contract state, timing and signer rules. Passing a deadline does not automatically transfer tokens.
+
+New assignments do not offer simulated bank/card payments or general direct wallet transfers. Historical simulation and direct payment records are retained as earlier records. Profiles, conversations and delivery files remain in the application; contract financial actions are recorded on Stellar.
 
 The three sample jobs are labelled and do not accept applications. To add them to a fresh database, run `python manage.py seed_demo` with the prepared Python environment. No shared demo password or login bypass exists. Profiles appear publicly only after their owner enables publication.
 
@@ -75,22 +80,22 @@ The three sample jobs are labelled and do not accept applications. To add them t
 - Hiring accounts can edit an open brief until its first application arrives. The terms then become read-only to protect what applicants considered.
 - CSRF protection, database-backed request limits, a hard daily email-recipient cap, form validation, escaped output, restricted profile fields and security headers.
 - Server-controlled assignment state changes, stored agreement scope/budget and a chronological event record.
-- One simulated payment record per assignment; browser-supplied amounts cannot change the agreed amount.
-- Non-custodial Stellar testnet sends signed in Freighter, with server-controlled recipient, asset, amount and memo; the server rejects altered envelopes, submits the signed transaction to Horizon and records its unique hash.
-- A Soroban milestone contract with role authorisation, exact token locking, delivery hashes, release, expiry, dispute and split-resolution paths; tested locally and through a complete Stellar testnet lifecycle, but kept out of the active custody path until independent review.
-- A participant-only inbox and project conversations backed by server-side access checks. These messages are private to assignment participants but are not end-to-end encrypted.
-- Separate Wallet and Payments areas: Wallet handles Freighter, send and receive actions; Payments handles earnings, pending work and settlement history.
+- Agreement bound testnet escrow with server validated transactions and confirmation checks. Pending requests are not treated as payments.
+- Freighter signing for client funding, worker delivery, client release and authorised dispute settlement. Push never stores wallet private keys.
+- The staff governed Soroban contract in `contracts/contracts/push-escrow-staff`, with exact token locking, role authorisation, delivery hashes, revision, release, expiry and dispute resolution paths. Recorded testnet XLM and USDC lifecycle evidence is in `contracts/deployments/testnet-owner-escrow.json`. Earlier contract packages remain historical implementations.
+- Private project conversations with participant access checks and authorised support review. Messages are not encrypted end to end.
+- Separate Wallet and Payments areas for wallet connection, earnings and settlement records. Payment actions belong to an accepted workroom agreement.
 - Dashboard earnings/progress summaries and a Freighter testnet public-address connection.
 - Separate public and signed-in interfaces, with a bold wallet-style balance, responsive work console, custom mark and reduced-motion-safe payment animation. GSAP is vendored locally, so the interface makes no third-party runtime request.
 
-The included tests cover account flows, job editing/closure, application withdrawal, access restrictions, invalid state changes, simulated payment methods, signed Stellar transaction validation and repeated approval. Run:
+The included tests cover account flows, access restrictions, transaction validation and escrow state and permission checks, alongside historical payment behaviour. Automated checks do not replace the browser evidence described in [the acceptance checklist](docs/pilot-acceptance.md). Run:
 
 ```powershell
 .\.runtime-venv\Scripts\python.exe manage.py test core
 .\.runtime-venv\Scripts\python.exe manage.py check
 cd contracts
-cargo test -p push-milestone
-stellar contract build --package push-milestone
+cargo test -p push-escrow-staff
+stellar contract build --package push-escrow-staff
 ```
 
 On this computer the existing prepared Python also lives at `../../work/push-venv/Scripts/python.exe`. Tests use a separate disposable database, not your preview accounts.
