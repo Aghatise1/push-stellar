@@ -1,6 +1,7 @@
 """Testnet-only Soroban gateway. Never signs or holds a wallet secret."""
 import hashlib
 import json
+from types import SimpleNamespace
 from django.conf import settings
 from stellar_sdk import Asset, Keypair, Network, SorobanServer, TransactionBuilder, TransactionEnvelope, scval, xdr
 from stellar_sdk.client.requests_client import RequestsClient
@@ -94,12 +95,31 @@ def validate_signature(record,signed_xdr):
     raise StellarVerificationError('The expected wallet did not sign this transaction.')
 
 
+def normalise_agreement_data(data,agreement,rpc=None):
+    """Return one public agreement shape for legacy and compact contracts."""
+    if 'client' in data:
+        return data
+    required={'a','c','d','h','l','r','s','t','u','w','x'}
+    if not isinstance(data,dict) or not required.issubset(data):
+        raise StellarVerificationError('Escrow agreement data has an unsupported format.')
+    return {
+        'client':data['c'],'worker':data['w'],
+        'arbiter':SimpleNamespace(address=registry_owner(agreement.contract,rpc)),
+        'token':data['t'],'amount':data['a'],'deadline':data['d'],
+        'review_seconds':data['s'],'review_until':data['u'],
+        'revision_limit':data['l'],'revisions':data['r'],
+        'status':data['x'],'delivery_hash':data['h'],
+    }
+
+
 def read_agreement(agreement,rpc=None):
     rpc=rpc or server()
     key=scval.to_vec([scval.to_symbol('Agreement'),scval.to_bytes(bytes.fromhex(agreement.agreement_id))])
     entry=rpc.get_contract_data(agreement.contract,key)
     if not entry: raise StellarVerificationError('Escrow agreement is not present on the testnet ledger.')
-    data=scval.to_native(xdr.LedgerEntryData.from_xdr(entry.xdr).contract_data.val)
+    data=normalise_agreement_data(
+        scval.to_native(xdr.LedgerEntryData.from_xdr(entry.xdr).contract_data.val),agreement,rpc
+    )
     expected={'client':agreement.client_address,'worker':agreement.worker_address,'arbiter':agreement.reviewer_address,'token':agreement.token_address}
     if any(str(data[k].address)!=v for k,v in expected.items()) or data['amount']!=agreement.amount*SCALE:
         raise StellarVerificationError('On-chain escrow terms do not match the accepted agreement.')

@@ -6,7 +6,10 @@ use soroban_sdk::{
 };
 
 const AGREEMENT_TTL_THRESHOLD: u32 = 17_280;
-const AGREEMENT_TTL_BUMP: u32 = 518_400;
+const SECONDS_PER_LEDGER: u64 = 5;
+const AGREEMENT_SAFETY_SECONDS: u64 = 172_800;
+const DISPUTE_TTL_SECONDS: u64 = 2_592_000;
+const STAFF_TTL_BUMP: u32 = 518_400;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -36,6 +39,24 @@ pub struct Agreement {
     pub revisions: u32,
     pub status: Status,
     pub delivery_hash: Option<BytesN<32>>,
+}
+
+// Short internal field names reduce persistent ledger bytes and therefore the
+// rent charged to the client. The public contract interface remains Agreement.
+#[derive(Clone)]
+#[contracttype]
+struct StoredAgreement {
+    a: i128,
+    c: Address,
+    d: u64,
+    h: Option<BytesN<32>>,
+    l: u32,
+    r: u32,
+    s: u64,
+    t: Address,
+    u: u64,
+    w: Address,
+    x: Status,
 }
 
 #[derive(Clone)]
@@ -90,8 +111,20 @@ pub struct DisputeReviewer {
     pub reviewer: Address,
 }
 
-fn publish(env: &Env, action: Symbol, id: BytesN<32>, primary_amount: i128, secondary_amount: i128) {
-    AgreementEvent { action, id, primary_amount, secondary_amount }.publish(env);
+fn publish(
+    env: &Env,
+    action: Symbol,
+    id: BytesN<32>,
+    primary_amount: i128,
+    secondary_amount: i128,
+) {
+    AgreementEvent {
+        action,
+        id,
+        primary_amount,
+        secondary_amount,
+    }
+    .publish(env);
 }
 
 #[contract]
@@ -102,28 +135,68 @@ fn key(id: &BytesN<32>) -> DataKey {
 }
 
 fn load(env: &Env, id: &BytesN<32>) -> Result<Agreement, Error> {
-    let storage_key = key(id);
-    let agreement = env
+    let stored = env
         .storage()
         .persistent()
-        .get::<_, Agreement>(&storage_key)
+        .get::<_, StoredAgreement>(&key(id))
         .ok_or(Error::NotFound)?;
-    env.storage().persistent().extend_ttl(
-        &storage_key,
-        AGREEMENT_TTL_THRESHOLD,
-        AGREEMENT_TTL_BUMP,
-    );
-    Ok(agreement)
+    Ok(Agreement {
+        client: stored.c,
+        worker: stored.w,
+        arbiter: env.storage().instance().get(&DataKey::Owner).unwrap(),
+        token: stored.t,
+        amount: stored.a,
+        deadline: stored.d,
+        review_seconds: stored.s,
+        review_until: stored.u,
+        revision_limit: stored.l,
+        revisions: stored.r,
+        status: stored.x,
+        delivery_hash: stored.h,
+    })
+}
+
+fn agreement_ttl(env: &Env, agreement: &Agreement) -> u32 {
+    let now = env.ledger().timestamp();
+    let required_until = match agreement.status {
+        Status::Created | Status::Funded => {
+            agreement.deadline.saturating_add(agreement.review_seconds)
+        }
+        Status::Submitted => agreement.review_until,
+        Status::Disputed => now.saturating_add(DISPUTE_TTL_SECONDS),
+        _ => now,
+    }
+    .saturating_add(AGREEMENT_SAFETY_SECONDS);
+    let ledgers = required_until
+        .saturating_sub(now)
+        .saturating_add(SECONDS_PER_LEDGER - 1)
+        / SECONDS_PER_LEDGER;
+    let bounded = ledgers
+        .max(AGREEMENT_TTL_THRESHOLD as u64)
+        .min(env.storage().max_ttl() as u64);
+    bounded as u32
 }
 
 fn save(env: &Env, id: &BytesN<32>, agreement: &Agreement) {
     let storage_key = key(id);
-    env.storage().persistent().set(&storage_key, agreement);
-    env.storage().persistent().extend_ttl(
-        &storage_key,
-        AGREEMENT_TTL_THRESHOLD,
-        AGREEMENT_TTL_BUMP,
-    );
+    let stored = StoredAgreement {
+        a: agreement.amount,
+        c: agreement.client.clone(),
+        d: agreement.deadline,
+        h: agreement.delivery_hash.clone(),
+        l: agreement.revision_limit,
+        r: agreement.revisions,
+        s: agreement.review_seconds,
+        t: agreement.token.clone(),
+        u: agreement.review_until,
+        w: agreement.worker.clone(),
+        x: agreement.status.clone(),
+    };
+    env.storage().persistent().set(&storage_key, &stored);
+    let ttl = agreement_ttl(env, agreement);
+    env.storage()
+        .persistent()
+        .extend_ttl(&storage_key, ttl, ttl);
 }
 
 fn payout(env: &Env, agreement: &Agreement, recipient: &Address, amount: i128) {
@@ -141,23 +214,36 @@ impl PushEscrow {
     pub fn __constructor(env: Env, owner: Address, xlm: Address, usdc: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::Assets, &(xlm, usdc));
+        env.storage()
+            .instance()
+            .extend_ttl(AGREEMENT_TTL_THRESHOLD, STAFF_TTL_BUMP);
+    }
+    pub fn keepalive(env: Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(AGREEMENT_TTL_THRESHOLD, STAFF_TTL_BUMP);
     }
     pub fn owner(env: Env) -> Address {
-        env.storage().instance().extend_ttl(AGREEMENT_TTL_THRESHOLD, AGREEMENT_TTL_BUMP);
         env.storage().instance().get(&DataKey::Owner).unwrap()
     }
     // 0 revoked, 1 reviewer, 2 administrator, 3 deployment owner.
     pub fn staff_role(env: Env, wallet: Address) -> u32 {
-        if wallet == Self::owner(env.clone()) { return 3; }
+        if wallet == Self::owner(env.clone()) {
+            return 3;
+        }
         let k = DataKey::Staff(wallet);
         if env.storage().persistent().has(&k) {
-            env.storage().persistent().extend_ttl(&k, AGREEMENT_TTL_THRESHOLD, AGREEMENT_TTL_BUMP);
+            env.storage()
+                .persistent()
+                .extend_ttl(&k, AGREEMENT_TTL_THRESHOLD, STAFF_TTL_BUMP);
         }
         env.storage().persistent().get(&k).unwrap_or(0)
     }
     pub fn set_staff(env: Env, actor: Address, wallet: Address, role: u32) -> Result<(), Error> {
         actor.require_auth();
-        if role > 2 || wallet == Self::owner(env.clone()) { return Err(Error::InvalidRole); }
+        if role > 2 || wallet == Self::owner(env.clone()) {
+            return Err(Error::InvalidRole);
+        }
         let actor_role = Self::staff_role(env.clone(), actor.clone());
         let current = Self::staff_role(env.clone(), wallet.clone());
         if actor == wallet || actor_role < 2 || (actor_role == 2 && (role == 2 || current == 2)) {
@@ -166,8 +252,18 @@ impl PushEscrow {
         let k = DataKey::Staff(wallet.clone());
         // Store revocation explicitly, never revive an archived grant.
         env.storage().persistent().set(&k, &role);
-        env.storage().persistent().extend_ttl(&k, AGREEMENT_TTL_THRESHOLD, AGREEMENT_TTL_BUMP);
-        StaffChanged { wallet, actor, role }.publish(&env);
+        env.storage()
+            .persistent()
+            .extend_ttl(&k, AGREEMENT_TTL_THRESHOLD, STAFF_TTL_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(AGREEMENT_TTL_THRESHOLD, STAFF_TTL_BUMP);
+        StaffChanged {
+            wallet,
+            actor,
+            role,
+        }
+        .publish(&env);
         Ok(())
     }
     pub fn create(
@@ -183,8 +279,11 @@ impl PushEscrow {
         revision_limit: u32,
     ) -> Result<Agreement, Error> {
         client.require_auth();
-        let (xlm, usdc): (Address, Address) = env.storage().instance().get(&DataKey::Assets).unwrap();
-        if token != xlm && token != usdc { return Err(Error::UnsupportedAsset); }
+        let (xlm, usdc): (Address, Address) =
+            env.storage().instance().get(&DataKey::Assets).unwrap();
+        if token != xlm && token != usdc {
+            return Err(Error::UnsupportedAsset);
+        }
         if env.storage().persistent().has(&key(&id)) {
             return Err(Error::AlreadyExists);
         }
@@ -194,7 +293,11 @@ impl PushEscrow {
         if client == worker || arbiter != Self::owner(env.clone()) {
             return Err(Error::InvalidParties);
         }
-        if deadline <= env.ledger().timestamp() || review_seconds < 86_400 || review_seconds > 1_209_600 || revision_limit > 10 {
+        if deadline <= env.ledger().timestamp()
+            || review_seconds < 86_400
+            || review_seconds > 1_209_600
+            || revision_limit > 10
+        {
             return Err(Error::InvalidDeadline);
         }
         let agreement = Agreement {
@@ -216,22 +319,49 @@ impl PushEscrow {
         Ok(agreement)
     }
 
-    pub fn create_fund(env: Env, id: BytesN<32>, client: Address, worker: Address,
-        arbiter: Address, token: Address, amount: i128, deadline: u64,
-        review_seconds: u64, revision_limit: u32) -> Result<Agreement, Error> {
-        Self::create(env.clone(), id.clone(), client, worker, arbiter, token, amount,
-                     deadline, review_seconds, revision_limit)?;
+    pub fn create_fund(
+        env: Env,
+        id: BytesN<32>,
+        client: Address,
+        worker: Address,
+        arbiter: Address,
+        token: Address,
+        amount: i128,
+        deadline: u64,
+        review_seconds: u64,
+        revision_limit: u32,
+    ) -> Result<Agreement, Error> {
+        Self::create(
+            env.clone(),
+            id.clone(),
+            client,
+            worker,
+            arbiter,
+            token,
+            amount,
+            deadline,
+            review_seconds,
+            revision_limit,
+        )?;
         Self::fund(env, id)
     }
 
     pub fn revise(env: Env, id: BytesN<32>) -> Result<Agreement, Error> {
         let mut agreement = load(&env, &id)?;
         agreement.client.require_auth();
-        if agreement.status != Status::Submitted || agreement.revisions >= agreement.revision_limit
-            || env.ledger().timestamp() > agreement.review_until { return Err(Error::InvalidState); }
+        if agreement.status != Status::Submitted
+            || agreement.revisions >= agreement.revision_limit
+            || env.ledger().timestamp() > agreement.review_until
+        {
+            return Err(Error::InvalidState);
+        }
         agreement.revisions += 1;
         // Each included revision receives the agreed review-window length to deliver.
-        agreement.deadline = env.ledger().timestamp().checked_add(agreement.review_seconds).ok_or(Error::InvalidDeadline)?;
+        agreement.deadline = env
+            .ledger()
+            .timestamp()
+            .checked_add(agreement.review_seconds)
+            .ok_or(Error::InvalidDeadline)?;
         agreement.review_until = 0;
         agreement.status = Status::Funded;
         save(&env, &id, &agreement);
@@ -249,7 +379,9 @@ impl PushEscrow {
         if agreement.status != Status::Created {
             return Err(Error::InvalidState);
         }
-        if env.ledger().timestamp() > agreement.deadline { return Err(Error::Expired); }
+        if env.ledger().timestamp() > agreement.deadline {
+            return Err(Error::Expired);
+        }
         agreement.status = Status::Funded;
         save(&env, &id, &agreement);
         token::Client::new(&env, &agreement.token).transfer(
@@ -261,11 +393,7 @@ impl PushEscrow {
         Ok(agreement)
     }
 
-    pub fn submit(
-        env: Env,
-        id: BytesN<32>,
-        delivery_hash: BytesN<32>,
-    ) -> Result<Agreement, Error> {
+    pub fn submit(env: Env, id: BytesN<32>, delivery_hash: BytesN<32>) -> Result<Agreement, Error> {
         let mut agreement = load(&env, &id)?;
         agreement.worker.require_auth();
         if agreement.status != Status::Funded {
@@ -274,7 +402,11 @@ impl PushEscrow {
         if env.ledger().timestamp() > agreement.deadline {
             return Err(Error::Expired);
         }
-        agreement.review_until = env.ledger().timestamp().checked_add(agreement.review_seconds).ok_or(Error::InvalidDeadline)?;
+        agreement.review_until = env
+            .ledger()
+            .timestamp()
+            .checked_add(agreement.review_seconds)
+            .ok_or(Error::InvalidDeadline)?;
         agreement.delivery_hash = Some(delivery_hash);
         agreement.status = Status::Submitted;
         save(&env, &id, &agreement);
@@ -339,11 +471,7 @@ impl PushEscrow {
         Ok(agreement)
     }
 
-    pub fn open_dispute(
-        env: Env,
-        id: BytesN<32>,
-        caller: Address,
-    ) -> Result<Agreement, Error> {
+    pub fn open_dispute(env: Env, id: BytesN<32>, caller: Address) -> Result<Agreement, Error> {
         let mut agreement = load(&env, &id)?;
         caller.require_auth();
         if caller != agreement.client && caller != agreement.worker {
@@ -367,7 +495,10 @@ impl PushEscrow {
     ) -> Result<Agreement, Error> {
         let mut agreement = load(&env, &id)?;
         reviewer.require_auth();
-        if reviewer == agreement.client || reviewer == agreement.worker || Self::staff_role(env.clone(), reviewer.clone()) == 0 {
+        if reviewer == agreement.client
+            || reviewer == agreement.worker
+            || Self::staff_role(env.clone(), reviewer.clone()) == 0
+        {
             return Err(Error::Unauthorised);
         }
         if agreement.status != Status::Disputed {
@@ -383,8 +514,18 @@ impl PushEscrow {
         save(&env, &id, &agreement);
         payout(&env, &agreement, &agreement.client, client_amount);
         payout(&env, &agreement, &agreement.worker, worker_amount);
-        DisputeReviewer { id: id.clone(), reviewer }.publish(&env);
-        publish(&env, symbol_short!("resolve"), id, client_amount, worker_amount);
+        DisputeReviewer {
+            id: id.clone(),
+            reviewer,
+        }
+        .publish(&env);
+        publish(
+            &env,
+            symbol_short!("resolve"),
+            id,
+            client_amount,
+            worker_amount,
+        );
         Ok(agreement)
     }
 }

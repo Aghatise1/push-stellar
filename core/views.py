@@ -1540,7 +1540,16 @@ def select(request,pk):
             escrow_required=settings.PUSH_TESTNET_ONLY or bool(settings.PUSH_TESTNET_ESCROW_ENABLED and settings.PUSH_TESTNET_ESCROW_CONTRACT))
         Event.objects.create(assignment=assignment,actor=request.user,kind='Worker selected')
         notify(application.worker,'selection','You were selected',f'{application.job.owner.display_name} selected you for {application.job.title}.',f'/assignments/{assignment.pk}/')
-    messages.success(request,'Worker selected. They must accept the agreed scope before a payment route is selected.')
+    if assignment.escrow_required:
+        from .escrow_views import create_agreement
+        try:create_agreement(assignment)
+        except StellarVerificationError:
+            messages.info(request,'Worker selected. Connect both testnet wallets in the workroom to finish the agreement.')
+        except Exception:
+            messages.info(request,'Worker selected. Agreement setup will resume safely from the workroom.')
+        else:
+            messages.success(request,'Worker selected. The agreement is ready for the worker to review and accept.')
+    else:messages.success(request,'Worker selected. They must accept the agreed scope before a payment route is selected.')
     return redirect('assignment',pk=assignment.pk)
 
 

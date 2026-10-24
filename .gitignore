@@ -12,6 +12,7 @@ private-backups/
 
 .local/
 .runtime-venv/
+.superpowers/
 
 contracts/contracts/push-escrow/test_snapshots/
 

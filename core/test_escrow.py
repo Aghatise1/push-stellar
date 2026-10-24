@@ -2,7 +2,7 @@ from types import SimpleNamespace as Obj
 from unittest.mock import patch
 from django.test import SimpleTestCase, override_settings
 from stellar_sdk import Keypair, Account, TransactionBuilder, Network
-from .escrow import require_enabled, token_address, validate_signature
+from .escrow import normalise_agreement_data, require_enabled, token_address, validate_signature
 from .escrow_policy import action_payload
 from .stellar import StellarVerificationError
 
@@ -50,10 +50,28 @@ class EscrowPolicyTests(SimpleTestCase):
         self.assertNotEqual(token_address('USDC'),token_address('XLM'))
         with self.assertRaises(StellarVerificationError):token_address('BTC')
 
+    @patch('core.escrow.registry_owner',return_value='reviewer')
+    def test_compact_contract_record_is_normalised_for_existing_workflows(self,owner):
+        address=lambda value:Obj(address=value)
+        agreement=Obj(contract='Ctest')
+        compact={
+            'a':1_000_000_000,'c':address('client'),'d':123,'h':b'delivery',
+            'l':2,'r':1,'s':86_400,'t':address('token'),'u':456,
+            'w':address('worker'),'x':['Submitted'],
+        }
+
+        self.assertEqual(normalise_agreement_data(compact,agreement,rpc='rpc'),{
+            'client':address('client'),'worker':address('worker'),'arbiter':address('reviewer'),
+            'token':address('token'),'amount':1_000_000_000,'deadline':123,
+            'review_seconds':86_400,'review_until':456,'revision_limit':2,
+            'revisions':1,'status':['Submitted'],'delivery_hash':b'delivery',
+        })
+        owner.assert_called_once_with('Ctest','rpc')
+
 from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
-from .models import User,Job,Assignment,EscrowAgreement,EscrowTransaction,Payment
+from .models import User,Job,Application,Assignment,EscrowAgreement,EscrowTransaction,Payment,Event
 from .escrow_records import reconcile
 
 class EscrowRecordTests(TestCase):
@@ -234,6 +252,57 @@ class WalletSetupRecoveryTests(TestCase):
         self.assertContains(response,'Connect my testnet wallet',status_code=400)
         self.assertEqual(EscrowAgreement.objects.count(),0)
         self.assertEqual(EscrowTransaction.objects.count(),0)
+
+    @patch('core.escrow_views.chain.build')
+    @patch('core.escrow_views.chain.token_address',return_value='token')
+    @patch('core.escrow_views.chain.registry_owner')
+    def test_selecting_a_worker_automatically_prepares_terms_without_moving_tokens(self,registry,token,build):
+        from .models import EscrowStaffWallet
+        self.item.delete()
+        StaffAccess.objects.create(user=self.reviewer,role='owner',status='approved')
+        EscrowStaffWallet.objects.create(user=self.reviewer,address=self.reviewer.stellar_address)
+        registry.return_value=self.reviewer.stellar_address
+        application=Application.objects.create(job=self.job,worker=self.worker,proposal='I can deliver this scope.')
+        self.client.force_login(self.owner)
+
+        response=self.client.post(reverse('select',args=[application.pk]))
+
+        self.assertEqual(response.status_code,302)
+        assignment=Assignment.objects.get(job=self.job)
+        agreement=EscrowAgreement.objects.get(assignment=assignment)
+        self.assertEqual(agreement.client_address,self.owner.stellar_address)
+        self.assertEqual(agreement.worker_address,self.worker.stellar_address)
+        self.assertEqual(assignment.status,'awaiting_acceptance')
+        self.assertFalse(EscrowTransaction.objects.exists())
+        build.assert_not_called()
+
+    @patch('core.escrow_views.chain.registry_owner')
+    def test_selection_succeeds_when_worker_wallet_is_missing_and_shows_recovery(self,registry):
+        self.item.delete()
+        self.worker.stellar_address='';self.worker.save(update_fields=['stellar_address'])
+        application=Application.objects.create(job=self.job,worker=self.worker,proposal='I can deliver this scope.')
+        self.client.force_login(self.owner)
+
+        response=self.client.post(reverse('select',args=[application.pk]))
+
+        self.assertEqual(response.status_code,302)
+        assignment=Assignment.objects.get(job=self.job)
+        self.assertFalse(EscrowAgreement.objects.filter(assignment=assignment).exists())
+        room=self.client.get(reverse('escrow_detail',args=[assignment.pk]))
+        self.assertContains(room,'worker has not saved a valid wallet')
+        registry.assert_not_called()
+
+    def test_workroom_status_is_private_and_changes_when_server_state_changes(self):
+        self.client.force_login(self.owner)
+        url=reverse('escrow_status',args=[self.item.pk])
+        first=self.client.get(url)
+        self.assertEqual(first.status_code,200)
+        self.assertIn('no-store',first['Cache-Control'])
+        version=first.json()['version']
+        Event.objects.create(assignment=self.item,actor=self.owner,kind='Agreement updated')
+        self.assertNotEqual(self.client.get(url).json()['version'],version)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code,403)
 
     def test_disconnected_client_gets_inline_recovery(self):
         self.client.force_login(self.owner)

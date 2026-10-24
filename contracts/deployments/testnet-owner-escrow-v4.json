@@ -1,0 +1,25 @@
+{
+  "contract": "CAO6VET6JK73QW4IJOIFCECYACWIZMC7GZK4I3G43ECSFQMCHGEKT3G5",
+  "network": "testnet",
+  "deployed_at": "2026-10-24",
+  "purpose": "owner controlled testnet pilot with deadline based agreement storage",
+  "owner": "GAOLY6ZLXM4V5NOFFHWX7QYNZR4MECF2AECJSHBDFBFEG4T4OZOTQZTR",
+  "assets": {
+    "XLM": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "USDC": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+  },
+  "wasm_sha256": "342d24adb7ab78dd2678f692b0936baa6d870c6e93448f5b43c7789ef7279694",
+  "wasm_upload_transaction": "4b569f122b457284d79e4155fb081acb2e8c8d98738cca8f096213742f1b9108",
+  "deployment_transaction": "4a26779430772a625300110703ec2136024fb7532f550e62786bd2b47276734b",
+  "qa": {
+    "contract": "CBIW533HP7PWH55DVTN32UQ5QWXFWQF5X7JFT5J2D4LQLFS4JYPHCNFF",
+    "deployment_transaction": "0dc014a58417cfb9a57a82fd268afbb83f8ebd222d987cc3b6ccf7d4831cbe87",
+    "xlm_funding_transaction": "0462de70def9b39f641b982c456d81a0f4007f961b0c6fce92e0bcb2c0b53722",
+    "amount_stroops": 10000000,
+    "proposed_fee_stroops": 2630897,
+    "charged_fee_stroops": 2284803,
+    "refunded_fee_stroops": 346094
+  },
+  "storage_policy": "Deployment prepays shared instance storage. Each agreement stores a compact record through its delivery and review windows plus a two day safety period. Disputes receive a thirty day extension.",
+  "limitations": "Existing agreements remain bound to their recorded contract. Owner signed dispute settlement still requires a separate Freighter acceptance test."
+}
