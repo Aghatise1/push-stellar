@@ -232,3 +232,11 @@ PUSH_TESTNET_ESCROW_CONTRACT = os.environ.get('PUSH_TESTNET_ESCROW_CONTRACT','')
 # The public application no longer creates simulated payment records.
 PUSH_TESTNET_ONLY = True
 PUSH_TESTNET_ESCROW_STAFF_CONTRACT = os.environ.get('PUSH_TESTNET_ESCROW_STAFF_CONTRACT','').strip()
+
+# Optional server side workroom assistant. It can draft summaries but has no payment authority.
+PUSH_ORBIO_ASSISTANT_ENABLED = os.environ.get('PUSH_ORBIO_ASSISTANT_ENABLED','false').lower() == 'true'
+ORBIO_API_KEY = os.environ.get('ORBIO_API_KEY','').strip()
+ORBIO_MODEL = os.environ.get('ORBIO_MODEL','').strip()
+ORBIO_BASE_URL = os.environ.get('ORBIO_BASE_URL','https://api.orbio.so/api/v1').strip()
+if PUSH_ORBIO_ASSISTANT_ENABLED and (not ORBIO_API_KEY or not ORBIO_MODEL or not ORBIO_BASE_URL.startswith('https://')):
+    raise ImproperlyConfigured('Enabled Orbio assistance requires ORBIO_API_KEY, ORBIO_MODEL and an HTTPS ORBIO_BASE_URL.')

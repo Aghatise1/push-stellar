@@ -44,3 +44,9 @@ services:
         value: false
       - key: PUSH_TESTNET_ESCROW_STAFF_CONTRACT
         sync: false
+      - key: PUSH_ORBIO_ASSISTANT_ENABLED
+        value: false
+      - key: ORBIO_API_KEY
+        sync: false
+      - key: ORBIO_MODEL
+        sync: false

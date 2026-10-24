@@ -12,7 +12,7 @@ Staff reconnect requires a fresh signed proof checked locally, never broadcast. 
 
 ## Funding and settlement
 
-New testnet assignments use escrow with separate participant wallets and test XLM or test USDC. The client signs funding after agreement acceptance. Acceptance alone cannot debit a wallet. Only confirmed chain evidence advances the funding state.
+New testnet assignments use escrow with separate participant wallets and test XLM or test USDC. Selecting a worker automatically prepares the off chain agreement from the accepted terms when both saved wallets are valid. It never moves tokens. The worker accepts, then the client explicitly signs funding in Freighter. Acceptance alone cannot debit a wallet. Only confirmed chain evidence advances the funding state.
 
 The worker signs delivery. The client signs release or a permitted revision. Staff do not approve routine payments. Contract disputes block ordinary release until an authorised staff wallet resolves the case. Settlement can only pay the original participant wallets. Expiry refund and claim paths require an authorised signed transaction and contract timing checks; time alone does not move tokens.
 
@@ -26,7 +26,9 @@ App suspension blocks application access. Removing chain authority requires a se
 
 ## Configuration and evidence
 
-Testnet only mode uses PUSH_TESTNET_ESCROW_ENABLED and PUSH_TESTNET_ESCROW_STAFF_CONTRACT. Defaults remain conservative. The deployed staff contract is recorded in contracts/deployments/testnet-owner-escrow.json with owner and XLM/USDC lifecycle hashes. Earlier deployment files are historical evidence.
+Testnet only mode uses PUSH_TESTNET_ESCROW_ENABLED and PUSH_TESTNET_ESCROW_STAFF_CONTRACT. Defaults remain conservative. The fee efficient deployment is recorded in contracts/deployments/testnet-owner-escrow-v4.json with its verified owner, asset contracts, deployment hashes and measured fee. Existing agreements retain the contract address saved when they were created. Earlier deployment files are historical evidence.
+
+The optional Orbio assistant is configured separately and remains off by default. It may summarise scope, delivery evidence and dispute records. It cannot determine whether a transaction succeeded, select a worker, approve a payment or settle a dispute. Those decisions remain with Stellar verification and the required human wallet signatures.
 
 The pilot was previously enabled on Render. Recheck /healthz/ and deployment settings before a demonstration; this document is not a live health check. Never use mainnet assets in the pilot.
 

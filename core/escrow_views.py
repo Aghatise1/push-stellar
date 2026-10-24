@@ -16,6 +16,7 @@ from .forms import SubmissionForm,MessageForm
 from .stellar import StellarVerificationError,valid_account_id
 from .views import verified
 from .access import staff_role
+from . import orbio
 
 
 def reviewers(item):
@@ -44,6 +45,52 @@ def wallet_setup_problem(request,item,agreement=None):
     return ''
 
 
+def agreement_setup_problem(item):
+    client=item.job.owner.stellar_address
+    worker=item.worker.stellar_address
+    if not valid_account_id(client):
+        return 'The client has not saved a valid wallet. The client must connect Freighter on Stellar testnet before the agreement can be prepared.'
+    if not valid_account_id(worker):
+        return 'The worker has not saved a valid wallet. Ask the worker to sign in to their own Push account and connect Freighter on Stellar testnet.'
+    if client==worker:
+        return 'The client and worker are using the same wallet. Each person needs a different Stellar testnet wallet.'
+    return ''
+
+
+def create_agreement(item):
+    existing=EscrowAgreement.objects.filter(assignment=item).first()
+    if existing:return existing
+    chain.require_enabled()
+    problem=agreement_setup_problem(item)
+    if problem:raise StellarVerificationError(problem)
+    contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT if settings.PUSH_TESTNET_ONLY else settings.PUSH_TESTNET_ESCROW_CONTRACT
+    if not contract:raise StellarVerificationError('The staff escrow contract must be configured before an agreement can be prepared.')
+    root_address=chain.registry_owner(contract)
+    root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
+    if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
+        raise StellarVerificationError('The contract owner must register and verify their staff wallet first.')
+    deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
+    if deadline<=timezone.now().timestamp():raise StellarVerificationError('The delivery deadline has passed.')
+    snapshot=item.agreement_snapshot;asset=snapshot.get('payment_asset',item.job.payment_asset)
+    return EscrowAgreement.objects.create(
+        assignment=item,reviewer=root.user,contract=contract,staff_governed=settings.PUSH_TESTNET_ONLY,
+        agreement_id=hashlib.sha256(('push-escrow:'+str(item.pk)).encode()).hexdigest(),
+        client_address=item.job.owner.stellar_address,worker_address=item.worker.stellar_address,
+        reviewer_address=root.address,asset=asset,token_address=chain.token_address(asset),
+        amount=item.budget,deadline=deadline,
+        review_seconds=int(snapshot.get('response_days',item.job.response_days))*86400,
+        revision_limit=int(snapshot.get('revision_limit',item.job.revision_limit)),
+    )
+
+
+def state_version(item,agreement=None):
+    latest=item.events.order_by('-created_at','-pk').values_list('pk','created_at').first()
+    data=[str(item.pk),item.status,str(item.accepted_terms_at or ''),str(latest or '')]
+    if agreement:
+        data.extend([agreement.chain_status,agreement.funded_hash,agreement.settlement_hash,str(agreement.review_until)])
+    return hashlib.sha256('|'.join(data).encode()).hexdigest()[:20]
+
+
 def workroom(request,item,error='',status=200):
     agreement=EscrowAgreement.objects.filter(assignment=item).first()
     return render(request,'escrow_assignment.html',{
@@ -59,6 +106,8 @@ def workroom(request,item,error='',status=200):
         'now_timestamp':int(timezone.now().timestamp()),
         'delivery_due':datetime.fromtimestamp(agreement.deadline,tz=dt_timezone.utc) if agreement else None,
         'review_due':datetime.fromtimestamp(agreement.review_until,tz=dt_timezone.utc) if agreement and agreement.review_until else None,
+        'state_version':state_version(item,agreement),
+        'orbio_enabled':orbio.enabled(),
     },status=status)
 
 
@@ -66,6 +115,38 @@ def workroom(request,item,error='',status=200):
 def detail(request,pk):
     try:return workroom(request,accessible(request,pk))
     except PermissionError as exc:return HttpResponseForbidden(str(exc))
+
+
+@verified
+def status(request,pk):
+    try:item=accessible(request,pk)
+    except PermissionError as exc:return HttpResponseForbidden(str(exc))
+    agreement=EscrowAgreement.objects.filter(assignment=item).first()
+    response=JsonResponse({'version':state_version(item,agreement),'status':item.status,
+        'escrowStatus':agreement.chain_status if agreement else None})
+    response['Cache-Control']='no-store'
+    return response
+
+
+@verified
+@require_POST
+def assistant(request,pk):
+    try:
+        item=accessible(request,pk);data=request_payload(request)
+        context={
+            'title':item.job.title,
+            'scope':item.agreement_snapshot.get('deliverables',item.scope),
+            'acceptance_criteria':item.agreement_snapshot.get('acceptance_criteria',''),
+            'status':item.status,
+            'messages':list(item.messages.order_by('-created_at').values_list('body',flat=True)[:12]),
+            'deliveries':[submission.notes+'\n'+submission.evidence for submission in item.submissions.all()[:8]],
+        }
+        if hasattr(item,'dispute'):context['dispute']=item.dispute.reason+'\n'+item.dispute.evidence
+        result=orbio.assist(str(data.get('action','')),context)
+        return JsonResponse({'ok':True,'advisory':True,'result':result})
+    except PermissionError as exc:return HttpResponseForbidden(str(exc))
+    except (StellarVerificationError,orbio.OrbioError) as exc:
+        return JsonResponse({'ok':False,'message':str(exc)},status=400)
 
 
 def agreement_action(request,item):
@@ -83,34 +164,9 @@ def agreement_action(request,item):
             except StellarVerificationError as exc:return workroom_error(str(exc))
             problem=wallet_setup_problem(request,item)
             if problem: return workroom_error(problem)
-            contract=settings.PUSH_TESTNET_ESCROW_CONTRACT
-            governed=settings.PUSH_TESTNET_ONLY
-            if governed:
-                contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
-                if not contract: return workroom_error('The staff escrow contract must be configured before funding can be enabled.')
-                try: root_address=chain.registry_owner(contract)
-                except Exception:
-                    return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
-                root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
-                if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
-                    return workroom_error('The contract owner must register and verify their staff wallet first.')
-                reviewer=root.user
-                reviewer_address=root.address
-            else:
-                reviewer=get_object_or_404(reviewers(item),pk=request.POST.get('reviewer'))
-                reviewer_address=reviewer.stellar_address
-            source=request.session.get('wallet_connected_address','')
-            addresses=[source,item.worker.stellar_address,reviewer_address]
-            if source!=item.job.owner.stellar_address or not all(valid_account_id(v) for v in addresses) or addresses[0]==addresses[1] or (not governed and len(set(addresses))!=3):
-                return workroom_error('Connect your wallet. Client and worker need distinct valid testnet wallets.')
-            deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
-            if deadline<=timezone.now().timestamp():return workroom_error('The delivery deadline has passed.')
-            snapshot=item.agreement_snapshot;asset=snapshot.get('payment_asset',item.job.payment_asset)
-            EscrowAgreement.objects.create(assignment=item,reviewer=reviewer,contract=contract,staff_governed=governed,
-                agreement_id=hashlib.sha256(('push-escrow:'+str(item.pk)).encode()).hexdigest(),client_address=source,
-                worker_address=addresses[1],reviewer_address=addresses[2],asset=asset,token_address=chain.token_address(asset),
-                amount=item.budget,deadline=deadline,review_seconds=int(snapshot.get('response_days',item.job.response_days))*86400,
-                revision_limit=int(snapshot.get('revision_limit',item.job.revision_limit)))
+            try:create_agreement(item)
+            except Exception:
+                return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
         elif action=='accept' and request.user.pk==item.worker_id and agreement:
             if not agreement.staff_governed and not can_review(agreement.reviewer,agreement):
                 return workroom_error('The assigned reviewer is no longer authorised. Cancel this unfunded agreement and prepare new terms.')

@@ -7,6 +7,7 @@
   var token = null;
   var signedXdr = null;
   var busy = false;
+  var stateVersion = room.dataset.stateVersion;
   function csrf() { var input = document.querySelector('[name=csrfmiddlewaretoken]'); return input ? input.value : ''; }
   async function post(url, payload) {
     var response = await fetch(url, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()}, body:JSON.stringify(payload)});
@@ -51,4 +52,31 @@
   room.querySelectorAll('[data-escrow-action]').forEach(function(form) { form.addEventListener('submit',function(event) { event.preventDefault(); run(function() { return perform(form); }); }); });
   room.querySelectorAll('[data-escrow-check]').forEach(function(button) { button.addEventListener('click',function() { token = button.dataset.escrowCheck; run(check); }); });
   retry.addEventListener('click',function() { run(check); });
+  async function syncState() {
+    if (busy || document.visibilityState !== 'visible' || !room.dataset.stateUrl) return;
+    try {
+      var response = await fetch(room.dataset.stateUrl, {credentials:'same-origin', cache:'no-store'});
+      if (!response.ok) return;
+      var data = await response.json();
+      if (data.version && data.version !== stateVersion) window.location.reload();
+    } catch (error) {
+      // A transient status check must never interrupt a wallet action.
+    }
+  }
+  window.setInterval(syncState, 5000);
+  var assistant = document.querySelector('[data-orbio-room]');
+  if (assistant) {
+    var assistantForm=assistant.querySelector('[data-orbio-form]');
+    var assistantResult=assistant.querySelector('[data-orbio-result]');
+    assistantForm.addEventListener('submit',async function(event) {
+      event.preventDefault();assistantResult.textContent='Preparing an advisory draft…';
+      try {
+        var data=await post(assistant.dataset.orbioUrl,Object.fromEntries(new FormData(assistantForm)));
+        var result=data.result;
+        var lines=[result.summary].concat(result.observations||[],result.missing_information||[],[result.suggested_next_step]);
+        if(result.escalate_to_human) lines.push('Human review is required.');
+        assistantResult.textContent=lines.filter(Boolean).join(' ');
+      } catch(error) {assistantResult.textContent=error.message||'The advisory draft is unavailable.';}
+    });
+  }
 })();
