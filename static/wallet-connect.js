@@ -51,9 +51,10 @@
     var address = shell.querySelector('[data-wallet-address]');
     var message = shell.querySelector('[data-wallet-message]');
     var disconnect = shell.querySelector('[data-wallet-disconnect]');
-    var active = result.activeAddress || '';
-    var saved = result.savedAddress || shell.dataset.savedAddress || '';
-    var connected = Boolean(result.connected && active);
+    var active = result.activeAddress || (result.connected !== false && result.address) || '';
+    var saved = result.savedAddress || (result.connected !== false && result.address) || shell.dataset.savedAddress || '';
+    var connected = Boolean((result.connected === undefined ? result.address : result.connected) && active);
+    if (connected) shell.dataset.savedAddress = active;
     if (chip) chip.textContent = connected ? shortAddress(active) : (saved ? 'Saved ' + shortAddress(saved) : 'Connect wallet');
     if (state) {
       state.dataset.state = connected ? 'connected' : (result.state || 'disconnected');
@@ -136,6 +137,14 @@
       if (!networkResult || networkResult.error || !networkResult.network) {
         throw new Error('Freighter did not return its current network.');
       }
+      if (String(networkResult.network).toUpperCase() !== 'TESTNET') {
+        renderWalletState({
+          connected: false,
+          state: 'wrong_network',
+          activeAddress: addressResult.address,
+          message: 'Freighter is connected to another network. Switch it to Stellar testnet.'
+        });
+      }
 
       showStatus('Saving your testnet public address…');
       var shell = walletShell();
@@ -159,8 +168,9 @@
         result = await postJson(endpoint, {address:addressResult.address,network:networkResult.network,signedXdr:signed.signedTxXdr});
       }
       renderWalletState(result);
+      if (shell) shell.dataset.initialConnected = String(Boolean((result.connected === undefined ? result.address : result.connected) && (result.activeAddress || result.address)));
       showStatus(result.message, 'success');
-      window.setTimeout(function () { window.location.reload(); }, 700);
+      if (typeof window.setTimeout === 'function') window.setTimeout(function () { window.location.reload(); }, 700);
     } catch (error) {
       showStatus(errorMessage(error, 'Wallet connection failed. Try again from Freighter.'), 'error');
     } finally {
@@ -208,8 +218,9 @@
     try {
       var result = await postJson(endpoint, {});
       renderWalletState(result);
+      if (shell) shell.dataset.initialConnected = 'false';
       showStatus(result.message, 'success');
-      window.setTimeout(function () { window.location.reload(); }, 500);
+      if (typeof window.setTimeout === 'function') window.setTimeout(function () { window.location.reload(); }, 500);
     } catch (error) {
       showStatus(errorMessage(error, 'Push could not disconnect this wallet session.'), 'error');
     }
