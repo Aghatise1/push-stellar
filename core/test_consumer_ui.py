@@ -164,3 +164,56 @@ class ConsumerHomeTests(TestCase):
         self.assertNotContains(response, "hero-balance")
         self.assertNotContains(response, "payment-motion")
 
+
+class ConsumerWorkTests(ConsumerHomeTests):
+    def test_work_hub_uses_a_stable_segmented_control_and_record_cards(self):
+        self.make_assignment("awaiting_acceptance")
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("work"))
+        self.assertContains(response, "consumer-segmented-nav")
+        for view in ("assigned", "applications", "hiring", "posted"):
+            self.assertContains(response, f"?view={view}")
+        self.assertContains(response, "consumer-work-card")
+        self.assertContains(response, "Awaiting agreement")
+
+    def test_hiring_view_keeps_agreement_link_budget_and_status(self):
+        assignment = self.make_assignment("awaiting_funding")
+        self.client.force_login(self.client_user)
+        response = self.client.get(reverse("work") + "?view=hiring")
+        self.assertContains(response, reverse("assignment", args=[assignment.pk]))
+        self.assertContains(response, assignment.budget_display)
+        self.assertContains(response, assignment.get_status_display())
+
+
+class ConsumerJobsTests(ConsumerHomeTests):
+    def test_job_card_shows_client_scope_budget_and_primary_action(self):
+        assignment = self.make_assignment("awaiting_acceptance")
+        assignment.delete()
+        assignment.job.status = "open"
+        assignment.job.save(update_fields=["status"])
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("jobs"))
+        self.assertContains(response, 'class="consumer-job-card')
+        self.assertContains(response, assignment.job.owner.display_name)
+        self.assertContains(response, assignment.job.description)
+        self.assertContains(response, assignment.job.budget_display)
+        self.assertContains(response, reverse("job_detail", args=[assignment.job.pk]))
+
+    def test_job_detail_and_forms_use_consumer_components_without_changing_actions(self):
+        assignment = self.make_assignment("awaiting_acceptance")
+        assignment.delete()
+        job = assignment.job
+        job.status = "open"
+        job.save(update_fields=["status"])
+        self.client.force_login(self.worker)
+
+        detail = self.client.get(reverse("job_detail", args=[job.pk]))
+        self.assertContains(detail, 'class="consumer-job-detail')
+        self.assertContains(detail, f'action="{reverse("apply", args=[job.pk])}"')
+        self.assertContains(detail, "csrfmiddlewaretoken")
+
+        create = self.client.get(reverse("job_create"))
+        self.assertContains(create, 'class="consumer-form-page')
+        self.assertContains(create, "csrfmiddlewaretoken")
+        self.assertContains(create, "Deliverables")
+

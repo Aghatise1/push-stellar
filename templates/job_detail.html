@@ -1,5 +1,6 @@
 {% extends 'base.html' %}{% block title %}{{ job.title }}{% endblock %}{% block meta_description %}Review the scope, budget, deadline and deliverables for {{ job.title }} on Push.{% endblock %}
 {% block content %}
+<div class="consumer-job-detail">
 <a class="back-link" href="{% url 'jobs' %}">Back to opportunities</a>
 <div class="page-heading">
   <div>
@@ -81,11 +82,12 @@
     <dl>
       <dt>Deadline</dt><dd>{{ job.deadline|date:'j F Y' }}</dd>
       <dt>Posted</dt><dd>{{ job.created_at|date:'j F Y' }}</dd>
-      <dt>Payment</dt><dd>Simulation only</dd>
+      <dt>Payment</dt><dd>{{ job.budget_display }} through Stellar testnet escrow</dd>
     </dl>
     <p>Never share passwords, recovery phrases or payment credentials in an application.</p>
     <p>The job link can be shared with anyone. Private proposals and hiring records remain restricted.</p>
     <label class="job-share-field" for="job-share-url">Shareable job link<input id="job-share-url" value="{{ request.build_absolute_uri }}" readonly></label>
   </aside>
+</div>
 </div>
 {% endblock %}
