@@ -259,6 +259,58 @@ class PilotReliabilityReportTests(TestCase):
         self.assertEqual(report['attention'], [])
         self.assertNotIn(str(agreement.assignment_id), str(report['attention']))
 
+    def test_attention_queue_fetches_only_bounded_records_while_preserving_complete_total(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        valid_agreement = self.make_agreement('awaiting_funding', 'Unfunded', amount=50, asset='XLM')
+        m1 = self.make_agreement('funded', 'Unfunded', amount=110, asset='USDC', accepted_delta_seconds=3000)
+        m2 = self.make_agreement('submitted', 'Funded', amount=120, asset='XLM', accepted_delta_seconds=2400)
+        m3 = self.make_agreement('paid', 'Submitted', amount=130, asset='USDC', accepted_delta_seconds=1800)
+
+        t1 = self.make_tx(valid_agreement, action='fund', state='prepared', age_seconds=40 * 60)
+        t2 = self.make_tx(m1, action='fund', state='pending', age_seconds=35 * 60)
+        t3 = self.make_tx(m2, action='submit', state='failed', age_seconds=30 * 60)
+        t4 = self.make_tx(m3, action='approve', state='failed', age_seconds=25 * 60)
+
+        with CaptureQueriesContext(connection) as zero_queries:
+            zero_report = build_pilot_reliability_report(now=self.fixed_now, attention_limit=0)
+        self.assertEqual(zero_report['attention_total'], 7)
+        self.assertEqual(zero_report['attention'], [])
+        self.assertEqual(len(zero_queries), 3)
+
+        with CaptureQueriesContext(connection) as agreement_only_queries:
+            only_agreements = build_pilot_reliability_report(now=self.fixed_now, attention_limit=2)
+        self.assertEqual(only_agreements['attention_total'], 7)
+        self.assertEqual(len(only_agreements['attention']), 2)
+        self.assertEqual(
+            [(item['assignment_id'], item['action']) for item in only_agreements['attention']],
+            [
+                (str(m1.assignment_id), 'state_mismatch'),
+                (str(m2.assignment_id), 'state_mismatch'),
+            ],
+        )
+        self.assertEqual(len(agreement_only_queries), 4)
+        self.assertIn('LIMIT 2', agreement_only_queries[-1]['sql'].upper())
+
+        with CaptureQueriesContext(connection) as shared_queries:
+            shared_report = build_pilot_reliability_report(now=self.fixed_now, attention_limit=5)
+        self.assertEqual(shared_report['attention_total'], 7)
+        self.assertEqual(len(shared_report['attention']), 5)
+        self.assertEqual(
+            [(item['assignment_id'], item['action']) for item in shared_report['attention']],
+            [
+                (str(m1.assignment_id), 'state_mismatch'),
+                (str(m2.assignment_id), 'state_mismatch'),
+                (str(m3.assignment_id), 'state_mismatch'),
+                (str(t1.escrow.assignment_id), 'fund'),
+                (str(t2.escrow.assignment_id), 'fund'),
+            ],
+        )
+        self.assertEqual(len(shared_queries), 5)
+        self.assertIn('LIMIT 5', shared_queries[-2]['sql'].upper())
+        self.assertIn('LIMIT 2', shared_queries[-1]['sql'].upper())
+
 
 class PilotReliabilityPageTests(TestCase):
     @classmethod

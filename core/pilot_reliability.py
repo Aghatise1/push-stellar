@@ -66,11 +66,24 @@ def _age_seconds(now, timestamp) -> int:
     return max(0, int((now - timestamp).total_seconds()))
 
 
+def _valid_agreement_q() -> Q:
+    valid_q = Q()
+    for a_status, valid_chains in EXPECTED_CHAIN_STATES.items():
+        valid_q |= Q(assignment__status=a_status, chain_status__in=valid_chains)
+    return valid_q
+
+
 def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> dict:
     current_time = now or timezone.now()
     threshold_minutes = stale_minutes()
     stale_cutoff = current_time - timedelta(minutes=threshold_minutes)
-    limit = max(0, int(attention_limit)) if isinstance(attention_limit, int) else 100
+    if isinstance(attention_limit, bool) or attention_limit is None:
+        limit = 100
+    else:
+        try:
+            limit = max(0, int(attention_limit))
+        except (TypeError, ValueError):
+            limit = 100
 
     configured_contract = (
         settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
@@ -89,6 +102,7 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
     by_chain_status = {status: 0 for status in KNOWN_CHAIN_STATES}
     by_pair = {}
     agreement_total = 0
+    agreement_attention_total = 0
 
     for row in (
         EscrowAgreement.objects.values('assignment__status', 'chain_status')
@@ -102,6 +116,9 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
         by_assignment_status[a_status] = by_assignment_status.get(a_status, 0) + count
         by_chain_status[c_status] = by_chain_status.get(c_status, 0) + count
         by_pair[f'{a_status}:{c_status}'] = count
+        expected = EXPECTED_CHAIN_STATES.get(a_status)
+        if expected is None or c_status not in KNOWN_CHAIN_STATES or c_status not in expected:
+            agreement_attention_total += count
 
     transaction_counts = {'total': 0}
     for state in STANDARD_TRANSACTION_STATES:
@@ -112,88 +129,93 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
         transaction_counts['total'] += count
         transaction_counts[state] = transaction_counts.get(state, 0) + count
 
-    attention_items = []
-
-    agreements = (
-        EscrowAgreement.objects.select_related('assignment')
-        .only(
-            'id',
-            'assignment_id',
-            'client_address',
-            'asset',
-            'amount',
-            'chain_status',
-            'accepted_at',
-            'assignment__id',
-            'assignment__status',
-            'assignment__created_at',
-        )
-        .order_by('id')
-    )
-    for agreement in agreements:
-        a_status = str(agreement.assignment.status or '')
-        c_status = str(agreement.chain_status or '')
-        expected = EXPECTED_CHAIN_STATES.get(a_status)
-        if expected is None or c_status not in KNOWN_CHAIN_STATES:
-            action = 'unknown_state'
-            safe_state = f'unknown_state:{a_status}:{c_status}'
-        elif c_status not in expected:
-            action = 'state_mismatch'
-            safe_state = f'mismatch:{a_status}:{c_status}'
-        else:
-            continue
-
-        reference_time = agreement.accepted_at or agreement.assignment.created_at
-        attention_items.append({
-            'assignment_id': str(agreement.assignment_id),
-            'action': action,
-            'state': safe_state,
-            'age_seconds': _age_seconds(current_time, reference_time),
-            'asset': str(agreement.asset),
-            'amount': int(agreement.amount),
-            'source': abbreviate_address(agreement.client_address),
-            'workroom_url': reverse('escrow_detail', args=[agreement.assignment_id]),
-        })
-
     attention_tx_filter = (
         Q(state__in=['prepared', 'pending'], created_at__lte=stale_cutoff)
         | Q(state='failed')
         | ~Q(state__in=STANDARD_TRANSACTION_STATES)
     )
-    attention_txs = (
-        EscrowTransaction.objects.filter(attention_tx_filter)
-        .select_related('escrow')
-        .only(
-            'id',
-            'action',
-            'source',
-            'state',
-            'created_at',
-            'escrow__id',
-            'escrow__assignment_id',
-            'escrow__asset',
-            'escrow__amount',
-        )
-        .order_by('created_at', 'id')
-    )
-    for tx in attention_txs:
-        if tx.state in ('prepared', 'pending'):
-            safe_state = f'stale_{tx.state}'
-        elif tx.state == 'failed':
-            safe_state = 'failed'
-        else:
-            safe_state = f'unknown_state:{tx.state}'
+    tx_attention_qs = EscrowTransaction.objects.filter(attention_tx_filter)
+    tx_attention_total = tx_attention_qs.count()
+    attention_total = agreement_attention_total + tx_attention_total
 
-        attention_items.append({
-            'assignment_id': str(tx.escrow.assignment_id),
-            'action': str(tx.action),
-            'state': safe_state,
-            'age_seconds': _age_seconds(current_time, tx.created_at),
-            'asset': str(tx.escrow.asset),
-            'amount': int(tx.escrow.amount),
-            'source': abbreviate_address(tx.source),
-            'workroom_url': reverse('escrow_detail', args=[tx.escrow.assignment_id]),
-        })
+    attention_items = []
+
+    if limit > 0 and agreement_attention_total > 0:
+        agreements = (
+            EscrowAgreement.objects.filter(~_valid_agreement_q())
+            .select_related('assignment')
+            .only(
+                'id',
+                'assignment_id',
+                'client_address',
+                'asset',
+                'amount',
+                'chain_status',
+                'accepted_at',
+                'assignment__id',
+                'assignment__status',
+                'assignment__created_at',
+            )
+            .order_by('id')[:limit]
+        )
+        for agreement in agreements:
+            a_status = str(agreement.assignment.status or '')
+            c_status = str(agreement.chain_status or '')
+            expected = EXPECTED_CHAIN_STATES.get(a_status)
+            if expected is None or c_status not in KNOWN_CHAIN_STATES:
+                action = 'unknown_state'
+                safe_state = f'unknown_state:{a_status}:{c_status}'
+            else:
+                action = 'state_mismatch'
+                safe_state = f'mismatch:{a_status}:{c_status}'
+
+            reference_time = agreement.accepted_at or agreement.assignment.created_at
+            attention_items.append({
+                'assignment_id': str(agreement.assignment_id),
+                'action': action,
+                'state': safe_state,
+                'age_seconds': _age_seconds(current_time, reference_time),
+                'asset': str(agreement.asset),
+                'amount': int(agreement.amount),
+                'source': abbreviate_address(agreement.client_address),
+                'workroom_url': reverse('escrow_detail', args=[agreement.assignment_id]),
+            })
+
+    remaining = limit - len(attention_items)
+    if remaining > 0 and tx_attention_total > 0:
+        attention_txs = (
+            tx_attention_qs.select_related('escrow')
+            .only(
+                'id',
+                'action',
+                'source',
+                'state',
+                'created_at',
+                'escrow__id',
+                'escrow__assignment_id',
+                'escrow__asset',
+                'escrow__amount',
+            )
+            .order_by('created_at', 'id')[:remaining]
+        )
+        for tx in attention_txs:
+            if tx.state in ('prepared', 'pending'):
+                safe_state = f'stale_{tx.state}'
+            elif tx.state == 'failed':
+                safe_state = 'failed'
+            else:
+                safe_state = f'unknown_state:{tx.state}'
+
+            attention_items.append({
+                'assignment_id': str(tx.escrow.assignment_id),
+                'action': str(tx.action),
+                'state': safe_state,
+                'age_seconds': _age_seconds(current_time, tx.created_at),
+                'asset': str(tx.escrow.asset),
+                'amount': int(tx.escrow.amount),
+                'source': abbreviate_address(tx.source),
+                'workroom_url': reverse('escrow_detail', args=[tx.escrow.assignment_id]),
+            })
 
     return {
         'generated_at': current_time,
@@ -206,6 +228,6 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
             'by_pair': by_pair,
         },
         'transaction_counts': transaction_counts,
-        'attention': attention_items[:limit],
-        'attention_total': len(attention_items),
+        'attention': attention_items,
+        'attention_total': attention_total,
     }
