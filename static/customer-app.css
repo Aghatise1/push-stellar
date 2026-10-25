@@ -213,3 +213,24 @@ body.customer-app-mode{
 @media(max-width:420px){
   .customer-app-mode .consumer-work-card .app-list-row{grid-template-columns:auto minmax(0,1fr)}.customer-app-mode .consumer-work-card .row-amount,.customer-app-mode .consumer-work-card .status-bubble,.customer-app-mode .consumer-work-card .work-next-action{grid-column:2;justify-self:start}.customer-app-mode .consumer-job-card-top{display:block}.customer-app-mode .consumer-job-budget{display:block;margin-top:.5rem}.customer-app-mode .consumer-job-meta span{width:100%}.customer-app-mode .consumer-job-meta span+span:before{content:none}
 }
+
+/* Workrooms and private conversations */
+.customer-app-mode .consumer-workroom{width:100%;max-width:76rem;margin:0 auto}
+.customer-app-mode .consumer-workroom>.page-heading{margin-bottom:.75rem;border-color:var(--customer-line);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-progress{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.35rem;margin:.75rem 0 1rem;padding:.55rem;border:1px solid var(--customer-line);border-radius:1rem;background:var(--customer-surface)}
+.customer-app-mode .consumer-progress span{position:relative;padding:.7rem .45rem;border-radius:.65rem;background:#f1f4f2;color:#859088;text-align:center;font-size:.63rem;font-weight:700}
+.customer-app-mode .consumer-progress span.complete{background:#e7f3eb;color:var(--customer-green)}.customer-app-mode .consumer-progress span.current{background:var(--customer-green);color:#fff;box-shadow:0 .35rem 1rem rgba(13,74,56,.16)}
+.customer-app-mode .consumer-workroom .detail-layout>div>section,.customer-app-mode .consumer-workroom .side-note,.customer-app-mode .consumer-workroom>section{border-color:var(--customer-line);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-workroom-action{border-color:#bed8c6!important;background:#fbfefc!important}.customer-app-mode .consumer-workroom-action>h2{margin-top:0}.customer-app-mode .consumer-primary-action{box-shadow:0 .55rem 1.3rem rgba(13,74,56,.16)}
+.customer-app-mode .consumer-workroom code{max-width:100%;overflow-wrap:anywhere}.customer-app-mode .consumer-workroom .agreement-facts dd{overflow-wrap:anywhere}
+.customer-app-mode .consumer-chat{border-color:var(--customer-line);background:var(--customer-surface)}
+.customer-app-mode .messages-page .app-heading{padding:0;border:0;background:transparent}.customer-app-mode .messages-page .app-heading h1{max-width:18ch;font-size:clamp(2rem,4vw,3.4rem)}
+.customer-app-mode .message-hub.consumer-chat{min-height:38rem;border-radius:var(--customer-radius-card);box-shadow:var(--customer-shadow);overflow:hidden}
+.customer-app-mode .consumer-chat .conversation-list-pane{background:#f7faf8;border-color:var(--customer-line)}.customer-app-mode .consumer-chat .conversation-list>a{border-color:var(--customer-line)}.customer-app-mode .consumer-chat .conversation-list>a[aria-current]{background:#e4f1e9;color:var(--customer-green)}
+.customer-app-mode .consumer-chat .chat-header{border-color:var(--customer-line);background:rgba(255,255,255,.96);backdrop-filter:blur(14px)}.customer-app-mode .consumer-chat .chat-thread{background:#f6f8f6}.customer-app-mode .consumer-chat .chat-bubble{max-width:min(75%,36rem);border-color:var(--customer-line);border-radius:1rem 1rem 1rem .3rem;background:#fff}.customer-app-mode .consumer-chat .chat-bubble.mine{border-radius:1rem 1rem .3rem 1rem;background:#dff0e5;color:var(--customer-ink)}
+.customer-app-mode .consumer-chat-composer{border-color:var(--customer-line);background:#fff}.customer-app-mode .consumer-chat-composer textarea{border-color:var(--customer-line);border-radius:.85rem;background:#f8faf9;resize:vertical}.customer-app-mode .consumer-chat-composer>p{color:var(--customer-muted);font-size:.6rem}
+
+@media(max-width:700px){
+  .customer-app-mode .consumer-progress{display:flex;overflow-x:auto}.customer-app-mode .consumer-progress span{flex:1 0 5.25rem}
+  .customer-app-mode .message-hub.consumer-chat{min-height:0}.customer-app-mode .message-hub.consumer-chat.has-active{display:block}.customer-app-mode .message-hub.consumer-chat.has-active .conversation-list-pane{display:none}.customer-app-mode .consumer-chat .chat-panel{min-height:calc(100vh - 14rem)}.customer-app-mode .consumer-chat .chat-thread{min-height:16rem}.customer-app-mode .consumer-chat-composer{position:sticky;bottom:5rem;z-index:4;padding:1rem;box-shadow:0 -.5rem 1.5rem rgba(20,57,43,.07)}.customer-app-mode .consumer-chat .chat-bubble{max-width:88%}
+}

@@ -1,11 +1,11 @@
 from datetime import timedelta
 
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Assignment, Job, StaffAccess, User
+from .models import Assignment, Job, Message, StaffAccess, User
 
 
 class ConsumerShellTests(TestCase):
@@ -216,4 +216,48 @@ class ConsumerJobsTests(ConsumerHomeTests):
         self.assertContains(create, 'class="consumer-form-page')
         self.assertContains(create, "csrfmiddlewaretoken")
         self.assertContains(create, "Deliverables")
+
+
+class ConsumerWorkroomTests(ConsumerHomeTests):
+    @override_settings(PUSH_TESTNET_ONLY=False)
+    def test_worker_sees_one_primary_agreement_action_and_current_status(self):
+        assignment = self.make_assignment("awaiting_acceptance")
+        assignment.escrow_required = False
+        assignment.save(update_fields=["escrow_required"])
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("assignment", args=[assignment.pk]))
+        self.assertContains(response, "consumer-workroom")
+        self.assertContains(response, assignment.get_status_display())
+        self.assertContains(response, "consumer-primary-action", count=1)
+        self.assertContains(response, "Cancel this agreement")
+
+    def test_escrow_workroom_keeps_wallet_and_transaction_hooks(self):
+        assignment = self.make_assignment("awaiting_acceptance")
+        self.client.force_login(self.client_user)
+        response = self.client.get(reverse("assignment", args=[assignment.pk]))
+        self.assertContains(response, "consumer-workroom")
+        self.assertContains(response, "consumer-progress")
+        self.assertContains(response, "data-wallet-connect")
+        self.assertContains(response, "data-escrow-room")
+        self.assertContains(response, "data-escrow-status")
+        self.assertContains(response, "data-escrow-retry")
+
+    def test_messages_keep_project_context_privacy_and_composer(self):
+        assignment = self.make_assignment("funded")
+        Message.objects.create(assignment=assignment, sender=self.client_user, body="The scope is confirmed.")
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("conversation", args=[assignment.pk]))
+        self.assertContains(response, "consumer-chat")
+        self.assertContains(response, "consumer-chat-composer")
+        self.assertContains(response, assignment.job.title)
+        self.assertContains(response, "does not currently provide end-to-end encryption")
+        self.assertContains(response, f'action="{reverse("conversation", args=[assignment.pk])}"')
+
+    def test_closed_conversation_remains_visible_and_read_only(self):
+        assignment = self.make_assignment("paid")
+        Message.objects.create(assignment=assignment, sender=self.client_user, body="Payment released.")
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse("conversation", args=[assignment.pk]))
+        self.assertContains(response, "read-only")
+        self.assertNotContains(response, "consumer-chat-composer")
 
