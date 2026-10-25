@@ -261,3 +261,51 @@ class ConsumerWorkroomTests(ConsumerHomeTests):
         self.assertContains(response, "read-only")
         self.assertNotContains(response, "consumer-chat-composer")
 
+
+class ConsumerWalletTests(ConsumerHomeTests):
+    wallet_address = "GAOLY6ZLXM4V5NOFFHWX7QYNZR4MECF2AECJSHBDFBFEG4T4OZOTQZTR"
+
+    def wallet_response(self, user=None):
+        self.client.force_login(user or self.worker)
+        response = self.client.get(reverse("wallet"))
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_wallet_separates_receiving_session_and_escrow_states(self):
+        response = self.wallet_response()
+        self.assertContains(response, "consumer-wallet-states")
+        self.assertContains(response, "Receiving address")
+        self.assertContains(response, "Freighter session")
+        self.assertContains(response, "Escrow payments")
+        self.assertContains(response, "No address saved")
+        self.assertContains(response, "Freighter disconnected")
+        self.assertContains(response, "Stellar testnet")
+        self.assertContains(response, "data-wallet-connect")
+        self.assertContains(response, "data-wallet-status")
+
+    def test_saved_address_is_not_described_as_a_live_connection(self):
+        self.worker.stellar_address = self.wallet_address
+        self.worker.save(update_fields=["stellar_address"])
+        response = self.wallet_response()
+        self.assertContains(response, "Saved for receiving")
+        self.assertContains(response, "Freighter disconnected")
+        self.assertContains(response, self.wallet_address)
+
+    def test_matching_session_is_labelled_connected_on_testnet(self):
+        self.worker.stellar_address = self.wallet_address
+        self.worker.save(update_fields=["stellar_address"])
+        self.client.force_login(self.worker)
+        session = self.client.session
+        session["wallet_connected_address"] = self.wallet_address
+        session.save()
+        response = self.client.get(reverse("wallet"))
+        self.assertContains(response, "Connected on testnet")
+        self.assertContains(response, "Disconnect")
+
+    def test_payments_use_compact_evidence_records(self):
+        response = self.wallet_response()
+        payments = self.client.get(reverse("payments"))
+        self.assertContains(payments, "consumer-payment-summary")
+        self.assertContains(payments, "consumer-payment-history")
+        self.assertContains(payments, "Testnet assets have no monetary value")
+
