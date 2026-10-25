@@ -494,6 +494,33 @@ class PilotReliabilityPageTests(TestCase):
         self.assertNotIn('Secret delivery evidence notes', body)
         self.assertNotIn('https://example.test/secret-evidence-link', body)
 
+    def test_reliability_pages_hide_account_email_without_mutating_user(self):
+        pages = (
+            reverse('pilot_reliability'),
+            reverse('pilot_reliability_inspect', args=[self.assignment.pk]),
+        )
+        for allowed_user in (self.owner_user, self.admin_user):
+            original_email = allowed_user.email
+            self.client.force_login(allowed_user)
+            for url in pages:
+                with self.subTest(user=allowed_user.username, url=url):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn('no-store', response['Cache-Control'])
+                    self.assertEqual(response.wsgi_request.user.email, original_email)
+                    self.assertEqual(response.context['user'].email, original_email)
+                    body = response.content.decode('utf-8')
+                    self.assertNotIn(original_email, body)
+                    self.assertNotIn('@example.test', body)
+            allowed_user.refresh_from_db()
+            self.assertEqual(allowed_user.email, original_email)
+
+    def test_ordinary_authenticated_page_still_renders_account_email(self):
+        self.client.force_login(self.owner_user)
+        response = self.client.get(reverse('moderation'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.owner_user.email)
+
     def test_pilot_reliability_inspect_page_enforces_access_without_staff_wallet_and_omits_sensitive_data(self):
         from core.models import EscrowStaffWallet, Message, Submission
 

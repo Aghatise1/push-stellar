@@ -14,8 +14,10 @@ from .pilot_reliability import (
 @require_GET
 def pilot_reliability(request):
     report = build_pilot_reliability_report()
-    request.user.email = ''
-    response = render(request, 'pilot_reliability.html', {'report': report})
+    response = render(request, 'pilot_reliability.html', {
+        'report': report,
+        'hide_account_email': True,
+    })
     response['Cache-Control'] = 'no-store'
     return response
 
@@ -26,7 +28,9 @@ def pilot_reliability_inspect(request, pk):
     inspection = build_pilot_reliability_inspection(pk)
     if inspection is None:
         raise Http404('Pilot reliability record not found.')
-    request.user.email = ''
-    response = render(request, 'pilot_reliability_inspect.html', {'inspection': inspection})
+    response = render(request, 'pilot_reliability_inspect.html', {
+        'inspection': inspection,
+        'hide_account_email': True,
+    })
     response['Cache-Control'] = 'no-store'
     return response
