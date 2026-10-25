@@ -427,3 +427,134 @@ class PilotReliabilityPageTests(TestCase):
         self.assertNotIn('Secret workroom message body', body)
         self.assertNotIn('Secret delivery evidence notes', body)
         self.assertNotIn('https://example.test/secret-evidence-link', body)
+
+
+class PilotReliabilityCommandTests(TestCase):
+    def setUp(self):
+        accepted = timezone.now() - timedelta(days=1)
+        self.client_address = Keypair.random().public_key
+        self.worker_address = Keypair.random().public_key
+        self.reviewer_address = Keypair.random().public_key
+        self.customer = User.objects.create_user(
+            username='cmd-customer@example.test',
+            email='cmd-customer@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Command Customer',
+            email_verified=True,
+            stellar_address=self.client_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+        )
+        self.worker = User.objects.create_user(
+            username='cmd-worker@example.test',
+            email='cmd-worker@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Command Worker',
+            email_verified=True,
+            stellar_address=self.worker_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+        )
+        self.reviewer = User.objects.create_user(
+            username='cmd-reviewer@example.test',
+            email='cmd-reviewer@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Command Reviewer',
+            email_verified=True,
+            stellar_address=self.reviewer_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+        )
+
+    def test_check_pilot_reliability_prints_safe_summary_and_supports_fail_on_attention(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        from core.models import Message, Submission
+
+        clean_out = StringIO()
+        call_command('check_pilot_reliability', '--fail-on-attention', stdout=clean_out)
+        self.assertIn('attention_total: 0', clean_out.getvalue())
+
+        now = timezone.now()
+        job = Job.objects.create(
+            owner=self.customer,
+            project='Command Reliability Project',
+            title='Command Reliability Job',
+            description='Private command job description',
+            deliverables='Command deliverable spec',
+            category='Development',
+            budget=80,
+            payment_asset='XLM',
+            deadline=now.date() + timedelta(days=7),
+            moderation_status='approved',
+            status='assigned',
+        )
+        assignment = Assignment.objects.create(
+            job=job,
+            worker=self.worker,
+            scope='Private command scope',
+            budget=80,
+            status='funded',
+            escrow_required=True,
+            accepted_terms_at=now - timedelta(minutes=30),
+        )
+        agreement = EscrowAgreement.objects.create(
+            staff_governed=True,
+            assignment=assignment,
+            reviewer=self.reviewer,
+            contract='CCONTRACT1234567890123456789012345678901234567890123456',
+            agreement_id=hashlib.sha256(b'cmd-agreement').hexdigest(),
+            client_address=self.client_address,
+            worker_address=self.worker_address,
+            reviewer_address=self.reviewer_address,
+            asset='XLM',
+            token_address='CTOKEN1234567890123456789012345678901234567890123456789',
+            amount=80,
+            deadline=int((now + timedelta(days=7)).timestamp()),
+            review_seconds=86400,
+            revision_limit=2,
+            chain_status='Unfunded',
+            accepted_at=now - timedelta(minutes=30),
+        )
+        tx = EscrowTransaction.objects.create(
+            escrow=agreement,
+            actor=self.customer,
+            action='fund',
+            source=self.client_address,
+            prepared_xdr='CMD_SECRET_PREPARED_XDR',
+            signed_xdr='CMD_SECRET_SIGNED_XDR',
+            tx_hash=hashlib.sha256(b'cmd-tx').hexdigest(),
+            state='failed',
+        )
+        EscrowTransaction.objects.filter(pk=tx.pk).update(created_at=now - timedelta(minutes=30))
+        Message.objects.create(assignment=assignment, sender=self.customer, body='Private command test message')
+        Submission.objects.create(
+            assignment=assignment,
+            author=self.worker,
+            notes='Private command submission notes',
+            link='https://example.test/private-cmd-evidence',
+            evidence='Private command evidence text',
+        )
+
+        out = StringIO()
+        call_command('check_pilot_reliability', stdout=out)
+        output = out.getvalue()
+        self.assertIn('Push database records', output)
+        self.assertIn(str(assignment.pk), output)
+        self.assertIn('state_mismatch', output)
+        self.assertIn('mismatch:funded:Unfunded', output)
+        self.assertIn(abbreviate_address(self.client_address), output)
+        self.assertNotIn('CMD_SECRET_PREPARED_XDR', output)
+        self.assertNotIn('CMD_SECRET_SIGNED_XDR', output)
+        self.assertNotIn(self.client_address, output)
+        self.assertNotIn(self.worker_address, output)
+        self.assertNotIn(self.reviewer_address, output)
+        self.assertNotIn('cmd-customer@example.test', output)
+        self.assertNotIn('Private command test message', output)
+        self.assertNotIn('Private command submission notes', output)
+        self.assertNotIn('https://example.test/private-cmd-evidence', output)
+
+        with self.assertRaises(CommandError):
+            call_command('check_pilot_reliability', '--fail-on-attention', stdout=StringIO())
+
