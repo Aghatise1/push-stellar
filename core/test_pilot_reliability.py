@@ -222,7 +222,7 @@ class PilotReliabilityReportTests(TestCase):
 
         for item in report['attention']:
             self.assertEqual(set(item.keys()), allowed_keys)
-            self.assertEqual(item['workroom_url'], reverse('escrow_detail', args=[item['assignment_id']]))
+            self.assertEqual(item['workroom_url'], reverse('pilot_reliability_inspect', args=[item['assignment_id']]))
             self.assertEqual(item['source'], abbreviate_address(self.client_address))
 
         attention_by_assignment = {(item['assignment_id'], item['action']): item for item in report['attention']}
@@ -477,7 +477,9 @@ class PilotReliabilityPageTests(TestCase):
         self.assertIn('no-store', response['Cache-Control'])
         self.assertContains(response, 'Push database records')
         self.assertContains(response, 'does not replace Stellar ledger verification')
-        self.assertContains(response, reverse('escrow_detail', args=[self.assignment.pk]))
+        inspect_url = reverse('pilot_reliability_inspect', args=[self.assignment.pk])
+        self.assertContains(response, inspect_url)
+        self.assertNotContains(response, reverse('escrow_detail', args=[self.assignment.pk]))
         self.assertContains(response, abbreviate_address(self.client_address))
 
         body = response.content.decode('utf-8')
@@ -491,6 +493,72 @@ class PilotReliabilityPageTests(TestCase):
         self.assertNotIn('Secret workroom message body', body)
         self.assertNotIn('Secret delivery evidence notes', body)
         self.assertNotIn('https://example.test/secret-evidence-link', body)
+
+    def test_pilot_reliability_inspect_page_enforces_access_without_staff_wallet_and_omits_sensitive_data(self):
+        from core.models import EscrowStaffWallet, Message, Submission
+
+        self.assertFalse(EscrowStaffWallet.objects.filter(user=self.admin_user).exists())
+        Message.objects.create(assignment=self.assignment, sender=self.customer_user, body='Inspect secret message text')
+        Submission.objects.create(
+            assignment=self.assignment,
+            author=self.worker_user,
+            notes='Inspect secret delivery notes',
+            link='https://example.test/inspect-secret-link',
+            evidence='Inspect confidential submission evidence',
+        )
+
+        inspect_url = reverse('pilot_reliability_inspect', args=[self.assignment.pk])
+        self.assertEqual(inspect_url, f'/moderation/pilot-reliability/{self.assignment.pk}/')
+
+        # Signed-out visitors are redirected to staff login
+        self.client.logout()
+        anon_response = self.client.get(inspect_url)
+        self.assertEqual(anon_response.status_code, 302)
+        self.assertIn(reverse('staff_login'), anon_response['Location'])
+
+        # Customers receive 403
+        self.client.force_login(self.customer_user)
+        self.assertEqual(self.client.get(inspect_url).status_code, 403)
+
+        # Trust and Support receives 403
+        self.client.force_login(self.support_user)
+        self.assertEqual(self.client.get(inspect_url).status_code, 403)
+
+        # Escrow workroom still requires registered staff wallet for admin (403 unchanged)
+        self.client.force_login(self.admin_user)
+        self.assertEqual(self.client.get(reverse('escrow_detail', args=[self.assignment.pk])).status_code, 403)
+
+        # Owners and administrators (without registered staff wallet) can open the inspection page; POST rejected
+        for allowed_user in (self.owner_user, self.admin_user):
+            with self.subTest(role=allowed_user.username):
+                self.client.force_login(allowed_user)
+                response = self.client.get(inspect_url)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('no-store', response['Cache-Control'])
+                self.assertEqual(self.client.post(inspect_url).status_code, 405)
+
+                self.assertContains(response, str(self.assignment.pk))
+                self.assertContains(response, 'mismatch:funded:Unfunded')
+                self.assertContains(response, abbreviate_address(self.client_address))
+                self.assertContains(response, abbreviate_address(self.worker_address))
+                self.assertContains(response, 'Push database records')
+
+                body = response.content.decode('utf-8')
+                self.assertNotIn('PRIVATE_PREPARED_XDR_PAYLOAD', body)
+                self.assertNotIn('PRIVATE_SIGNED_XDR_PAYLOAD', body)
+                self.assertNotIn(self.client_address, body)
+                self.assertNotIn(self.worker_address, body)
+                self.assertNotIn(self.reviewer_address, body)
+                self.assertNotIn('rel-customer@example.test', body)
+                self.assertNotIn('rel-worker@example.test', body)
+                self.assertNotIn('rel-owner@example.test', body)
+                self.assertNotIn('rel-admin@example.test', body)
+                self.assertNotIn('Inspect secret message text', body)
+                self.assertNotIn('Inspect secret delivery notes', body)
+                self.assertNotIn('https://example.test/inspect-secret-link', body)
+                self.assertNotIn('Inspect confidential submission evidence', body)
+                self.assertNotIn('Confidential job body', body)
+                self.assertNotIn('Confidential scope text', body)
 
 
 class PilotReliabilityCommandTests(TestCase):

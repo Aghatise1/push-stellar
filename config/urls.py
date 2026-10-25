@@ -128,6 +128,7 @@ urlpatterns = [
     path('moderation/email/',views.operations_email,name='operations_email'),
     path('moderation/payments/',views.operations_payments,name='operations_payments'),
     path('moderation/pilot-reliability/',pilot_reliability_views.pilot_reliability,name='pilot_reliability'),
+    path('moderation/pilot-reliability/<uuid:pk>/',pilot_reliability_views.pilot_reliability_inspect,name='pilot_reliability_inspect'),
     path('moderation/docs/',views.operations_docs,name='operations_docs'),
     path('moderation/docs/<int:pk>/',views.operations_docs,name='operations_docs_edit'),
 ]

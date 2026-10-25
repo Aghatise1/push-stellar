@@ -73,30 +73,36 @@ def _valid_agreement_q() -> Q:
     return valid_q
 
 
-def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> dict:
-    current_time = now or timezone.now()
-    threshold_minutes = stale_minutes()
-    stale_cutoff = current_time - timedelta(minutes=threshold_minutes)
-    if isinstance(attention_limit, bool) or attention_limit is None:
-        limit = 100
-    else:
-        try:
-            limit = max(0, int(attention_limit))
-        except (TypeError, ValueError):
-            limit = 100
-
+def _deployment_summary() -> dict:
     configured_contract = (
         settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
         if settings.PUSH_TESTNET_ONLY
         else settings.PUSH_TESTNET_ESCROW_CONTRACT
     )
-    deployment = {
+    return {
         'tier': str(getattr(settings, 'PUSH_DEPLOYMENT_TIER', 'development') or 'development'),
         'release': str(getattr(settings, 'PUSH_RELEASE', '') or 'unreported'),
         'network': 'stellar-testnet',
         'testnet_only': bool(getattr(settings, 'PUSH_TESTNET_ONLY', True)),
         'escrow_enabled': bool(getattr(settings, 'PUSH_TESTNET_ESCROW_ENABLED', False) and configured_contract),
     }
+
+
+def _safe_limit(raw_limit, default: int = 100) -> int:
+    if isinstance(raw_limit, bool) or raw_limit is None:
+        return default
+    try:
+        return max(0, int(raw_limit))
+    except (TypeError, ValueError):
+        return default
+
+
+def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> dict:
+    current_time = now or timezone.now()
+    threshold_minutes = stale_minutes()
+    stale_cutoff = current_time - timedelta(minutes=threshold_minutes)
+    limit = _safe_limit(attention_limit, default=100)
+    deployment = _deployment_summary()
 
     by_assignment_status = {status: 0 for status in EXPECTED_CHAIN_STATES}
     by_chain_status = {status: 0 for status in KNOWN_CHAIN_STATES}
@@ -178,7 +184,7 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
                 'asset': str(agreement.asset),
                 'amount': int(agreement.amount),
                 'source': abbreviate_address(agreement.client_address),
-                'workroom_url': reverse('escrow_detail', args=[agreement.assignment_id]),
+                'workroom_url': reverse('pilot_reliability_inspect', args=[agreement.assignment_id]),
             })
 
     remaining = limit - len(attention_items)
@@ -214,7 +220,7 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
                 'asset': str(tx.escrow.asset),
                 'amount': int(tx.escrow.amount),
                 'source': abbreviate_address(tx.source),
-                'workroom_url': reverse('escrow_detail', args=[tx.escrow.assignment_id]),
+                'workroom_url': reverse('pilot_reliability_inspect', args=[tx.escrow.assignment_id]),
             })
 
     return {
@@ -230,4 +236,106 @@ def build_pilot_reliability_report(*, now=None, attention_limit: int = 100) -> d
         'transaction_counts': transaction_counts,
         'attention': attention_items,
         'attention_total': attention_total,
+    }
+
+
+def build_pilot_reliability_inspection(assignment_id, *, now=None, transaction_limit: int = 100) -> dict | None:
+    current_time = now or timezone.now()
+    threshold_minutes = stale_minutes()
+    stale_cutoff = current_time - timedelta(minutes=threshold_minutes)
+    limit = _safe_limit(transaction_limit, default=100)
+
+    agreement = (
+        EscrowAgreement.objects.select_related('assignment')
+        .only(
+            'id',
+            'assignment_id',
+            'client_address',
+            'worker_address',
+            'reviewer_address',
+            'asset',
+            'amount',
+            'chain_status',
+            'accepted_at',
+            'assignment__id',
+            'assignment__status',
+            'assignment__created_at',
+        )
+        .filter(assignment_id=assignment_id)
+        .first()
+    )
+    if agreement is None:
+        return None
+
+    a_status = str(agreement.assignment.status or '')
+    c_status = str(agreement.chain_status or '')
+    expected = EXPECTED_CHAIN_STATES.get(a_status)
+    if expected is None or c_status not in KNOWN_CHAIN_STATES:
+        action = 'unknown_state'
+        safe_state = f'unknown_state:{a_status}:{c_status}'
+    elif c_status not in expected:
+        action = 'state_mismatch'
+        safe_state = f'mismatch:{a_status}:{c_status}'
+    else:
+        action = 'consistent'
+        safe_state = f'consistent:{a_status}:{c_status}'
+
+    reference_time = agreement.accepted_at or agreement.assignment.created_at
+
+    transaction_counts = {'total': 0}
+    for state in STANDARD_TRANSACTION_STATES:
+        transaction_counts[state] = 0
+    for row in (
+        EscrowTransaction.objects.filter(escrow=agreement)
+        .values('state')
+        .annotate(count=Count('pk'))
+        .order_by('state')
+    ):
+        state = str(row['state'] or '')
+        count = int(row['count'])
+        transaction_counts['total'] += count
+        transaction_counts[state] = transaction_counts.get(state, 0) + count
+
+    transactions = []
+    if limit > 0:
+        tx_rows = (
+            EscrowTransaction.objects.filter(escrow=agreement)
+            .only('id', 'action', 'source', 'state', 'created_at')
+            .order_by('created_at', 'id')[:limit]
+        )
+        for tx in tx_rows:
+            if tx.state in ('prepared', 'pending') and tx.created_at <= stale_cutoff:
+                tx_state = f'stale_{tx.state}'
+            elif tx.state in STANDARD_TRANSACTION_STATES:
+                tx_state = str(tx.state)
+            else:
+                tx_state = f'unknown_state:{tx.state}'
+
+            transactions.append({
+                'action': str(tx.action),
+                'state': tx_state,
+                'age_seconds': _age_seconds(current_time, tx.created_at),
+                'asset': str(agreement.asset),
+                'amount': int(agreement.amount),
+                'source': abbreviate_address(tx.source),
+            })
+
+    return {
+        'generated_at': current_time,
+        'stale_minutes': threshold_minutes,
+        'deployment': _deployment_summary(),
+        'assignment_id': str(agreement.assignment_id),
+        'assignment_status': a_status,
+        'chain_status': c_status,
+        'expected_chain_states': sorted(expected) if expected is not None else [],
+        'action': action,
+        'state': safe_state,
+        'age_seconds': _age_seconds(current_time, reference_time),
+        'asset': str(agreement.asset),
+        'amount': int(agreement.amount),
+        'client_source': abbreviate_address(agreement.client_address),
+        'worker_source': abbreviate_address(agreement.worker_address),
+        'reviewer_source': abbreviate_address(agreement.reviewer_address),
+        'transaction_counts': transaction_counts,
+        'transactions': transactions,
     }
