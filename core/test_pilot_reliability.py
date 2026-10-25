@@ -246,3 +246,184 @@ class PilotReliabilityReportTests(TestCase):
         self.assertEqual(len(bounded['attention']), 2)
         self.assertEqual(bounded['agreement_counts']['total'], 10)
         self.assertEqual(bounded['transaction_counts']['total'], 6)
+
+
+class PilotReliabilityPageTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.fixed_now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=dt_timezone.utc)
+        accepted = cls.fixed_now - timedelta(days=2)
+        cls.client_address = Keypair.random().public_key
+        cls.worker_address = Keypair.random().public_key
+        cls.reviewer_address = Keypair.random().public_key
+
+        cls.owner_user = User.objects.create_user(
+            username='rel-owner@example.test',
+            email='rel-owner@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Rel Owner',
+            email_verified=True,
+            stellar_address=cls.reviewer_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+            is_staff=True,
+        )
+        StaffAccess.objects.create(user=cls.owner_user, role='owner', status='approved', approved_at=accepted)
+
+        cls.admin_user = User.objects.create_user(
+            username='rel-admin@example.test',
+            email='rel-admin@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Rel Admin',
+            email_verified=True,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+            is_staff=True,
+        )
+        StaffAccess.objects.create(user=cls.admin_user, role='admin', status='approved', approved_at=accepted)
+
+        cls.support_user = User.objects.create_user(
+            username='rel-support@example.test',
+            email='rel-support@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Rel Support',
+            email_verified=True,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+            is_staff=True,
+        )
+        StaffAccess.objects.create(user=cls.support_user, role='trust_support', status='approved', approved_at=accepted)
+
+        cls.customer_user = User.objects.create_user(
+            username='rel-customer@example.test',
+            email='rel-customer@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Rel Customer',
+            email_verified=True,
+            stellar_address=cls.client_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+        )
+
+        cls.worker_user = User.objects.create_user(
+            username='rel-worker@example.test',
+            email='rel-worker@example.test',
+            password='Independent-cobalt-732!',
+            display_name='Rel Worker',
+            email_verified=True,
+            stellar_address=cls.worker_address,
+            terms_version='2026-10-06.1',
+            terms_accepted_at=accepted,
+        )
+
+        job = Job.objects.create(
+            owner=cls.customer_user,
+            project='Confidential Project',
+            title='Confidential Job',
+            description='Confidential job body',
+            deliverables='Confidential deliverable',
+            category='Development',
+            budget=250,
+            payment_asset='USDC',
+            deadline=cls.fixed_now.date() + timedelta(days=7),
+            moderation_status='approved',
+            status='assigned',
+        )
+        cls.assignment = Assignment.objects.create(
+            job=job,
+            worker=cls.worker_user,
+            scope='Confidential scope text',
+            budget=250,
+            status='funded',
+            escrow_required=True,
+            accepted_terms_at=cls.fixed_now - timedelta(hours=2),
+        )
+        cls.agreement = EscrowAgreement.objects.create(
+            staff_governed=True,
+            assignment=cls.assignment,
+            reviewer=cls.owner_user,
+            contract='CCONTRACT1234567890123456789012345678901234567890123456',
+            agreement_id=hashlib.sha256(b'page-agreement').hexdigest(),
+            client_address=cls.client_address,
+            worker_address=cls.worker_address,
+            reviewer_address=cls.reviewer_address,
+            asset='USDC',
+            token_address='CTOKEN1234567890123456789012345678901234567890123456789',
+            amount=250,
+            deadline=int((cls.fixed_now + timedelta(days=7)).timestamp()),
+            review_seconds=86400,
+            revision_limit=2,
+            chain_status='Unfunded',
+            accepted_at=cls.fixed_now - timedelta(hours=2),
+        )
+        tx = EscrowTransaction.objects.create(
+            escrow=cls.agreement,
+            actor=cls.customer_user,
+            action='fund',
+            source=cls.client_address,
+            prepared_xdr='PRIVATE_PREPARED_XDR_PAYLOAD',
+            signed_xdr='PRIVATE_SIGNED_XDR_PAYLOAD',
+            tx_hash=hashlib.sha256(b'page-tx').hexdigest(),
+            state='failed',
+        )
+        EscrowTransaction.objects.filter(pk=tx.pk).update(created_at=cls.fixed_now - timedelta(minutes=30))
+
+    def test_pilot_reliability_page_enforces_owner_and_admin_access(self):
+        url = reverse('pilot_reliability')
+        self.assertEqual(url, '/moderation/pilot-reliability/')
+
+        anon_response = self.client.get(url)
+        self.assertEqual(anon_response.status_code, 302)
+        self.assertIn(reverse('staff_login'), anon_response['Location'])
+
+        self.client.force_login(self.customer_user)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+        self.client.force_login(self.support_user)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        moderation_support = self.client.get(reverse('moderation'))
+        self.assertEqual(moderation_support.status_code, 200)
+        self.assertNotContains(moderation_support, url)
+
+        for allowed_user in (self.owner_user, self.admin_user):
+            with self.subTest(role=allowed_user.username):
+                self.client.force_login(allowed_user)
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.client.post(url).status_code, 405)
+                moderation_page = self.client.get(reverse('moderation'))
+                self.assertContains(moderation_page, url)
+                self.assertContains(moderation_page, 'Pilot reliability')
+
+    def test_pilot_reliability_page_renders_safe_records_with_no_store_and_omits_sensitive_data(self):
+        from core.models import Message, Submission
+
+        Message.objects.create(assignment=self.assignment, sender=self.customer_user, body='Secret workroom message body')
+        Submission.objects.create(
+            assignment=self.assignment,
+            author=self.worker_user,
+            notes='Secret delivery evidence notes',
+            link='https://example.test/secret-evidence-link',
+            evidence='Confidential submission evidence details',
+        )
+
+        self.client.force_login(self.owner_user)
+        response = self.client.get(reverse('pilot_reliability'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertContains(response, 'Push database records')
+        self.assertContains(response, 'does not replace Stellar ledger verification')
+        self.assertContains(response, reverse('escrow_detail', args=[self.assignment.pk]))
+        self.assertContains(response, abbreviate_address(self.client_address))
+
+        body = response.content.decode('utf-8')
+        self.assertNotIn('PRIVATE_PREPARED_XDR_PAYLOAD', body)
+        self.assertNotIn('PRIVATE_SIGNED_XDR_PAYLOAD', body)
+        self.assertNotIn(self.client_address, body)
+        self.assertNotIn(self.worker_address, body)
+        self.assertNotIn(self.reviewer_address, body)
+        self.assertNotIn('rel-customer@example.test', body)
+        self.assertNotIn('rel-worker@example.test', body)
+        self.assertNotIn('Secret workroom message body', body)
+        self.assertNotIn('Secret delivery evidence notes', body)
+        self.assertNotIn('https://example.test/secret-evidence-link', body)

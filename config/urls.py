@@ -2,7 +2,7 @@ from core import escrow_staff
 from django.conf import settings
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
-from core import views, escrow_views
+from core import views, escrow_views, pilot_reliability_views
 
 handler403 = 'core.views.staff_permission_denied'
 handler400 = 'core.errors.bad_request'
@@ -127,6 +127,7 @@ urlpatterns = [
     path('moderation/users/<int:pk>/',views.operations_user,name='operations_user'),
     path('moderation/email/',views.operations_email,name='operations_email'),
     path('moderation/payments/',views.operations_payments,name='operations_payments'),
+    path('moderation/pilot-reliability/',pilot_reliability_views.pilot_reliability,name='pilot_reliability'),
     path('moderation/docs/',views.operations_docs,name='operations_docs'),
     path('moderation/docs/<int:pk>/',views.operations_docs,name='operations_docs_edit'),
 ]

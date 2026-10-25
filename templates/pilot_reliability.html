@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Pilot reliability{% endblock %}
+{% block app_location %}Operations · Pilot reliability{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <span class="tag">Owner · Admin · read only</span>
+    <h1>Pilot reliability.</h1>
+    <p class="lead">This report reflects Push database records and does not replace Stellar ledger verification. No transaction can be broadcast, retried or settled from this page.</p>
+  </div>
+  <a class="button secondary" href="{% url 'moderation' %}">Operations overview</a>
+</div>
+
+<div class="moderation-metrics">
+  <div><span>Environment tier</span><strong>{{ report.deployment.tier }}</strong></div>
+  <div><span>Release</span><strong>{{ report.deployment.release }}</strong></div>
+  <div><span>Network</span><strong>{{ report.deployment.network }}{% if report.deployment.testnet_only %} · testnet only{% endif %}</strong></div>
+  <div><span>Escrow enabled</span><strong>{% if report.deployment.escrow_enabled %}Enabled{% else %}Disabled{% endif %}</strong></div>
+  <div><span>Stale threshold</span><strong>{{ report.stale_minutes }} min</strong></div>
+</div>
+
+<section>
+  <div class="section-heading">
+    <div><h2>Escrow agreements ({{ report.agreement_counts.total }})</h2><p>Counts by application state and recorded escrow chain state.</p></div>
+  </div>
+  <div class="moderation-metrics">
+    {% for status, count in report.agreement_counts.by_assignment_status.items %}
+    <div><span>App · {{ status }}</span><strong>{{ count }}</strong></div>
+    {% endfor %}
+    {% for status, count in report.agreement_counts.by_chain_status.items %}
+    <div><span>Chain · {{ status }}</span><strong>{{ count }}</strong></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <div class="section-heading">
+    <div><h2>Escrow transactions ({{ report.transaction_counts.total }})</h2><p>Recorded transaction lifecycle totals.</p></div>
+  </div>
+  <div class="moderation-metrics">
+    <div><span>Prepared</span><strong>{{ report.transaction_counts.prepared }}</strong></div>
+    <div><span>Pending</span><strong>{{ report.transaction_counts.pending }}</strong></div>
+    <div><span>Confirmed</span><strong>{{ report.transaction_counts.confirmed }}</strong></div>
+    <div><span>Failed</span><strong>{{ report.transaction_counts.failed }}</strong></div>
+    <div><span>Expired</span><strong>{{ report.transaction_counts.expired }}</strong></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading">
+    <div><h2>Attention queue</h2><p>Stale prepared or pending transactions ({{ report.stale_minutes }}+ minutes), failed transactions and agreement state mismatches.</p></div>
+    <span>{{ report.attention_total }} item{{ report.attention_total|pluralize }}</span>
+  </div>
+  <div class="review-list">
+    {% for item in report.attention %}
+    <a href="{{ item.workroom_url }}">
+      <span class="tag">{{ item.state }}</span>
+      <strong>Assignment {{ item.assignment_id }} · {{ item.action }} · {{ item.amount }} test {{ item.asset }}</strong>
+      <small>Source {{ item.source|default:'unrecorded' }} · Age {{ item.age_seconds }}s · Inspect protected workroom</small>
+    </a>
+    {% empty %}
+    <p class="empty">No stale transactions, failed records or state mismatches require attention.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
