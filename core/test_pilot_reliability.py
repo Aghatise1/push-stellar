@@ -557,4 +557,3 @@ class PilotReliabilityCommandTests(TestCase):
 
         with self.assertRaises(CommandError):
             call_command('check_pilot_reliability', '--fail-on-attention', stdout=StringIO())
-
