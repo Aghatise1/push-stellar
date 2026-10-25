@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Assignment, Job, Message, StaffAccess, User
+from .models import Assignment, Job, Message, StaffAccess, SupportTicket, User
 
 
 class ConsumerShellTests(TestCase):
@@ -308,4 +308,44 @@ class ConsumerWalletTests(ConsumerHomeTests):
         self.assertContains(payments, "consumer-payment-summary")
         self.assertContains(payments, "consumer-payment-history")
         self.assertContains(payments, "Testnet assets have no monetary value")
+
+
+class ConsumerRemainingPagesTests(ConsumerHomeTests):
+    def assert_standard_page(self, route_name, marker):
+        self.client.force_login(self.worker)
+        response = self.client.get(reverse(route_name))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "consumer-standard-page")
+        self.assertContains(response, marker)
+        return response
+
+    def test_notifications_account_profile_and_analytics_share_the_system(self):
+        self.assert_standard_page("notifications", "consumer-list-group")
+        settings = self.assert_standard_page("account_settings", "consumer-settings-groups")
+        self.assertContains(settings, "consumer-danger-group")
+        self.assertContains(settings, reverse("request_account_deletion"))
+        self.assert_standard_page("profile", "consumer-form-surface")
+        self.assert_standard_page("analytics", "consumer-metric-group")
+
+    def test_support_keeps_ticket_creation_state_and_feedback_routes(self):
+        support = self.assert_standard_page("support", "consumer-support-page")
+        self.assertContains(support, "csrfmiddlewaretoken")
+        ticket = SupportTicket.objects.create(
+            requester=self.worker,
+            subject="Wallet connection help",
+            category="payment",
+            description="The wallet state needs review.",
+            status="resolved",
+        )
+        detail = self.client.get(reverse("support_ticket", args=[ticket.pk]))
+        self.assertContains(detail, "consumer-standard-page")
+        self.assertContains(detail, ticket.get_status_display())
+        self.assertContains(detail, reverse("support_feedback", args=[ticket.pk]))
+
+    def test_community_list_detail_and_form_keep_moderation_actions(self):
+        community = self.assert_standard_page("community", "consumer-community-page")
+        self.assertContains(community, reverse("community_create"))
+        create = self.client.get(reverse("community_create"))
+        self.assertContains(create, "consumer-standard-page")
+        self.assertContains(create, "csrfmiddlewaretoken")
 

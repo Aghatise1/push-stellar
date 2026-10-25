@@ -248,3 +248,30 @@ body.customer-app-mode{
 .customer-app-mode .wallet-menu-panel{border-color:var(--customer-line);border-radius:var(--customer-radius-card);background:var(--customer-surface);box-shadow:var(--customer-shadow)}.customer-app-mode .wallet-menu-panel code{background:var(--customer-surface-soft)}.customer-app-mode .wallet-menu-panel p{color:var(--customer-muted)}
 
 @media(max-width:880px){.customer-app-mode .consumer-wallet-states{grid-template-columns:1fr}.customer-app-mode .consumer-wallet-states article{min-height:0}.customer-app-mode .consumer-wallet-states .button{margin-top:.25rem}}
+
+/* Shared customer pages */
+.customer-app-mode .consumer-standard-page{max-width:76rem;margin-inline:auto}
+.customer-app-mode .consumer-standard-page>.page-heading{margin-bottom:1.1rem}
+.customer-app-mode .consumer-standard-page>.page-heading h1{max-width:20ch;font-size:clamp(2rem,4vw,3.45rem);letter-spacing:-.045em}
+.customer-app-mode .consumer-standard-page :is(.form-panel,.side-note,.settings-panel,.analytics-panel,.ticket-thread,.community-thread,.community-replies,.community-reply-form,.community-report){border-color:var(--customer-line);border-radius:var(--customer-radius-card);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-list-group{overflow:hidden;border:1px solid var(--customer-line);border-radius:var(--customer-radius-card);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-list-group>*{border-color:var(--customer-line)}
+.customer-app-mode .consumer-settings-groups{gap:1rem}
+.customer-app-mode .consumer-settings-groups .settings-panel{padding:1.35rem}
+.customer-app-mode .consumer-danger-group{border-color:#e8cece!important;background:#fffafa!important}
+.customer-app-mode .consumer-form-surface{padding:clamp(1.2rem,2.5vw,2rem)}
+.customer-app-mode .consumer-metric-group .analytics-grid{gap:1rem}
+.customer-app-mode .consumer-metric-group .metric-card{border-color:var(--customer-line);border-radius:var(--customer-radius-card);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-support-page .form-layout{margin-bottom:1.5rem}
+.customer-app-mode .consumer-support-page .ticket-thread{overflow:hidden}
+.customer-app-mode .consumer-community-page .community-summary,.customer-app-mode .consumer-community-page .search-form,.customer-app-mode .consumer-community-page .community-card{border-color:var(--customer-line);border-radius:var(--customer-radius-card);background:var(--customer-surface);box-shadow:0 .35rem 1.4rem rgba(20,57,43,.04)}
+.customer-app-mode .consumer-community-page .community-grid{gap:1rem}
+.customer-app-mode .consumer-community-page .community-card{transition:transform 180ms var(--customer-ease),border-color 180ms ease,box-shadow 180ms ease}
+.customer-app-mode .consumer-community-page .community-card:hover{transform:translateY(-2px);border-color:#c9d9ce;box-shadow:var(--customer-shadow)}
+
+@media(max-width:760px){
+  .customer-app-mode .consumer-standard-page>.page-heading{align-items:flex-start}
+  .customer-app-mode .consumer-standard-page :is(.form-panel,.side-note,.settings-panel,.ticket-thread,.community-thread,.community-replies,.community-reply-form){padding:1rem}
+  .customer-app-mode .consumer-community-page .community-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .customer-app-mode .consumer-community-page .community-summary>p{grid-column:1/-1}
+}
