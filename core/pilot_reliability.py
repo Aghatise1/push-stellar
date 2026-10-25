@@ -11,6 +11,7 @@ from .models import EscrowAgreement, EscrowTransaction
 DEFAULT_STALE_MINUTES = 15
 
 EXPECTED_CHAIN_STATES = {
+    'awaiting_acceptance': frozenset({'Unfunded'}),
     'awaiting_funding': frozenset({'Unfunded'}),
     'funded': frozenset({'Funded'}),
     'submitted': frozenset({'Submitted'}),

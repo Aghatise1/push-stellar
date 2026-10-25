@@ -42,6 +42,7 @@ class PilotReliabilityHelperTests(SimpleTestCase):
         self.assertNotEqual(abbreviated_short, short_input)
 
     def test_expected_chain_states_matches_spec_rules(self):
+        self.assertEqual(expected_chain_states('awaiting_acceptance'), {'Unfunded'})
         self.assertEqual(expected_chain_states('awaiting_funding'), {'Unfunded'})
         self.assertEqual(expected_chain_states('funded'), {'Funded'})
         self.assertEqual(expected_chain_states('submitted'), {'Submitted'})
@@ -246,6 +247,17 @@ class PilotReliabilityReportTests(TestCase):
         self.assertEqual(len(bounded['attention']), 2)
         self.assertEqual(bounded['agreement_counts']['total'], 10)
         self.assertEqual(bounded['transaction_counts']['total'], 6)
+
+    def test_awaiting_acceptance_with_unfunded_is_valid_and_produces_no_alert(self):
+        agreement = self.make_agreement('awaiting_acceptance', 'Unfunded', amount=75, asset='USDC')
+        report = build_pilot_reliability_report(now=self.fixed_now)
+        self.assertEqual(report['agreement_counts']['total'], 1)
+        self.assertEqual(report['agreement_counts']['by_assignment_status']['awaiting_acceptance'], 1)
+        self.assertEqual(report['agreement_counts']['by_chain_status']['Unfunded'], 1)
+        self.assertEqual(report['agreement_counts']['by_pair'].get('awaiting_acceptance:Unfunded'), 1)
+        self.assertEqual(report['attention_total'], 0)
+        self.assertEqual(report['attention'], [])
+        self.assertNotIn(str(agreement.assignment_id), str(report['attention']))
 
 
 class PilotReliabilityPageTests(TestCase):
