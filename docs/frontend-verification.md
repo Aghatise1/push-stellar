@@ -32,3 +32,15 @@ Deployment verification is pending for this release. No live wallet was connecte
 ## Silent loop follow up
 
 The film now uses a video only H.264 derivative with no audio stream. Browser checks at 1280 and 390 pixels confirmed automatic muted playback, loop enabled, no native controls, no horizontal overflow and a full section width video. The page motion control paused playback. Desktop uses a centred 16:9 crop; mobile keeps the complete 4:3 frame. The original source remains preserved. The earlier native player observations above describe the previous release.
+
+## Customer application verification
+
+Local verification on 27 October 2026 covered the signed in customer application redesign on the working tree based on commit `401b8ed`.
+
+The browser matrix covered Home, My work, Find work, a job detail, a workroom, Messages, Wallet, Payments, Account settings and Support at widths of 320, 390, 768, 1024 and 1440 pixels. All 50 route and viewport combinations loaded the customer application shell without an error page or horizontal overflow. The corrected Account settings page exposed all eight customer shortcuts. The mobile checks also confirmed a visible top bar and a five item bottom navigation at the 721 and 760 pixel boundaries.
+
+Keyboard navigation produced a visible three pixel focus outline on the skip link. The final browser pass reported no console errors. Screenshots from the verified customer Home are saved as `docs/screenshots/customer-home-mobile-390.png` and `docs/screenshots/customer-home-desktop-1440.png`.
+
+The complete Django `core` suite passed 283 tests with one skipped and no system check issues. The wallet JavaScript suite passed 10 tests. Syntax checks passed for both `static/app-motion.js` and `static/customer-motion.js`. Automated isolation checks confirmed that customer motion is not loaded on public or staff pages.
+
+These checks used disposable local data and did not connect Freighter, sign a transaction, alter an escrow agreement or prove a live deployment. Reduced motion is covered by the stylesheet and script contract plus automated source checks, not by a separate browser emulation run. Real device testing and deployed environment acceptance remain separate work.

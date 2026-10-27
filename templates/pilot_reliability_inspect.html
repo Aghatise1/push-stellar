@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Pilot reliability · Assignment {{ inspection.assignment_id }}{% endblock %}
+{% block app_location %}Operations · Pilot reliability · Inspection{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <span class="tag">Owner · Admin · read only</span>
+    <h1>Assignment {{ inspection.assignment_id }}</h1>
+    <p class="lead">This inspection view reflects Push database records and does not replace Stellar ledger verification. No transaction can be prepared, signed, broadcast, retried or settled from this page.</p>
+  </div>
+  <a class="button secondary" href="{% url 'pilot_reliability' %}">Back to pilot reliability</a>
+</div>
+
+<div class="moderation-metrics">
+  <div><span>Consistency</span><strong>{{ inspection.state }}</strong></div>
+  <div><span>App status</span><strong>{{ inspection.assignment_status }}</strong></div>
+  <div><span>Chain status</span><strong>{{ inspection.chain_status }}</strong></div>
+  <div><span>Amount</span><strong>{{ inspection.amount }} test {{ inspection.asset }}</strong></div>
+  <div><span>Age</span><strong>{{ inspection.age_seconds }}s</strong></div>
+</div>
+
+<section>
+  <div class="section-heading">
+    <div><h2>Abbreviated wallet sources</h2><p>Abbreviated Stellar testnet addresses recorded on the escrow agreement.</p></div>
+  </div>
+  <div class="moderation-metrics">
+    <div><span>Client source</span><strong>{{ inspection.client_source|default:'unrecorded' }}</strong></div>
+    <div><span>Worker source</span><strong>{{ inspection.worker_source|default:'unrecorded' }}</strong></div>
+    <div><span>Reviewer source</span><strong>{{ inspection.reviewer_source|default:'unrecorded' }}</strong></div>
+    <div><span>Stale threshold</span><strong>{{ inspection.stale_minutes }} min</strong></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-heading">
+    <div><h2>Escrow transactions ({{ inspection.transaction_counts.total }})</h2><p>Recorded transaction lifecycle states for this agreement.</p></div>
+  </div>
+  <div class="moderation-metrics">
+    <div><span>Prepared</span><strong>{{ inspection.transaction_counts.prepared }}</strong></div>
+    <div><span>Pending</span><strong>{{ inspection.transaction_counts.pending }}</strong></div>
+    <div><span>Confirmed</span><strong>{{ inspection.transaction_counts.confirmed }}</strong></div>
+    <div><span>Failed</span><strong>{{ inspection.transaction_counts.failed }}</strong></div>
+    <div><span>Expired</span><strong>{{ inspection.transaction_counts.expired }}</strong></div>
+  </div>
+  <div class="review-list">
+    {% for tx in inspection.transactions %}
+    <div>
+      <span class="tag">{{ tx.state }}</span>
+      <strong>{{ tx.action }} · {{ tx.amount }} test {{ tx.asset }}</strong>
+      <small>Source {{ tx.source|default:'unrecorded' }} · Age {{ tx.age_seconds }}s</small>
+    </div>
+    {% empty %}
+    <p class="empty">No escrow transactions recorded for this agreement.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

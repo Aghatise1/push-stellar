@@ -1,8 +1,7 @@
 (function () {
   function init() {
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var copyButton = document.querySelector('[data-copy]');
-    if (copyButton) {
+    document.querySelectorAll('[data-copy]').forEach(function (copyButton) {
       copyButton.addEventListener('click', function () {
         navigator.clipboard.writeText(copyButton.getAttribute('data-copy')).then(function () {
           var original = copyButton.textContent;
@@ -10,12 +9,12 @@
           window.setTimeout(function () { copyButton.textContent = original; }, 1800);
         });
       });
-    }
+    });
 
     var chatThread = document.querySelector('.chat-thread');
     if (chatThread) chatThread.scrollTop = chatThread.scrollHeight;
 
-    if (reduceMotion || !window.gsap) return;
+    if (reduceMotion || document.body.classList.contains('customer-app-mode') || !window.gsap) return;
     var gsap = window.gsap;
     function animateIfPresent(selector, vars) {
       if (document.querySelector(selector)) gsap.to(selector, vars);

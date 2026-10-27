@@ -8,7 +8,7 @@
     <a class="button" href="{% url 'job_create' %}">Post a job</a>
   </div>
 
-  <nav class="work-tabs app-reveal" aria-label="My work views">
+  <nav class="work-tabs consumer-segmented-nav app-reveal" aria-label="My work views">
     <a {% if selected_view == 'assigned' %}aria-current="page"{% endif %} href="{% url 'work' %}?view=assigned"><span>Jobs I’m doing<small>Work awarded to you</small></span><b class="{% if work_attention_count %}attention-count{% endif %}">{{ assigned|length }}</b></a>
     <a {% if selected_view == 'applications' %}aria-current="page"{% endif %} href="{% url 'work' %}?view=applications"><span>My applications<small>Proposals you sent</small></span><b>{{ applications|length }}</b></a>
     <a {% if selected_view == 'hiring' %}aria-current="page"{% endif %} href="{% url 'work' %}?view=hiring"><span>People I hired<small>Workers you selected</small></span><b>{{ hiring|length }}</b></a>
@@ -16,14 +16,14 @@
   </nav>
 
   {% if selected_view == 'assigned' %}
-  <section class="work-record-card priority-record scroll-reveal">
+  <section class="work-record-card consumer-work-card priority-record scroll-reveal">
     <div class="section-heading"><div><span class="section-kicker">Worker view</span><h2>Jobs I’m doing</h2><p>Only jobs awarded to you appear here. Applications remain in the next tab until a client selects you.</p></div><span>{{ assigned|length }} job{{ assigned|length|pluralize }}</span></div>
     <div class="work-subsections">
       <section class="work-subsection" id="action">
         <div class="subsection-heading"><div><h3>Needs my action</h3><p>Accept an agreement or submit your delivery.</p></div><b class="{% if needs_action %}attention-count{% endif %}">{{ needs_action|length }}</b></div>
         <div class="app-list">
           {% for item in needs_action %}
-          <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }} · {% if item.status == 'awaiting_acceptance' %}You were selected{% else %}Ready for delivery{% endif %}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
+          <a class="app-list-row action-row" href="{% url 'assignment' item.pk %}"><span class="status-dot attention-dot"></span><span class="row-copy"><strong>{{ item.job.title }}</strong><small>Client: {{ item.job.owner.display_name }} · {{ item.get_status_display }}</small></span><span class="row-amount">{{ item.budget_display }}</span><span class="work-next-action">{% if item.status == 'awaiting_acceptance' %}Review and accept →{% else %}Submit work →{% endif %}</span></a>
           {% empty %}<div class="record-empty"><strong>Nothing needs your action.</strong><span>New selections and delivery steps will be highlighted here.</span><a href="{% url 'jobs' %}">Find work</a></div>{% endfor %}
         </div>
       </section>
@@ -47,7 +47,7 @@
   </section>
 
   {% elif selected_view == 'applications' %}
-  <section class="work-record-card scroll-reveal">
+  <section class="work-record-card consumer-work-card scroll-reveal">
     <div class="section-heading"><div><span class="section-kicker">Worker view</span><h2>My applications</h2><p>These are proposals you sent. A job moves to “Jobs I’m doing” only after the client selects you.</p></div><span>{{ applications|length }} sent</span></div>
     <div class="app-list">
       {% for application in applications %}
@@ -57,7 +57,7 @@
   </section>
 
   {% elif selected_view == 'hiring' %}
-  <section class="work-record-card scroll-reveal">
+  <section class="work-record-card consumer-work-card scroll-reveal">
     <div class="section-heading"><div><span class="section-kicker">Hiring view</span><h2>People I hired</h2><p>Workers you selected, with the agreement and delivery status for each job.</p></div><span>{{ hiring|length }} hired</span></div>
     <div class="app-list">
       {% for item in hiring %}
@@ -67,7 +67,7 @@
   </section>
 
   {% else %}
-  <section class="work-record-card scroll-reveal">
+  <section class="work-record-card consumer-work-card scroll-reveal">
     <div class="section-heading"><div><span class="section-kicker">Hiring view</span><h2>Jobs I posted</h2><p>Your published briefs and the applications waiting on each one.</p></div><span>{{ posted|length }} posted</span></div>
     <div class="app-list">
       {% for job in posted %}

@@ -232,6 +232,11 @@ PUSH_TESTNET_ESCROW_CONTRACT = os.environ.get('PUSH_TESTNET_ESCROW_CONTRACT','')
 # The public application no longer creates simulated payment records.
 PUSH_TESTNET_ONLY = True
 PUSH_TESTNET_ESCROW_STAFF_CONTRACT = os.environ.get('PUSH_TESTNET_ESCROW_STAFF_CONTRACT','').strip()
+try:
+    _stale_minutes = int(str(os.environ.get('PUSH_PILOT_STALE_MINUTES', '15')).strip())
+except (TypeError, ValueError):
+    _stale_minutes = 15
+PUSH_PILOT_STALE_MINUTES = _stale_minutes if _stale_minutes > 0 else 15
 
 # Optional server side workroom assistant. It can draft summaries but has no payment authority.
 PUSH_ORBIO_ASSISTANT_ENABLED = os.environ.get('PUSH_ORBIO_ASSISTANT_ENABLED','false').lower() == 'true'

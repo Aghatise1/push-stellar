@@ -830,9 +830,72 @@ def resend(request):
     return redirect('verify_email')
 
 
+def _workspace_priority(user, assignments):
+    """Choose one honest, role aware next step without changing workflow state."""
+    # Legacy records do not prove an escrow deposit and may be read only.
+    items=[item for item in assignments if item.escrow_required]
+
+    def result(item,kind,title,body,action_label):
+        return {
+            'kind':kind,
+            'title':title,
+            'body':body,
+            'url':reverse('assignment',args=[item.pk]),
+            'action_label':action_label,
+        }
+
+    for item in items:
+        if item.job.owner_id == user.pk and item.status == 'submitted':
+            return result(item,'review_delivery','A delivery is ready for review',
+                f'{item.worker.display_name} submitted work for {item.job.title}. Review the evidence before you release or return it.',
+                'Review delivery')
+    for item in items:
+        if item.job.owner_id == user.pk and item.status == 'awaiting_funding':
+            return result(item,'fund_agreement','Fund the agreed work',
+                f'The agreement with {item.worker.display_name} is accepted. Fund it from your wallet before work begins.',
+                'Fund agreement')
+    for item in items:
+        if item.worker_id == user.pk and item.status == 'awaiting_acceptance':
+            return result(item,'review_agreement','Review your new agreement',
+                f'{item.job.owner.display_name} selected you for {item.job.title}. Check the scope and payment terms before accepting.',
+                'Review agreement')
+    for item in items:
+        if item.worker_id == user.pk and item.status == 'funded':
+            return result(item,'continue_work','Your funded work is ready',
+                f'{item.job.title} is funded. Use the workroom to coordinate and submit the agreed delivery.',
+                'Open workroom')
+    for item in items:
+        if item.status == 'disputed':
+            return result(item,'dispute_open','A dispute needs your attention',
+                f'The dispute for {item.job.title} is open. Keep your evidence and responses in the agreement record.',
+                'View dispute')
+    for item in items:
+        if item.worker_id == user.pk and item.status == 'awaiting_funding':
+            return result(item,'waiting_for_funding','Waiting for client funding',
+                f'The client must fund {item.job.title} before work begins. You can review the accepted terms while you wait.',
+                'View agreement')
+    for item in items:
+        if item.job.owner_id == user.pk and item.status == 'awaiting_acceptance':
+            return result(item,'waiting_for_acceptance','Waiting for the worker',
+                f'{item.worker.display_name} still needs to review and accept the agreement for {item.job.title}.',
+                'View agreement')
+    for item in items:
+        if item.status not in {'paid','cancelled'}:
+            return result(item,'view_work','Keep your work moving',
+                f'Open {item.job.title} to see its current status and latest activity.',
+                'View work')
+    return {
+        'kind':'find_work',
+        'title':'Find your next useful project',
+        'body':'Browse clear briefs from the Push community, or post a job when you need a skilled person.',
+        'url':reverse('jobs'),
+        'action_label':'Find work',
+    }
+
+
 @verified
 def workspace(request):
-    assignments = Assignment.objects.filter(Q(worker=request.user)|Q(job__owner=request.user)).select_related('job','worker')
+    assignments = Assignment.objects.filter(Q(worker=request.user)|Q(job__owner=request.user)).select_related('job','job__owner','worker').order_by('-created_at')
     worker_assignments=Assignment.objects.filter(worker=request.user)
     verified=Payment.objects.filter(assignment__worker=request.user,simulated=False).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
     simulated=Payment.objects.filter(assignment__worker=request.user,simulated=True).exclude(method='escrow_xlm').aggregate(total=Sum('amount'))['total'] or 0
@@ -841,11 +904,12 @@ def workspace(request):
     active=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).count()
     participant_messages=Message.objects.filter(Q(assignment__worker=request.user)|Q(assignment__job__owner=request.user)).distinct()
     message_count=participant_messages.count()
-    return render(request,'workspace.html',{'assignments':assignments,'own_jobs':Job.objects.filter(owner=request.user),
+    return render(request,'workspace.html',{'assignments':assignments,'active_assignments':assignments.exclude(status__in=['paid','cancelled'])[:4],'own_jobs':Job.objects.filter(owner=request.user),
         'applications':Application.objects.filter(worker=request.user).select_related('job'),
         'verified_earnings':verified,'simulated_earnings':simulated,'pending_earnings':pending,
         'total_earnings':verified if settings.PUSH_TESTNET_ONLY else verified+simulated,'completed_count':completed,'active_count':active,
-        'message_count':message_count,'recent_messages':participant_messages.select_related('sender','assignment__job').order_by('-created_at')[:3]})
+        'message_count':message_count,'recent_messages':participant_messages.select_related('sender','assignment__job').order_by('-created_at')[:3],
+        'workspace_priority':_workspace_priority(request.user,assignments)})
 
 
 @verified

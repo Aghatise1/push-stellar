@@ -1,1 +1,20 @@
+{% if user.is_authenticated and not staff_portal_active %}
+<article class="job-row consumer-job-card">
+  <div class="consumer-job-card-top">
+    <div><span class="consumer-job-category">{{ job.category }}</span>{% if job.demo %}<span class="tag">Sample brief</span>{% endif %}</div>
+    <strong class="consumer-job-budget">{{ job.budget_display }}</strong>
+  </div>
+  <div class="consumer-job-main">
+    <h3><a href="{% url 'job_detail' job.pk %}">{{ job.title }}</a></h3>
+    <p>{{ job.description|truncatechars:150 }}</p>
+  </div>
+  <div class="consumer-job-meta">
+    <span>By {{ job.owner.display_name }}</span>
+    <span>{{ job.project }}</span>
+    <span>Due {{ job.deadline|date:'j M Y' }}</span>
+  </div>
+  <a class="row-action consumer-job-action" href="{% url 'job_detail' job.pk %}">View project</a>
+</article>
+{% else %}
 <article class="job-row"><div class="job-category">{{ job.category }}{% if job.demo %}<span class="tag">Sample brief</span>{% endif %}</div><div class="job-summary"><h3><a href="{% url 'job_detail' job.pk %}">{{ job.title }}</a></h3><p>{{ job.project }} / Due {{ job.deadline|date:'j M Y' }}</p></div><div class="job-budget"><strong>{{ job.budget_display }}</strong><span>{% if testnet_only or job.payment_asset == 'XLM' %}Fixed test-token amount{% else %}Illustrative USD budget{% endif %}</span></div><a class="row-action" href="{% url 'job_detail' job.pk %}">View brief</a></article>
+{% endif %}

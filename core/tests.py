@@ -1528,9 +1528,10 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'Pay through your workroom')
         self.assertNotContains(response,'data-stellar-payment')
 
-    def test_messages_navigation_opens_after_agreement_acceptance(self):
+    def test_messages_navigation_stays_available_before_agreement_acceptance(self):
         item=self.make_assignment();self.login_as(self.worker)
-        self.assertNotContains(self.client.get(reverse('workspace')),'<span>Messages</span>')
+        self.assertContains(self.client.get(reverse('workspace')),'<span>Messages</span>')
+        self.assertContains(self.client.get(reverse('inbox')),'No conversations yet')
         item.status='awaiting_funding';item.save(update_fields=['status'])
         self.assertContains(self.client.get(reverse('workspace')),'<span>Messages</span>')
 

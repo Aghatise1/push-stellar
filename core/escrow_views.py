@@ -60,17 +60,19 @@ def agreement_setup_problem(item):
 def create_agreement(item):
     existing=EscrowAgreement.objects.filter(assignment=item).first()
     if existing:return existing
-    chain.require_enabled()
+    if not settings.PUSH_TESTNET_ESCROW_ENABLED:
+        chain.require_enabled()
     problem=agreement_setup_problem(item)
     if problem:raise StellarVerificationError(problem)
     contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT if settings.PUSH_TESTNET_ONLY else settings.PUSH_TESTNET_ESCROW_CONTRACT
     if not contract:raise StellarVerificationError('The staff escrow contract must be configured before an agreement can be prepared.')
+    chain.require_enabled()
+    deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
+    if deadline<=timezone.now().timestamp():raise StellarVerificationError('The delivery deadline has passed.')
     root_address=chain.registry_owner(contract)
     root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
     if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
         raise StellarVerificationError('The contract owner must register and verify their staff wallet first.')
-    deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
-    if deadline<=timezone.now().timestamp():raise StellarVerificationError('The delivery deadline has passed.')
     snapshot=item.agreement_snapshot;asset=snapshot.get('payment_asset',item.job.payment_asset)
     return EscrowAgreement.objects.create(
         assignment=item,reviewer=root.user,contract=contract,staff_governed=settings.PUSH_TESTNET_ONLY,
@@ -152,19 +154,20 @@ def assistant(request,pk):
 def agreement_action(request,item):
     def workroom_error(message):
         return workroom(request,item,error=message,status=400)
-    try:chain.require_enabled()
-    except StellarVerificationError as exc:return workroom_error(str(exc))
     action=request.POST.get('action')
+    if not settings.PUSH_TESTNET_ESCROW_ENABLED or action!='configure':
+        try:chain.require_enabled()
+        except StellarVerificationError as exc:return workroom_error(str(exc))
     with transaction.atomic():
         item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
         agreement=EscrowAgreement.objects.filter(assignment=item).first()
         if item.status!='awaiting_acceptance' and action!='cancel':return workroom_error('Use the wallet-authorised escrow controls.')
         if action=='configure' and request.user.pk==item.job.owner_id and not agreement:
-            try:chain.require_enabled()
-            except StellarVerificationError as exc:return workroom_error(str(exc))
             problem=wallet_setup_problem(request,item)
             if problem: return workroom_error(problem)
             try:create_agreement(item)
+            except StellarVerificationError as exc:
+                return workroom_error(str(exc))
             except Exception:
                 return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
         elif action=='accept' and request.user.pk==item.worker_id and agreement:
