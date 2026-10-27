@@ -32,10 +32,10 @@
   <link rel="apple-touch-icon" href="{% static 'images/push-logo.png' %}">
   <link rel="stylesheet" href="{% static 'workspace.css' %}?v=20260929-1">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'app.css' %}?v=20261005-1">{% endif %}
-  {% if user.is_authenticated and not staff_portal_active %}<link rel="stylesheet" href="{% static 'customer-app.css' %}?v=20261025-1">{% endif %}
 {% if request.resolver_match.url_name == 'operations_analytics' %}<link rel="stylesheet" href="{% static 'operations.css' %}">{% endif %}
 <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261006-1">
   {% block extra_head %}{% endblock %}
+  {% if user.is_authenticated and not staff_portal_active %}<link rel="stylesheet" href="{% static 'customer-app.css' %}?v=20261026-1">{% endif %}
 </head>
 <body class="{% if user.is_authenticated %}app-mode{% if staff_portal_active %} staff-portal-mode staff-role-{{ staff_portal_role }}{% else %} customer-app-mode{% endif %}{% else %}site-mode{% endif %}"{% if user.is_authenticated %} data-activity-endpoint="{% url 'activity_status' %}" data-latest-notification-id="{% if notification_preview %}{{ notification_preview.0.pk }}{% else %}0{% endif %}"{% endif %}>
   <a class="skip" href="#main">Skip to content</a>
@@ -166,6 +166,7 @@
   <script src="{% static 'wallet-connect.js' %}?v=20261006-4" defer></script>
   <a class="activity-live" data-activity-live href="{% url 'notifications' %}" role="status" aria-live="polite" hidden></a>
   <script src="{% static 'activity-status.js' %}?v=20260927-1" defer></script>
+  {% if not staff_portal_active %}<script src="{% static 'customer-motion.js' %}?v=20261025-1" defer></script>{% endif %}
   {% endif %}
   <script src="{% static 'menu-behavior.js' %}?v=20260927-3" defer></script>
   <script src="{% static 'share-link.js' %}?v=20260927-5" defer></script>

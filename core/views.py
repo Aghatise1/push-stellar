@@ -832,7 +832,8 @@ def resend(request):
 
 def _workspace_priority(user, assignments):
     """Choose one honest, role aware next step without changing workflow state."""
-    items=list(assignments)
+    # Legacy records do not prove an escrow deposit and may be read only.
+    items=[item for item in assignments if item.escrow_required]
 
     def result(item,kind,title,body,action_label):
         return {
@@ -903,7 +904,7 @@ def workspace(request):
     active=worker_assignments.filter(status__in=['awaiting_funding','funded','submitted']).count()
     participant_messages=Message.objects.filter(Q(assignment__worker=request.user)|Q(assignment__job__owner=request.user)).distinct()
     message_count=participant_messages.count()
-    return render(request,'workspace.html',{'assignments':assignments,'own_jobs':Job.objects.filter(owner=request.user),
+    return render(request,'workspace.html',{'assignments':assignments,'active_assignments':assignments.exclude(status__in=['paid','cancelled'])[:4],'own_jobs':Job.objects.filter(owner=request.user),
         'applications':Application.objects.filter(worker=request.user).select_related('job'),
         'verified_earnings':verified,'simulated_earnings':simulated,'pending_earnings':pending,
         'total_earnings':verified if settings.PUSH_TESTNET_ONLY else verified+simulated,'completed_count':completed,'active_count':active,

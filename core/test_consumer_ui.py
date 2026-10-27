@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.staticfiles.storage import staticfiles_storage
+from django.contrib.staticfiles import finders
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -164,6 +165,25 @@ class ConsumerHomeTests(TestCase):
         self.assertNotContains(response, "hero-balance")
         self.assertNotContains(response, "payment-motion")
 
+    def test_active_work_is_selected_before_the_four_item_limit(self):
+        active = self.make_assignment("funded")
+        for _ in range(4):
+            self.make_assignment("paid")
+        response, _ = self.priority_for(self.worker)
+        self.assertIn(active, response.context["active_assignments"])
+
+    def test_closed_work_shows_the_active_work_empty_state(self):
+        self.make_assignment("paid")
+        response, _ = self.priority_for(self.worker)
+        self.assertContains(response, "No active work yet")
+
+    def test_legacy_records_do_not_claim_escrow_funding(self):
+        item = self.make_assignment("funded")
+        item.escrow_required = False
+        item.save(update_fields=["escrow_required"])
+        _, priority = self.priority_for(self.worker)
+        self.assertEqual(priority["kind"], "find_work")
+
 
 class ConsumerWorkTests(ConsumerHomeTests):
     def test_work_hub_uses_a_stable_segmented_control_and_record_cards(self):
@@ -324,6 +344,8 @@ class ConsumerRemainingPagesTests(ConsumerHomeTests):
         settings = self.assert_standard_page("account_settings", "consumer-settings-groups")
         self.assertContains(settings, "consumer-danger-group")
         self.assertContains(settings, reverse("request_account_deletion"))
+        for route in ("wallet", "payments", "support", "community", "analytics"):
+            self.assertContains(settings, f'href="{reverse(route)}"')
         self.assert_standard_page("profile", "consumer-form-surface")
         self.assert_standard_page("analytics", "consumer-metric-group")
 
@@ -348,4 +370,29 @@ class ConsumerRemainingPagesTests(ConsumerHomeTests):
         create = self.client.get(reverse("community_create"))
         self.assertContains(create, "consumer-standard-page")
         self.assertContains(create, "csrfmiddlewaretoken")
+
+
+class ConsumerMotionTests(ConsumerShellTests):
+    def test_customer_motion_is_scoped_away_from_staff_and_public_pages(self):
+        self.client.force_login(self.member)
+        customer = self.client.get(reverse("workspace"))
+        self.assertContains(customer, staticfiles_storage.url("customer-motion.js"))
+        self.assertContains(customer, 'class="customer-primary-nav"')
+
+        self.client.logout()
+        self.client.force_login(self.staff)
+        staff = self.client.get(reverse("owner_dashboard"))
+        self.assertNotContains(staff, "customer-motion.js")
+
+        self.client.logout()
+        public = self.client.get(reverse("home"))
+        self.assertNotContains(public, "customer-motion.js")
+
+    def test_customer_styles_define_motion_ready_and_reduced_motion_states(self):
+        css_path = finders.find("customer-app.css")
+        self.assertIsNotNone(css_path)
+        css = open(css_path, encoding="utf-8").read()
+        self.assertIn(".customer-motion-ready", css)
+        self.assertIn("prefers-reduced-motion:reduce", css)
+        self.assertIn("@media(hover:hover)and(pointer:fine)", css.replace(" ", ""))
 

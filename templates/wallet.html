@@ -5,7 +5,7 @@
 {% block app_location %}Wallet{% endblock %}
 {% block content %}
 <div class="app-page wallet-page">
-  <header class="app-heading app-reveal"><div><p class="app-kicker">Wallet</p><h1>Your wallet, connected to your work.</h1><p>Connect Freighter, receive through your public address, and approve assignment payments in your wallet. Push records job earnings separately below.</p></div><span class="security-chip"><i></i> Wallet signed</span></header>
+  <header class="app-heading app-reveal"><div><p class="app-kicker">Wallet</p><h1>Your wallet, connected to your work.</h1><p>Connect Freighter, receive through your public address, and approve assignment payments in your wallet. Push records job earnings separately below.</p></div><span class="security-chip"><i></i> Stellar testnet</span></header>
   <section class="consumer-wallet-states app-reveal" aria-label="Wallet status">
     <article>
       <span class="consumer-eyebrow">Receiving address</span>
@@ -28,6 +28,7 @@
       <a class="button secondary" href="{% url 'work' %}">Open my work</a>
     </article>
   </section>
+  {% if balance_error %}<p class="notice" role="status">{{ balance_error }}</p>{% endif %}
   <section class="wallet-hero app-reveal">
     <div class="wallet-summary">
       <div class="wallet-account"><span class="wallet-identicon" aria-hidden="true"><i></i><b></b><em></em></span><span><small>{% if wallet_session_connected %}Active Freighter account{% else %}Saved receiving address{% endif %}</small><strong>{% if user.stellar_address %}{{ user.stellar_address|slice:':8' }}…{{ user.stellar_address|slice:'-6:' }}{% else %}No receiving address saved{% endif %}</strong></span><div class="wallet-account-actions"><a href="{% url 'profile' %}">Edit receiving address</a><button class="wallet-connect-action" type="button" data-wallet-connect data-wallet-endpoint="{% url 'wallet_connect' %}">{% if user.stellar_address %}Reconnect Freighter{% else %}Connect Freighter{% endif %}</button>{% if wallet_session_connected %}<form method="post" action="{% url 'wallet_disconnect' %}" data-wallet-disconnect>{% csrf_token %}<button type="submit">Disconnect</button></form>{% endif %}</div></div>

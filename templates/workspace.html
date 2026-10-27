@@ -29,8 +29,7 @@
         <a href="{% url 'work' %}">View all</a>
       </div>
       <div class="consumer-compact-list">
-        {% for item in assignments|slice:':4' %}
-          {% if item.status != 'paid' and item.status != 'cancelled' %}
+        {% for item in active_assignments %}
           <a class="consumer-work-row" href="{% url 'assignment' item.pk %}">
             <span class="consumer-status-dot" aria-hidden="true"></span>
             <span class="consumer-row-copy">
@@ -40,7 +39,6 @@
             <span class="consumer-row-meta"><b>{{ item.budget_display }}</b><small>{{ item.get_status_display }}</small></span>
             <span class="consumer-row-arrow" aria-hidden="true">›</span>
           </a>
-          {% endif %}
         {% empty %}
           <div class="consumer-empty-state"><h3>No active work yet</h3><p>Clear projects and their payment records will appear here.</p><a href="{% url 'jobs' %}">Browse available work</a></div>
         {% endfor %}
