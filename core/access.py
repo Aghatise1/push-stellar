@@ -37,9 +37,9 @@ def _staff_write_limited(request,limit=120):
 def staff_role(user):
     if not getattr(user,'is_authenticated',False):
         return None
-    if user.is_superuser:
-        return 'owner'
     access=getattr(user,'staff_access',None)
+    if user.is_superuser and user.is_active and (not access or access.status == 'approved'):
+        return 'owner'
     # A protected environment allow-list can establish the first recovery
     # owner after Google has verified and created the account. It never stores
     # a password and never silently restores revoked access.

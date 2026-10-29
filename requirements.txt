@@ -3,5 +3,6 @@ waitress==3.0.2
 django-allauth[socialaccount]==65.19.4
 psycopg[binary]==3.3.6
 whitenoise==6.11.0
+pypdf==6.1.1
 stellar-sdk==16.1.0
 gunicorn

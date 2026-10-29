@@ -93,6 +93,53 @@ class StaffWalletTests(TestCase):
         self.owner.staff_access.refresh_from_db()
         self.assertEqual(self.owner.staff_access.role,'owner')
 
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55)
+    @patch('core.views.escrow_chain.registry_role',return_value=1)
+    def test_staff_access_cannot_be_blocked_while_contract_role_remains(self,registry_role):
+        wallet=EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.client.force_login(self.owner)
+        for decision in ('suspended','revoked'):
+            with self.subTest(decision=decision):
+                response=self.client.post(
+                    reverse('staff_access_update',args=[self.support.staff_access.pk]),
+                    {'decision':decision},
+                )
+                self.assertEqual(response.status_code,409)
+                self.support.staff_access.refresh_from_db()
+                self.assertEqual(self.support.staff_access.status,'approved')
+        registry_role.assert_called_with('C'+'A'*55,wallet.address)
+
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55)
+    @patch('core.views.escrow_chain.registry_role',return_value=0)
+    def test_confirmed_contract_revocation_allows_staff_access_revocation(self,registry_role):
+        EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.support.is_staff=True
+        self.support.save(update_fields=['is_staff'])
+        self.client.force_login(self.owner)
+        response=self.client.post(
+            reverse('staff_access_update',args=[self.support.staff_access.pk]),
+            {'decision':'revoked'},
+        )
+        self.assertEqual(response.status_code,302)
+        self.support.staff_access.refresh_from_db()
+        self.support.refresh_from_db()
+        self.assertEqual(self.support.staff_access.status,'revoked')
+        self.assertFalse(self.support.is_staff)
+
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='')
+    @patch('core.views.escrow_chain.registry_role')
+    def test_registered_wallet_blocks_local_revocation_when_contract_is_unconfigured(self,registry_role):
+        EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.client.force_login(self.owner)
+        response=self.client.post(
+            reverse('staff_access_update',args=[self.support.staff_access.pk]),
+            {'decision':'revoked'},
+        )
+        self.assertEqual(response.status_code,503)
+        self.support.staff_access.refresh_from_db()
+        self.assertEqual(self.support.staff_access.status,'approved')
+        registry_role.assert_not_called()
+
 
 class TestnetOnlyTests(TestCase):
     def setUp(self):

@@ -29,6 +29,7 @@ from .models import User, EmailVerificationCode, PendingRegistration, Job, Appli
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm, CommunityPostForm, CommunityReplyForm, CommunityReportForm
 from .reporting import report_data
 from .access import has_staff_access, staff_only, staff_role
+from . import escrow as escrow_chain
 from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, prepare_payment, submit_signed_payment, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
@@ -1341,7 +1342,7 @@ def profile(request):
             user.resume_file=None;user.resume_filename=''
         resume=form.cleaned_data.get('resume_file')
         if resume:
-            user.resume_file=resume.read();user.resume_filename=os.path.basename(resume.name)[:160]
+            user.resume_file=resume.push_safe_pdf;user.resume_filename=os.path.basename(resume.name)[:160]
         user.save()
         messages.success(request,'Profile saved. Your email stays private.')
         return redirect('profile')
@@ -1356,7 +1357,7 @@ def public_profile(request,pk):
 @require_GET
 def profile_image(request,pk):
     person=get_object_or_404(User,pk=pk,is_active=True)
-    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or has_staff_access(request.user))):
         raise Http404
     if not person.profile_image: raise Http404
     content_type=person.profile_image_content_type if person.profile_image_content_type in {'image/jpeg','image/png','image/webp'} else 'application/octet-stream'
@@ -1369,7 +1370,7 @@ def profile_image(request,pk):
 @require_GET
 def resume_download(request,pk):
     person=get_object_or_404(User,pk=pk,is_active=True)
-    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or has_staff_access(request.user))):
         raise Http404
     if not person.resume_file: raise Http404
     filename=person.resume_filename or 'resume.pdf'
@@ -2130,12 +2131,34 @@ def staff_access_update(request,pk):
         return HttpResponseBadRequest('Another owner or administrator must change your own access.')
     if staff_role(request.user) == 'admin' and access.role in {'owner','admin'}:
         return HttpResponseBadRequest('Only an owner can change owner or administrator access.')
+    wallet=getattr(access.user,'escrow_staff_wallet',None)
+    contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
+    if decision in {'suspended','revoked'} and wallet:
+        if not contract:
+            return HttpResponse(
+                'The staff escrow contract is not configured, so wallet permission cannot be verified. No staff access change was made.',
+                status=503,
+            )
+        try:
+            contract_role=escrow_chain.registry_role(contract,wallet.address)
+        except Exception:
+            return HttpResponse(
+                'The wallet contract permission could not be verified. No staff access change was made.',
+                status=503,
+            )
+        if contract_role != 0:
+            return HttpResponse(
+                'Revoke this wallet in Escrow staff access and wait for on-chain confirmation before blocking the Push account.',
+                status=409,
+            )
     access.status=decision
     if decision == 'approved':
         access.approved_by=request.user;access.approved_at=timezone.now()
     access.save(update_fields=['status','approved_by','approved_at','updated_at'])
-    if decision in ('suspended','revoked') and hasattr(access.user,'escrow_staff_wallet'):
-        messages.warning(request,'Push access is blocked. Also revoke this wallet in Escrow staff access; the contract permission remains until its revocation is confirmed.')
+    desired_is_staff=decision == 'approved'
+    if access.user.is_staff != desired_is_staff:
+        access.user.is_staff=desired_is_staff
+        access.user.save(update_fields=['is_staff'])
     audit(request.user,'staff.access.updated',access,{'status':decision,'user_id':access.user_id})
     messages.success(request,f'Operations access for {access.user.email} is now {access.get_status_display().lower()}.')
     return redirect('staff_team')

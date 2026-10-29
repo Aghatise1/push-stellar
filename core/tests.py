@@ -1,6 +1,6 @@
 import re
 import json
-from io import StringIO
+from io import BytesIO, StringIO
 from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
@@ -16,6 +16,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
 from stellar_sdk import Account, Asset, Keypair, Network, TransactionBuilder
+from pypdf import PdfWriter
 from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, prepare_payment, valid_account_id, validate_signed_payment, verify_payment
@@ -273,6 +274,26 @@ class WorkspaceTests(TestCase):
         self.assertEqual(response['Retry-After'],'900')
         middleware=AppSecurityMiddleware(lambda request: JsonResponse({'error':'Try later.'},status=429))
         self.assertEqual(json.loads(middleware(request).content),{'error':'Try later.'})
+
+    @patch('core.middleware.logging.getLogger')
+    def test_unhandled_error_logs_redacted_password_reset_path(self,get_logger):
+        from .middleware import AppSecurityMiddleware
+        request=RequestFactory().get('/reset/encoded-user/live-secret-token/')
+        request.user=self.worker
+        def fail(_request):
+            raise RuntimeError('forced failure')
+        with self.assertRaises(RuntimeError):
+            AppSecurityMiddleware(fail)(request)
+        get_logger.return_value.exception.assert_called_once_with(
+            'Unhandled request error',
+            extra={'path':'/reset/[redacted]/[redacted]/','method':'GET'},
+        )
+
+    def test_sensitive_log_path_redacts_authentication_credentials(self):
+        from .middleware import safe_log_path
+        self.assertEqual(safe_log_path('/reset/user/token'),'/reset/[redacted]/[redacted]/')
+        self.assertEqual(safe_log_path('/verify/email-secret/'),'/verify/[redacted]/')
+        self.assertEqual(safe_log_path('/jobs/ordinary-slug/'),'/jobs/ordinary-slug/')
 
     def test_staff_waitlist_approval_checks_csrf_on_both_public_hosts_behind_proxy(self):
         from config.security import trusted_csrf_origins
@@ -745,7 +766,8 @@ class WorkspaceTests(TestCase):
     def test_profile_photo_and_resume_are_database_backed_and_privacy_scoped(self):
         self.login_as(self.worker)
         image=SimpleUploadedFile('portrait.png',b'\x89PNG\r\n\x1a\n'+b'profile-image',content_type='image/png')
-        resume=SimpleUploadedFile('worker-resume.pdf',b'%PDF-1.4\nresume',content_type='application/pdf')
+        pdf=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792);writer.write(pdf)
+        resume=SimpleUploadedFile('worker-resume.pdf',pdf.getvalue()+b'UNREFERENCED-TRAILER',content_type='application/pdf')
         response=self.client.post(reverse('profile'),{
             'display_name':'Worker','bio':'Product designer','skills':'Design','portfolio':'',
             'stellar_address':'','profile_image':image,'resume_file':resume,
@@ -755,6 +777,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(bytes(self.worker.profile_image),b'\x89PNG\r\n\x1a\nprofile-image')
         self.assertEqual(self.worker.profile_image_content_type,'image/png')
         self.assertEqual(self.worker.resume_filename,'worker-resume.pdf')
+        self.assertNotIn(b'UNREFERENCED-TRAILER',bytes(self.worker.resume_file))
 
         outsider=Client()
         self.assertEqual(outsider.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
@@ -768,6 +791,34 @@ class WorkspaceTests(TestCase):
         self.assertIn('attachment',download['Content-Disposition'])
         self.assertContains(outsider.get(reverse('public_profile',args=[self.worker.pk])),'Download résumé')
 
+    def test_revoked_staff_flag_does_not_grant_private_profile_media_access(self):
+        self.worker.profile_image=b'private-image'
+        self.worker.profile_image_content_type='image/png'
+        self.worker.resume_file=b'private-resume'
+        self.worker.resume_filename='private.pdf'
+        self.worker.public_profile=False
+        self.worker.save(update_fields=['profile_image','profile_image_content_type','resume_file','resume_filename','public_profile'])
+        self.grant_staff(self.outsider,'trust_support')
+        self.outsider.staff_access.status='revoked'
+        self.outsider.staff_access.save(update_fields=['status'])
+        staff_client=Client()
+        staff_client.force_login(self.outsider)
+        self.assertEqual(staff_client.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(staff_client.get(reverse('resume_download',args=[self.worker.pk])).status_code,404)
+
+    def test_revoked_superuser_does_not_grant_private_profile_media_access(self):
+        self.worker.profile_image=b'private-image'
+        self.worker.profile_image_content_type='image/png'
+        self.worker.resume_file=b'private-resume'
+        self.worker.resume_filename='private.pdf'
+        self.worker.public_profile=False
+        self.worker.save(update_fields=['profile_image','profile_image_content_type','resume_file','resume_filename','public_profile'])
+        superuser=User.objects.create_superuser(username='former-owner',email='former-owner@example.test',password='Independent-cobalt-732!')
+        StaffAccess.objects.create(user=superuser,role='owner',status='revoked')
+        staff_client=Client();staff_client.force_login(superuser)
+        self.assertEqual(staff_client.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(staff_client.get(reverse('resume_download',args=[self.worker.pk])).status_code,404)
+
     def test_profile_rejects_disguised_uploads(self):
         self.login_as(self.worker)
         response=self.client.post(reverse('profile'),{
@@ -777,7 +828,37 @@ class WorkspaceTests(TestCase):
         })
         self.assertEqual(response.status_code,200)
         self.assertContains(response,'Upload a valid JPG, PNG or WebP image')
-        self.assertContains(response,'Upload a valid PDF résumé')
+        self.assertContains(response,'Upload a safe, structurally valid PDF résumé')
+
+    def test_profile_rejects_header_only_and_active_content_pdfs(self):
+        self.login_as(self.worker)
+        active=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792);writer.add_js('app.alert(1)');writer.write(active)
+        samples=(
+            b'%PDF-1.4\nresume',
+            active.getvalue(),
+        )
+        for index,payload in enumerate(samples):
+            with self.subTest(index=index):
+                response=self.client.post(reverse('profile'),{
+                    'display_name':'Worker','bio':'','skills':'','portfolio':'','stellar_address':'',
+                    'resume_file':SimpleUploadedFile(f'unsafe-{index}.pdf',payload,content_type='application/pdf'),
+                })
+                self.assertEqual(response.status_code,200)
+                self.assertContains(response,'Upload a safe, structurally valid PDF résumé')
+
+    def test_profile_strips_link_annotations_from_stored_pdf(self):
+        self.login_as(self.worker)
+        linked=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792)
+        writer.add_uri(0,'javascript:alert(1)',(0,0,100,100));writer.write(linked)
+        response=self.client.post(reverse('profile'),{
+            'display_name':'Worker','bio':'','skills':'','portfolio':'','stellar_address':'',
+            'resume_file':SimpleUploadedFile('linked.pdf',linked.getvalue(),content_type='application/pdf'),
+        })
+        self.assertRedirects(response,reverse('profile'))
+        self.worker.refresh_from_db()
+        from pypdf import PdfReader
+        stored=PdfReader(BytesIO(bytes(self.worker.resume_file)),strict=True)
+        self.assertNotIn('/Annots',stored.pages[0])
     def test_applications_private_and_duplicate_prevented(self):
         self.login_as(self.worker)
         url=reverse('apply',args=[self.job.pk])

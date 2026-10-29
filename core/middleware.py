@@ -6,6 +6,16 @@ from django.conf import settings
 from .logging import request_id
 
 
+def safe_log_path(path):
+    """Remove credentials embedded in known authentication URLs."""
+    parts=[part for part in path.split('/') if part]
+    if len(parts) >= 3 and parts[0] == 'reset':
+        return '/reset/[redacted]/[redacted]/'
+    if len(parts) >= 2 and parts[0] == 'verify':
+        return '/verify/[redacted]/'
+    return path
+
+
 class AccountActivityMiddleware:
     """Count successful signed-in page use, at most once a minute per session."""
     def __init__(self,get_response):
@@ -44,7 +54,7 @@ class AppSecurityMiddleware:
             response = self.get_response(request)
         except Exception:
             logging.getLogger('core.request').exception(
-                'Unhandled request error',extra={'path':request.path,'method':request.method}
+                'Unhandled request error',extra={'path':safe_log_path(request.path),'method':request.method}
             )
             raise
         finally:
