@@ -12,26 +12,64 @@ from django.urls import reverse
 from django.utils import timezone
 from urllib.parse import urlencode
 
+from config.security import validated_client_ip
 from .models import RateBucket, StaffAccess, User
+
+
+def client_ip(request):
+    """Return the validated client IP under the configured trusted proxy policy."""
+    return validated_client_ip(request, getattr(settings, 'PUSH_TRUSTED_PROXIES', ()))
+
+
+def request_identity(request, scope, *, subject=None, include_ip=False):
+    """Build a hashed rate-limit bucket key without storing raw identifiers."""
+    source = client_ip(request)
+    user = getattr(request, 'user', None)
+    if subject is not None:
+        norm_subject = str(subject).strip().casefold()
+        raw = f'{scope}:subject:{norm_subject}:{source}' if include_ip else f'{scope}:subject:{norm_subject}'
+    elif getattr(user, 'is_authenticated', False):
+        base = scope if scope.endswith(f':{user.pk}') else f'{scope}:user:{user.pk}'
+        raw = f'{base}:{source}' if include_ip else base
+    else:
+        raw = f'{scope}:ip:{source}'
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+
+def consume_rate_bucket(key, limit, window=timedelta(minutes=15)):
+    now = timezone.now()
+    with transaction.atomic():
+        bucket, _ = RateBucket.objects.get_or_create(
+            key=key, defaults={'expires': now + window}
+        )
+        if bucket.expires <= now:
+            RateBucket.objects.filter(pk=bucket.pk, expires__lte=now).update(
+                count=0, expires=now + window
+            )
+        return RateBucket.objects.filter(pk=bucket.pk, count__lt=limit).update(count=F('count') + 1) == 0
+
+
+def rate_limited(request, scope, limit=12, *, subject=None, recipient=None, recipient_limit=None, include_ip=False, ip_limit=None):
+    primary_key = request_identity(request, scope, subject=subject, include_ip=include_ip)
+    is_limited = consume_rate_bucket(primary_key, limit)
+    if recipient:
+        norm_recipient = str(recipient).strip().casefold()
+        if norm_recipient:
+            rec_key = hashlib.sha256(f'{scope}:recipient:{norm_recipient}'.encode('utf-8')).hexdigest()
+            if consume_rate_bucket(rec_key, recipient_limit or limit):
+                is_limited = True
+    if ip_limit is not None:
+        ip_key = hashlib.sha256(f'{scope}:ip:{client_ip(request)}'.encode('utf-8')).hexdigest()
+        if consume_rate_bucket(ip_key, ip_limit):
+            is_limited = True
+    return is_limited
 
 
 def _staff_write_limited(request,limit=120):
     """Bound privileged writes per account and source address."""
     if request.method != 'POST':
         return False
-    source=request.META.get('REMOTE_ADDR','unknown')
-    raw=f'staff-write:{request.user.pk}:{source}'
-    key=hashlib.sha256(raw.encode()).hexdigest()
-    now=timezone.now()
-    with transaction.atomic():
-        bucket,_=RateBucket.objects.get_or_create(
-            key=key,defaults={'expires':now+timedelta(minutes=15)}
-        )
-        if bucket.expires <= now:
-            RateBucket.objects.filter(pk=bucket.pk).update(
-                count=0,expires=now+timedelta(minutes=15)
-            )
-        return RateBucket.objects.filter(pk=bucket.pk,count__lt=limit).update(count=F('count')+1) == 0
+    return rate_limited(request, 'staff-write', limit=limit, include_ip=True)
 
 
 def staff_role(user):

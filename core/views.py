@@ -28,7 +28,7 @@ from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, WalletTransfer, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm, CommunityPostForm, CommunityReplyForm, CommunityReportForm
 from .reporting import report_data
-from .access import has_staff_access, staff_only, staff_role
+from .access import has_staff_access, rate_limited, staff_only, staff_role
 from . import escrow as escrow_chain
 from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, prepare_payment, submit_signed_payment, verify_payment, valid_account_id
@@ -168,16 +168,8 @@ def audit(actor,action,target,detail=None):
     )
 
 
-def limited(request,scope,limit=12):
-    # REMOTE_ADDR only: do not trust client-supplied forwarding headers.
-    identity = f'{scope}:{request.META.get("REMOTE_ADDR", "unknown")}'
-    key = hashlib.sha256(identity.encode()).hexdigest()
-    now = timezone.now()
-    with transaction.atomic():
-        bucket,_ = RateBucket.objects.get_or_create(key=key,defaults={'expires':now+timedelta(minutes=15)})
-        if bucket.expires <= now:
-            RateBucket.objects.filter(pk=bucket.pk,expires__lte=now).update(count=0,expires=now+timedelta(minutes=15))
-        return RateBucket.objects.filter(pk=bucket.pk,count__lt=limit).update(count=F('count')+1) == 0
+def limited(request,scope,limit=12,**kwargs):
+    return rate_limited(request,scope,limit=limit,**kwargs)
 
 
 def verified(view):
@@ -458,7 +450,7 @@ def register(request):
     if invitation is None:
         messages.info(request,'Account creation for the current testnet pilot requires an invitation. Enter your invitation code first.')
         return redirect('invite_redeem')
-    if request.method == 'POST' and limited(request,'register',6):
+    if request.method == 'POST' and limited(request,'register',6,recipient=invitation.email):
         form=Registration(request.POST)
         form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
         return render(request,'registration/register.html',{'form':form,'invitation':invitation},status=429)
@@ -549,7 +541,7 @@ def verify_registration(request):
 def resend_registration(request):
     pending=pending_registration(request)
     if pending is None: return redirect('register')
-    if limited(request,'registration-resend',3):
+    if limited(request,'registration-resend',3,subject=f'pending:{pending.pk}',recipient=pending.email,ip_limit=15):
         messages.error(request,'Too many code requests. Please try again in 15 minutes.')
         return redirect('verify_registration')
     try: send_registration_verification(pending)
@@ -756,7 +748,7 @@ class Recovery(PasswordResetView):
     form_class = RecoveryForm
     success_url = reverse_lazy('password_reset_done')
     def dispatch(self,request,*args,**kwargs):
-        if request.method == 'POST' and limited(request,'recovery',5):
+        if request.method == 'POST' and limited(request,'recovery',5,recipient=request.POST.get('email')):
             form=self.form_class(request.POST)
             form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
             return render(request,self.template_name,{'form':form},status=429)
@@ -823,7 +815,7 @@ def verify_link(request,code):
 @require_POST
 def resend(request):
     if request.user.email_verified: return redirect('workspace')
-    if limited(request,'verify-resend',3):
+    if limited(request,'verify-resend',3,recipient=request.user.email,ip_limit=30):
         return HttpResponse('Please wait before requesting another email.',status=429)
     try: send_verification(request.user)
     except Exception: messages.error(request,'We could not send a verification code. Check the email delivery settings and try again.')

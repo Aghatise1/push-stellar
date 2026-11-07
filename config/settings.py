@@ -3,7 +3,7 @@ import secrets
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
-from .security import trusted_csrf_origins
+from .security import parse_trusted_proxies, trusted_csrf_origins
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 local_env_path = BASE_DIR / '.env'
@@ -40,6 +40,15 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME','').strip()
 PUSH_RELEASE = (os.environ.get('PUSH_RELEASE') or os.environ.get('RENDER_GIT_COMMIT') or '').strip()[:12]
 default_allowed_hosts = RENDER_EXTERNAL_HOSTNAME if PRODUCTION and RENDER_EXTERNAL_HOSTNAME else 'localhost,127.0.0.1'
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('PUSH_ALLOWED_HOSTS', default_allowed_hosts).split(',') if host.strip()]
+PUSH_TRUSTED_PROXIES = tuple(
+    entry.strip()
+    for entry in os.environ.get('PUSH_TRUSTED_PROXIES', '').split(',')
+    if entry.strip()
+)
+try:
+    parse_trusted_proxies(PUSH_TRUSTED_PROXIES)
+except ValueError as exc:
+    raise ImproperlyConfigured('PUSH_TRUSTED_PROXIES must contain valid IP addresses or CIDR networks.') from exc
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
                   'django.contrib.messages', 'django.contrib.staticfiles',
                   'allauth', 'allauth.account', 'allauth.socialaccount',

@@ -1623,3 +1623,109 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'noindex, nofollow, noarchive')
         self.assertEqual(self.client.get(reverse('robots')).content,b'User-agent: *\nDisallow: /\n')
         self.assertEqual(self.client.get(reverse('sitemap')).status_code,404)
+
+    def test_independent_authenticated_accounts_behind_proxy_have_separate_limits(self):
+        worker_client=Client();worker_client.force_login(self.worker)
+        owner_client=Client();owner_client.force_login(self.owner)
+        payload={'subject':'Need help','category':'account','description':'Checking account support limit.'}
+        for _ in range(10):
+            response=worker_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5')
+            self.assertEqual(response.status_code,302)
+        self.assertEqual(worker_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5').status_code,429)
+        owner_response=owner_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5')
+        self.assertEqual(owner_response.status_code,302)
+
+    @override_settings(PUSH_TRUSTED_PROXIES=())
+    def test_untrusted_forged_forwarded_headers_do_not_bypass_limits(self):
+        for i in range(12):
+            response=self.client.post(
+                reverse('login'),
+                {'username':f'absent-{i}@example.test','password':'wrong'},
+                REMOTE_ADDR='203.0.113.9',
+                HTTP_X_FORWARDED_FOR=f'198.51.100.{i + 1}',
+            )
+            self.assertEqual(response.status_code,200)
+        blocked=self.client.post(
+            reverse('login'),
+            {'username':'absent-final@example.test','password':'wrong'},
+            REMOTE_ADDR='203.0.113.9',
+            HTTP_X_FORWARDED_FOR='198.51.100.250',
+        )
+        self.assertEqual(blocked.status_code,429)
+
+    @override_settings(PUSH_TRUSTED_PROXIES=('10.0.0.0/8','127.0.0.1'))
+    def test_trusted_proxy_policy_handles_forwarded_forged_missing_and_malformed_headers(self):
+        payload={
+            'name':'Tester','role':'Designer','skills':'UX','intended_use':'Test jobs',
+            'reason':'Join pilot','accepted_testing_terms':'on',
+        }
+        for i in range(5):
+            response=self.client.post(
+                reverse('waitlist'),
+                {**payload,'email':f'first-{i}@example.test'},
+                REMOTE_ADDR='10.0.0.1',
+                HTTP_X_FORWARDED_FOR=f'1.1.1.{i + 1}, 198.51.100.10',
+            )
+            self.assertEqual(response.status_code,200)
+        spoofed=self.client.post(
+            reverse('waitlist'),
+            {**payload,'email':'first-blocked@example.test'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='8.8.8.8, 198.51.100.10',
+        )
+        self.assertEqual(spoofed.status_code,429)
+        second_client=self.client.post(
+            reverse('waitlist'),
+            {**payload,'email':'second-client@example.test'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.20',
+        )
+        self.assertEqual(second_client.status_code,200)
+        for bad_header in ('', 'not-an-ip', 'garbage, :::', '198.51.100.30, malformed'):
+            res=self.client.post(
+                reverse('waitlist'),
+                {**payload,'email':'malformed@example.test'},
+                REMOTE_ADDR='10.0.0.2',
+                HTTP_X_FORWARDED_FOR=bad_header,
+            )
+            self.assertIn(res.status_code,(200,429))
+
+    @override_settings(PUSH_TRUSTED_PROXIES=('10.0.0.0/8',))
+    def test_staff_limits_preserved_and_bucket_keys_remain_hashed(self):
+        staff_two=User.objects.create_user(
+            username='admin2@example.test',email='admin2@example.test',password='Independent-cobalt-732!',
+            display_name='Admin Two',email_verified=True,terms_version='2026-10-06.1',terms_accepted_at=timezone.now(),
+        )
+        self.grant_staff(self.owner,'owner')
+        self.grant_staff(staff_two,'admin')
+        owner_client=Client();owner_client.force_login(self.owner)
+        admin_client=Client();admin_client.force_login(staff_two)
+        for i in range(30):
+            res=owner_client.post(
+                reverse('create_staff_invitation'),
+                {'name':f'Invitee {i}','email':f'invitee-{i}@example.test','role':'Tester'},
+                REMOTE_ADDR='10.0.0.1',
+                HTTP_X_FORWARDED_FOR='198.51.100.40',
+            )
+            self.assertEqual(res.status_code,302)
+        limited_owner=owner_client.post(
+            reverse('create_staff_invitation'),
+            {'name':'Overflow','email':'overflow@example.test','role':'Tester'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.40',
+            follow=True,
+        )
+        self.assertContains(limited_owner,'Too many invitations were created recently.')
+        admin_ok=admin_client.post(
+            reverse('create_staff_invitation'),
+            {'name':'Admin Invitee','email':'admin-invitee@example.test','role':'Tester'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.40',
+            follow=True,
+        )
+        self.assertContains(admin_ok,'Invitation created')
+        for key in RateBucket.objects.values_list('key',flat=True):
+            self.assertEqual(len(key),64)
+            self.assertNotIn('198.51.100',key)
+            self.assertNotIn('10.0.0',key)
+            self.assertNotIn('@',key)
