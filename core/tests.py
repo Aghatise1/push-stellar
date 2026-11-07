@@ -17,7 +17,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
 from stellar_sdk import Account, Asset, Keypair, Network, TransactionBuilder
 from pypdf import PdfWriter
-from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
+from .models import AccountActivity, User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, prepare_payment, valid_account_id, validate_signed_payment, verify_payment
 from .email_backend import BrevoEmailBackend
@@ -1728,4 +1728,120 @@ class WorkspaceTests(TestCase):
             self.assertEqual(len(key),64)
             self.assertNotIn('198.51.100',key)
             self.assertNotIn('10.0.0',key)
+        for key in RateBucket.objects.values_list('key',flat=True):
+            self.assertEqual(len(key),64)
+            self.assertNotIn('198.51.100',key)
+            self.assertNotIn('10.0.0',key)
             self.assertNotIn('@',key)
+
+    def test_verify_email_exhaustion_expiry_deletion_and_repeated_gets_do_not_bypass_resend_limit(self):
+        self.worker.email_verified=False;self.worker.save(update_fields=['email_verified'])
+        self.login_as(self.worker)
+        mail.outbox.clear()
+
+        # Initial GET sends the first code; repeated GETs do not send more.
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        for _ in range(3):
+            self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhausting 5 wrong attempts and refreshing via GET must not send a new code.
+        for _ in range(5):
+            res=self.client.post(reverse('verify_email'),{'code':'000000'})
+            self.assertContains(res,'That code is incorrect')
+        exhausted=self.client.post(reverse('verify_email'),{'code':'000000'})
+        self.assertContains(exhausted,'Too many incorrect attempts. Send a new code.')
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Expiry and record deletion must also not cause GET to auto-send a new code.
+        EmailVerificationCode.objects.filter(user=self.worker).update(expires_at=timezone.now()-timedelta(minutes=1),attempts=0)
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        expired_post=self.client.post(reverse('verify_email'),{'code':'000000'})
+        self.assertContains(expired_post,'That code has expired. Send a new code and try again.')
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        EmailVerificationCode.objects.filter(user=self.worker).delete()
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Explicit resend allows 3 sends, even if the user repeatedly exhausts codes in between.
+        for expected_count in (2,3,4):
+            resend_res=self.client.post(reverse('resend'))
+            self.assertEqual(resend_res.status_code,302)
+            self.assertEqual(len(mail.outbox),expected_count)
+            if expected_count < 4:
+                for _ in range(6):
+                    self.client.post(reverse('verify_email'),{'code':'000000'})
+                self.client.get(reverse('verify_email'))
+                self.assertEqual(len(mail.outbox),expected_count)
+
+        # 4th explicit resend is blocked with 429.
+        self.assertEqual(self.client.post(reverse('resend')).status_code,429)
+        self.assertEqual(len(mail.outbox),4)
+
+        # The latest issued code still verifies the account cleanly.
+        latest_code=re.search(r'\b(\d{6})\b',mail.outbox[-1].body).group(1)
+        verified_res=self.client.post(reverse('verify_email'),{'code':latest_code})
+        self.assertRedirects(verified_res,reverse('verification_success'))
+        self.worker.refresh_from_db()
+        self.assertTrue(self.worker.email_verified)
+
+    def test_registration_verification_exhaustion_cooldown_and_independent_users(self):
+        mail.outbox.clear()
+        self.grant_invitation('reg1@example.test','PUSH-AAAA1111-BBBB2222')
+        self.grant_invitation('reg2@example.test','PUSH-CCCC3333-DDDD4444')
+        client_one=Client()
+        client_two=Client()
+        client_one.post(reverse('invite_redeem'),{'code':'PUSH-AAAA1111-BBBB2222'},REMOTE_ADDR='10.0.0.8')
+        client_two.post(reverse('invite_redeem'),{'code':'PUSH-CCCC3333-DDDD4444'},REMOTE_ADDR='10.0.0.8')
+
+        reg_one=client_one.post(
+            reverse('register'),
+            {'display_name':'Reg One','email':'reg1@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+        )
+        self.assertRedirects(reg_one,reverse('verify_registration'))
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhausting 5 wrong codes on registration verification blocks further attempts and GET does not resend.
+        for _ in range(5):
+            res=client_one.post(reverse('verify_registration'),{'code':'000000'},REMOTE_ADDR='10.0.0.8')
+            self.assertContains(res,'That code is incorrect')
+        locked=client_one.post(reverse('verify_registration'),{'code':'000000'},REMOTE_ADDR='10.0.0.8')
+        self.assertContains(locked,'Too many incorrect attempts. Send a new code.')
+        client_one.get(reverse('verify_registration'),REMOTE_ADDR='10.0.0.8')
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhaust 3 registration resends for client_one; 4th resend and re-POST to register are blocked from sending email.
+        for expected_count in (2,3,4):
+            res=client_one.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8')
+            self.assertEqual(res.status_code,302)
+            self.assertEqual(len(mail.outbox),expected_count)
+        blocked_resend=client_one.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8',follow=True)
+        self.assertContains(blocked_resend,'Too many code requests')
+        self.assertEqual(len(mail.outbox),4)
+        repost_reg=client_one.post(
+            reverse('register'),
+            {'display_name':'Reg One','email':'reg1@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+            follow=True,
+        )
+        self.assertEqual(len(mail.outbox),4)
+
+        # Independent user behind the same proxy can still register, resend, and verify.
+        reg_two=client_two.post(
+            reverse('register'),
+            {'display_name':'Reg Two','email':'reg2@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+        )
+        self.assertRedirects(reg_two,reverse('verify_registration'))
+        self.assertEqual(len(mail.outbox),5)
+        self.assertEqual(client_two.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8').status_code,302)
+        self.assertEqual(len(mail.outbox),6)
+        code_two=re.search(r'\b(\d{6})\b',mail.outbox[-1].body).group(1)
+        ok_two=client_two.post(reverse('verify_registration'),{'code':code_two},REMOTE_ADDR='10.0.0.8')
+        self.assertRedirects(ok_two,reverse('verification_success'))
+        self.assertTrue(User.objects.filter(email='reg2@example.test',email_verified=True).exists())

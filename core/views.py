@@ -460,6 +460,19 @@ def register(request):
         if invitation.email.casefold() != email.casefold():
             form.add_error('email',f'Use the approved email address: {invitation.email}')
             return render(request,'registration/register.html',{'form':form,'invitation':invitation})
+        already_issued=(
+            PendingRegistration.objects.filter(email__iexact=email).exists()
+            or EmailDelivery.objects.filter(
+                recipient__iexact=email,category='verification',
+                created_at__gt=timezone.now()-timedelta(minutes=15),
+            ).exists()
+        )
+        if already_issued and limited(request,'registration-resend',3,subject=f'recipient:{email.casefold()}',recipient=email,ip_limit=15):
+            existing=PendingRegistration.objects.filter(email__iexact=email).first()
+            if existing:
+                request.session['pending_registration_id']=str(existing.pk)
+            messages.error(request,'Too many code requests. Please try again in 15 minutes.')
+            return redirect('verify_registration')
         pending,_=PendingRegistration.objects.update_or_create(
             email=email,
             defaults={
@@ -494,6 +507,9 @@ def verify_registration(request):
         return redirect('register')
     form=VerificationCodeForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
+        if limited(request,'registration-verify-attempt',25,subject=f'recipient:{pending.email.casefold()}',ip_limit=75):
+            form.add_error('code','Too many verification attempts. Please wait 15 minutes or request a new code.')
+            return render(request,'registration/verify_registration.html',{'form':form,'pending':pending},status=429)
         with transaction.atomic():
             pending=PendingRegistration.objects.select_for_update().filter(pk=pending.pk).first()
             if pending is None:
@@ -541,7 +557,7 @@ def verify_registration(request):
 def resend_registration(request):
     pending=pending_registration(request)
     if pending is None: return redirect('register')
-    if limited(request,'registration-resend',3,subject=f'pending:{pending.pk}',recipient=pending.email,ip_limit=15):
+    if limited(request,'registration-resend',3,subject=f'recipient:{pending.email.casefold()}',recipient=pending.email,ip_limit=15):
         messages.error(request,'Too many code requests. Please try again in 15 minutes.')
         return redirect('verify_registration')
     try: send_registration_verification(pending)
@@ -759,37 +775,43 @@ class Recovery(PasswordResetView):
 def verify_email(request):
     if request.user.email_verified:
         return redirect('workspace')
-    record = EmailVerificationCode.objects.filter(user=request.user,expires_at__gt=timezone.now()).first()
-    if request.method == 'GET' and record is None:
+    record = EmailVerificationCode.objects.filter(user=request.user).first()
+    recent_delivery = EmailDelivery.objects.filter(
+        recipient__iexact=request.user.email,category='verification',
+        created_at__gt=timezone.now()-timedelta(minutes=15),
+    ).exists()
+    if request.method == 'GET' and record is None and not recent_delivery and not limited(request,'verify-initial',3,recipient=request.user.email,ip_limit=30):
         try:
             send_verification(request.user)
         except Exception:
             messages.error(request,'We could not create a verification email. Use “Send a new code” to try again.')
     form = VerificationCodeForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        record = EmailVerificationCode.objects.filter(user=request.user).first()
-        if not record or record.expires_at <= timezone.now():
-            if record: record.delete()
-            form.add_error('code','That code has expired. Send a new code and try again.')
-        elif record.attempts >= 5:
-            record.delete()
-            form.add_error('code','Too many incorrect attempts. Send a new code.')
-        else:
-            expected = salted_hmac('push.verify.code',f'{request.user.pk}:{form.cleaned_data["code"]}').hexdigest()
-            if not hmac.compare_digest(record.code_hash,expected):
-                record.attempts = F('attempts') + 1
-                record.save(update_fields=['attempts'])
-                form.add_error('code','That code is incorrect. Check the email and try again.')
+        if limited(request,'verify-attempt',25,ip_limit=75):
+            form.add_error('code','Too many verification attempts. Please wait 15 minutes or request a new code.')
+            return render(request,'registration/verify_code.html',{'form':form},status=429)
+        with transaction.atomic():
+            record = EmailVerificationCode.objects.select_for_update().filter(user=request.user).first()
+            if not record or record.expires_at <= timezone.now():
+                form.add_error('code','That code has expired. Send a new code and try again.')
+            elif record.attempts >= 5:
+                form.add_error('code','Too many incorrect attempts. Send a new code.')
             else:
-                User.objects.filter(pk=request.user.pk,email_verified=False).update(email_verified=True)
-                record.delete()
-                request.user.email_verified = True
-                queue_verification_success(
-                    request,'Email verified.',
-                    'Wallet, messages and protected work actions are now available.',
-                    'workspace',
-                )
-                return redirect('verification_success')
+                expected = salted_hmac('push.verify.code',f'{request.user.pk}:{form.cleaned_data["code"]}').hexdigest()
+                if not hmac.compare_digest(record.code_hash,expected):
+                    record.attempts = F('attempts') + 1
+                    record.save(update_fields=['attempts'])
+                    form.add_error('code','That code is incorrect. Check the email and try again.')
+                else:
+                    User.objects.filter(pk=request.user.pk,email_verified=False).update(email_verified=True)
+                    record.delete()
+                    request.user.email_verified = True
+                    queue_verification_success(
+                        request,'Email verified.',
+                        'Wallet, messages and protected work actions are now available.',
+                        'workspace',
+                    )
+                    return redirect('verification_success')
     return render(request,'registration/verify_code.html',{'form':form})
 
 
