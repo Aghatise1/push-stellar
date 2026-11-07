@@ -1,5 +1,6 @@
 """Staff wallet proof and wallet-signed, on-chain dispute permissions. No secrets."""
 import secrets
+import uuid
 from datetime import timedelta
 from django.conf import settings
 from django.db import transaction, IntegrityError
@@ -53,10 +54,10 @@ def prepare(request):
     try:
         eligible(request.user); data=request_payload(request)
         action=data.get('action'); contract=''; role=0
-        with transaction.atomic():
-            # Serialize proofs and management operations by the signing account.
-            actor=User.objects.select_for_update().get(pk=request.user.pk)
-            if action=='prove':
+        if action=='prove':
+            with transaction.atomic():
+                actor=User.objects.select_for_update().get(pk=request.user.pk)
+                eligible(actor)
                 target=actor; wallet=str(data.get('wallet','')).strip(); source=wallet
                 if not valid_account_id(wallet): raise StellarVerificationError('Provide a Stellar public G-address.')
                 existing=EscrowStaffWallet.objects.filter(user=actor).first()
@@ -67,10 +68,14 @@ def prepare(request):
                 proof=chain.digest({'user':actor.pk,'email':actor.email,'nonce':secrets.token_hex(32),'purpose':'Push staff wallet proof'})
                 envelope=(TransactionBuilder(Account(wallet,-1),chain.NETWORK,base_fee=100)
                     .append_manage_data_op('Push staff wallet proof',proof).set_timeout(300).build())
-            elif action=='set_staff':
-                chain.require_enabled(); contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
-                if not contract: raise StellarVerificationError('The staff escrow contract has not been configured.')
-                target=get_object_or_404(User,pk=data.get('target'))
+                record=EscrowStaffOperation.objects.create(actor=actor,target=target,action=action,contract=contract,
+                    source=source,wallet=wallet,role=role,prepared_xdr=envelope.to_xdr(),tx_hash=envelope.hash_hex())
+        elif action=='set_staff':
+            chain.require_enabled(); contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
+            if not contract: raise StellarVerificationError('The staff escrow contract has not been configured.')
+            with transaction.atomic():
+                actor=User.objects.select_for_update().get(pk=request.user.pk)
+                target=get_object_or_404(User.objects.select_for_update(),pk=data.get('target'))
                 role=int(data.get('role',-1))
                 if role not in (0,1,2): raise StellarVerificationError('Choose reviewer, administrator or revoke.')
                 permission(actor,target,role)
@@ -78,12 +83,42 @@ def prepare(request):
                 wallet=get_object_or_404(EscrowStaffWallet,user=target).address
                 if request.session.get('staff_wallet_connected_address')!=source:
                     raise StellarVerificationError('Connect your verified staff wallet from Escrow staff access.')
-                if EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state__in=['prepared','pending']).exists():
+                EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state='preparing',created_at__lt=timezone.now()-timedelta(seconds=30)).delete()
+                if EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state__in=['preparing','prepared','pending']).exists():
                     raise StellarVerificationError('Check your pending permission change before preparing another.')
+                reservation=EscrowStaffOperation.objects.create(
+                    actor=actor,target=target,action=action,contract=contract,
+                    source=source,wallet=wallet,role=role,prepared_xdr='',
+                    tx_hash=f'preparing-{uuid.uuid4().hex}',state='preparing',
+                )
+            try:
                 envelope=chain.build_staff(contract,source,wallet,role)
-            else: raise StellarVerificationError('Unsupported staff operation.')
-            record=EscrowStaffOperation.objects.create(actor=actor,target=target,action=action,contract=contract,
-                source=source,wallet=wallet,role=role,prepared_xdr=envelope.to_xdr(),tx_hash=envelope.hash_hex())
+            except Exception:
+                EscrowStaffOperation.objects.filter(pk=reservation.pk,state='preparing').delete()
+                raise
+            revalidation_error=None
+            with transaction.atomic():
+                actor=User.objects.select_for_update().get(pk=request.user.pk)
+                target=User.objects.select_for_update().get(pk=target.pk)
+                record=EscrowStaffOperation.objects.select_for_update().get(pk=reservation.pk)
+                try:
+                    permission(actor,target,role)
+                    current_source=get_object_or_404(EscrowStaffWallet,user=actor).address
+                    current_wallet=get_object_or_404(EscrowStaffWallet,user=target).address
+                    if current_source!=source or current_wallet!=wallet or record.state!='preparing':
+                        raise StellarVerificationError('Staff wallet or role authority changed during preparation. Refresh and try again.')
+                except Exception as exc:
+                    record.delete()
+                    revalidation_error=exc
+                else:
+                    record.prepared_xdr=envelope.to_xdr()
+                    record.tx_hash=envelope.hash_hex()
+                    record.state='prepared'
+                    record.save(update_fields=['prepared_xdr','tx_hash','state'])
+            if revalidation_error is not None:
+                raise revalidation_error
+        else:
+            raise StellarVerificationError('Unsupported staff operation.')
         return JsonResponse({'ok':True,'token':str(record.pk),'source':source,'xdr':record.prepared_xdr,'networkPassphrase':chain.NETWORK,
             'message':'Sign wallet ownership proof. No transaction will be broadcast.' if action=='prove' else f'Review permission change for {target.email}: role {role} (0 revoked, 1 reviewer, 2 administrator).'})
     except (StellarVerificationError,ValueError) as exc:
@@ -136,8 +171,12 @@ def submit(request):
             if request.session.get('staff_wallet_connected_address')!=record.source: raise StellarVerificationError('Reconnect your registered staff wallet.')
             envelope=chain.validate_signature(record,data.get('signedXdr'))
             with transaction.atomic():
+                actor=User.objects.select_for_update().get(pk=request.user.pk)
+                target=User.objects.select_for_update().get(pk=record.target_id)
                 locked=EscrowStaffOperation.objects.select_for_update().get(pk=record.pk)
+                if locked.state=='confirmed': return done()
                 if locked.state=='prepared':
+                    permission(actor,target,locked.role)
                     locked.signed_xdr=envelope.to_xdr();locked.state='pending';locked.save(update_fields=['signed_xdr','state'])
             record.refresh_from_db()
         result=rpc.send_transaction(chain.validate_signature(record,record.signed_xdr))

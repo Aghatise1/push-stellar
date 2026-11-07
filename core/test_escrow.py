@@ -432,3 +432,147 @@ class WalletSetupRecoveryTests(TestCase):
         self.assertEqual(result.status_code,302)
         self.item.refresh_from_db();self.assertEqual(self.item.status,'awaiting_funding')
         self.assertEqual(EscrowTransaction.objects.count(),0)
+
+
+    @patch('core.escrow_views.chain.build')
+    @patch('core.escrow_views.chain.token_address',return_value='token')
+    @patch('core.escrow_views.chain.registry_owner')
+    def test_configure_and_prepare_do_not_hold_db_lock_during_rpc(self,registry,token,build):
+        from django.db import connection
+        from .models import EscrowStaffWallet
+        StaffAccess.objects.create(user=self.reviewer,role='owner',status='approved')
+        EscrowStaffWallet.objects.create(user=self.reviewer,address=self.reviewer.stellar_address)
+        baseline_depth=len(connection.atomic_blocks)
+        atomic_states=[]
+        def fake_registry(_contract):
+            atomic_states.append(('registry_owner',len(connection.atomic_blocks)>baseline_depth))
+            return self.reviewer.stellar_address
+        signer=Keypair.random()
+        self.owner.stellar_address=signer.public_key;self.owner.save(update_fields=['stellar_address'])
+        tx=TransactionBuilder(Account(signer.public_key,1),Network.TESTNET_NETWORK_PASSPHRASE,100).append_manage_data_op('test','value').set_timeout(300).build()
+        def fake_build(*_args,**_kwargs):
+            atomic_states.append(('build',len(connection.atomic_blocks)>baseline_depth))
+            return tx
+        registry.side_effect=fake_registry
+        build.side_effect=fake_build
+        self.connect(self.worker)
+        self.connect(self.owner)
+        self.assertEqual(self.configure().status_code,302)
+        self.connect(self.worker)
+        self.client.post(reverse('assignment_action',args=[self.item.pk]),{'action':'accept','accept_terms':'on','accept_xlm':'on'})
+        self.connect(self.owner)
+        res=self.client.post(reverse('escrow_prepare',args=[self.item.pk]),{'action':'fund'},content_type='application/json')
+        self.assertEqual(res.status_code,200)
+        self.assertEqual(atomic_states,[('registry_owner',False),('build',False)])
+
+    @patch('core.escrow_views.chain.build')
+    @patch('core.escrow_views.chain.registry_role',return_value=1)
+    def test_permission_revocation_during_external_prepare_aborts_cleanly(self,role,build):
+        from .models import EscrowStaffWallet
+        signer=Keypair.random()
+        access=StaffAccess.objects.create(user=self.reviewer,role='trust_support',status='approved')
+        EscrowStaffWallet.objects.create(user=self.reviewer,address=signer.public_key)
+        agreement=EscrowAgreement.objects.create(
+            staff_governed=True,assignment=self.item,reviewer=self.reviewer,contract='Ctest',
+            agreement_id='e'*64,client_address=self.owner.stellar_address,worker_address=self.worker.stellar_address,
+            reviewer_address=signer.public_key,asset='USDC',token_address='token',amount=50,
+            deadline=9999999999,review_seconds=86400,revision_limit=1,chain_status='Disputed',accepted_at=timezone.now(),
+        )
+        self.item.status='disputed';self.item.save(update_fields=['status'])
+        tx=TransactionBuilder(Account(signer.public_key,1),Network.TESTNET_NETWORK_PASSPHRASE,100).append_manage_data_op('test','value').set_timeout(300).build()
+        def revoke_during_rpc(*_args,**_kwargs):
+            access.status='revoked';access.save(update_fields=['status'])
+            return tx
+        build.side_effect=revoke_during_rpc
+        self.client.force_login(self.reviewer)
+        session=self.client.session;session['staff_wallet_connected_address']=signer.public_key;session.save()
+        res=self.client.post(
+            reverse('escrow_prepare',args=[self.item.pk]),
+            {'action':'resolve','worker_amount':25,'note':'Split fairly'},
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code,400)
+        self.assertEqual(EscrowTransaction.objects.filter(escrow=agreement).count(),0)
+
+    @patch('core.escrow_records.chain.read_agreement')
+    @patch('core.escrow.server')
+    @patch('core.escrow.build')
+    def test_timeout_after_broadcast_and_revoked_reviewer_reconcile_without_duplicate_settlement(self,build,server,read):
+        from stellar_sdk.soroban_rpc import GetTransactionStatus as Get
+        from .models import EscrowStaffWallet
+        signer=Keypair.random()
+        access=StaffAccess.objects.create(user=self.reviewer,role='trust_support',status='approved')
+        EscrowStaffWallet.objects.create(user=self.reviewer,address=signer.public_key)
+        agreement=EscrowAgreement.objects.create(
+            staff_governed=True,assignment=self.item,reviewer=self.reviewer,contract='Ctest',
+            agreement_id='d'*64,client_address=self.owner.stellar_address,worker_address=self.worker.stellar_address,
+            reviewer_address=signer.public_key,asset='USDC',token_address='token',amount=50,
+            deadline=9999999999,review_seconds=86400,revision_limit=1,chain_status='Disputed',accepted_at=timezone.now(),
+        )
+        self.item.status='disputed';self.item.save(update_fields=['status'])
+        Dispute.objects.create(assignment=self.item,opened_by=self.owner,reason='Need review')
+        tx=TransactionBuilder(Account(signer.public_key,1),Network.TESTNET_NETWORK_PASSPHRASE,100).append_manage_data_op('test','value').set_timeout(300).build()
+        build.return_value=tx
+        with patch('core.escrow_views.chain.registry_role',return_value=1):
+            self.client.force_login(self.reviewer)
+            session=self.client.session;session['staff_wallet_connected_address']=signer.public_key;session.save()
+            prep=self.client.post(
+                reverse('escrow_prepare',args=[self.item.pk]),
+                {'action':'resolve','worker_amount':50,'note':'Release to worker'},
+                content_type='application/json',
+            )
+        self.assertEqual(prep.status_code,200)
+        token=prep.json()['token']
+        tx.sign(signer)
+        server.return_value.get_transaction.return_value=Obj(status=Get.NOT_FOUND)
+        server.return_value.send_transaction.side_effect=TimeoutError('RPC timeout after broadcast')
+        submit_url=reverse('escrow_submit',args=[self.item.pk])
+        uncertain=self.client.post(submit_url,{'token':token,'signedXdr':tx.to_xdr()},content_type='application/json')
+        self.assertEqual(uncertain.status_code,503)
+        record=EscrowTransaction.objects.get(pk=token)
+        self.assertEqual(record.state,'pending')
+        # A new preparation must remain blocked while the uncertain broadcast is pending.
+        with patch('core.escrow_views.chain.registry_role',return_value=1):
+            retry_prep=self.client.post(
+                reverse('escrow_prepare',args=[self.item.pk]),
+                {'action':'resolve','worker_amount':50,'note':'Duplicate attempt'},
+                content_type='application/json',
+            )
+        self.assertEqual(retry_prep.status_code,400)
+        # Even if reviewer access is revoked after broadcast, a confirmed ledger settlement reconciles idempotently.
+        access.status='revoked';access.save(update_fields=['status'])
+        server.return_value.get_transaction.return_value=Obj(status=Get.SUCCESS)
+        read.return_value={'status':['Resolved'],'deadline':9999999999,'review_until':0}
+        first_reconcile=self.client.post(submit_url,{'token':token},content_type='application/json')
+        second_reconcile=self.client.post(submit_url,{'token':token},content_type='application/json')
+        self.assertEqual(first_reconcile.status_code,200)
+        self.assertEqual(second_reconcile.status_code,200)
+        self.assertEqual(Payment.objects.filter(assignment=self.item).count(),1)
+        self.assertEqual(self.item.events.filter(kind='Escrow resolve').count(),1)
+
+    @patch('core.escrow_views.chain.build')
+    def test_concurrent_in_flight_preparation_is_blocked_during_rpc(self,build):
+        signer=Keypair.random()
+        self.owner.stellar_address=signer.public_key;self.owner.save(update_fields=['stellar_address'])
+        agreement=EscrowAgreement.objects.create(
+            staff_governed=True,assignment=self.item,reviewer=self.reviewer,contract='Ctest',
+            agreement_id='c'*64,client_address=signer.public_key,worker_address=self.worker.stellar_address,
+            reviewer_address=self.reviewer.stellar_address,asset='XLM',token_address='token',amount=10,
+            deadline=9999999999,review_seconds=86400,revision_limit=1,chain_status='Unfunded',accepted_at=timezone.now(),
+        )
+        self.item.status='awaiting_funding';self.item.save(update_fields=['status'])
+        tx=TransactionBuilder(Account(signer.public_key,1),Network.TESTNET_NETWORK_PASSPHRASE,100).append_manage_data_op('test','value').set_timeout(300).build()
+        second_statuses=[]
+        self.connect(self.owner)
+        url=reverse('escrow_prepare',args=[self.item.pk])
+        def build_and_race(*_args,**_kwargs):
+            second_res=self.client.post(url,{'action':'fund'},content_type='application/json')
+            second_statuses.append(second_res.status_code)
+            return tx
+        build.side_effect=build_and_race
+        first_res=self.client.post(url,{'action':'fund'},content_type='application/json')
+        self.assertEqual(first_res.status_code,200)
+        self.assertEqual(second_statuses,[400])
+        self.assertEqual(build.call_count,1)
+        self.assertEqual(EscrowTransaction.objects.filter(escrow=agreement).count(),1)
+        self.assertEqual(EscrowTransaction.objects.get(escrow=agreement).state,'prepared')

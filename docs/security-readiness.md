@@ -29,3 +29,7 @@ Track failed preparations, rejected submissions, age of pending transactions, re
 6. Record the cause, correction and regression check before reopening the affected path.
 
 Before real money use: independent application and contract review, legal review of escrow and dispute authority, tested key governance and recovery, monitored infrastructure, reviewed terms and asset configuration. A funding award does not replace these controls.
+
+## Proxy client identity and rate limits
+
+`PUSH_TRUSTED_PROXIES` accepts a comma-separated list of trusted proxy IP addresses or CIDR ranges (defaulting to empty). `X-Forwarded-For` is evaluated right-to-left only when `REMOTE_ADDR` belongs to `PUSH_TRUSTED_PROXIES`; direct or untrusted peers always use `REMOTE_ADDR`, and missing or malformed headers fall back safely. Authenticated write, support, and verification-resend buckets are keyed by account identity with additional IP or recipient abuse limits, while anonymous login, recovery, waitlist, invitation, and registration buckets remain IP/recipient bounded. All `RateBucket` keys store SHA-256 digests rather than raw IPs or emails.
