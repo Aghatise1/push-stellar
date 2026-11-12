@@ -1,13 +1,13 @@
 # Push grant readiness
 
-Updated 11 November 2026 from Tellus feedback, the Builders Circle discussion described by the founder, the current repository and public primary sources. This is an internal preparation document. It is not an award application, legal opinion or proof of completion.
+Updated 12 November 2026 from Tellus feedback, the Builders Circle discussion described by the founder, the current repository and public primary sources. This is an internal preparation document. It is not an award application, legal opinion or proof of completion.
 
 ## What reviewers asked us to correct
 
 | Requirement | Current position | Required action | Evidence for the next application |
 | --- | --- | --- | --- |
 | Correct chapter | Stellar Chile declined the November application mainly because the applicant listed Stellar Nigeria | Apply through Stellar Nigeria or obtain written cross-chapter eligibility before submission | Link or message showing the eligible round and chapter |
-| Open-source licence | MIT licence added locally with Aghatise Ehioghae as the copyright holder | Commit and push `LICENSE` and the README licence notice to the public repository | GitHub licence detection, exact commit and repository link |
+| Open-source licence | MIT licence and README notice are merged into the public repository | Confirm GitHub displays the licence and retain the merged commit in the evidence index | GitHub licence page, exact commit and repository link |
 | Budget with hours and rate | The previous budget used broad allocations | Price each engineering deliverable as hours multiplied by an honest hourly rate. Add infrastructure only when it has a real cost and purpose | Table whose hours, rates and costs sum exactly to the request |
 | Stellar-specific scope | Previous reliability work could apply to many web applications | Centre the application on contract state, wallet signatures, transaction reconciliation, asset handling, ledger evidence and mainnet gates | Contract tests, transaction links, deployment record and demo |
 | Why testnet and mainnet path | The pilot is testnet only and no dated transition was supplied | Explain that testnet protects users while contract roles, failure recovery and end-to-end signing are validated. Give evidence gates for mainnet rather than a decorative date | Completed gate checklist and links to each result |
@@ -110,12 +110,12 @@ Each roadmap item needs an owner, hours, completion condition and proof link. A 
 
 ## Immediate repository work
 
-1. Commit and publish the MIT licence and README licence notice, then verify GitHub detects the licence correctly.
-2. Finish independent review of branch `codex/security-reliability-repairs`; correct the preparation expiry race and execute PostgreSQL concurrency tests before integration.
-3. Replace the retired Instaward application draft with a new chapter-specific statement of work based on unfinished work at the next application date.
-4. Add a concise architecture diagram and link each financial state transition to its contract and application implementation.
-5. Create an application evidence index with commit, test, deployment, contract and transaction links.
-6. Run a final application quality check for duplicate deliverables, broken links, unsupported claims, correct chapter and exact budget arithmetic.
+1. **Complete:** MIT licence and README notice merged through pull request 13.
+2. **Complete for the current baseline:** reliability repairs, preparation expiry fix and review merged through pull request 13. The configured PostgreSQL GitHub Actions job passed for the deployed merge; four tests skip only in the local SQLite run.
+3. **Complete as a draft:** new Nigeria-specific statement of work added at `docs/instaward-nigeria-sow-draft.md`; founder confirmations remain required.
+4. **Complete:** architecture and financial state diagrams added at `docs/architecture-and-financial-flows.md`.
+5. **Complete:** application evidence index added at `docs/application-evidence-index.md`.
+6. **Pending:** obtain the active Stellar Nigeria application link, insert the recent founder escrow transaction hashes, verify all public sharing links, review the actual form, submit and preserve confirmation evidence.
 
 ## Licence decision note
 
