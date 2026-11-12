@@ -83,7 +83,10 @@ def prepare(request):
                 wallet=get_object_or_404(EscrowStaffWallet,user=target).address
                 if request.session.get('staff_wallet_connected_address')!=source:
                     raise StellarVerificationError('Connect your verified staff wallet from Escrow staff access.')
-                EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state='preparing',created_at__lt=timezone.now()-timedelta(seconds=30)).delete()
+                # Do not let a second request evict an in-flight Stellar build.
+                # The reservation follows the same five-minute signing window
+                # as the prepared operation.
+                EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state='preparing',created_at__lt=timezone.now()-timedelta(minutes=5)).delete()
                 if EscrowStaffOperation.objects.filter(actor=actor,action='set_staff',state__in=['preparing','prepared','pending']).exists():
                     raise StellarVerificationError('Check your pending permission change before preparing another.')
                 reservation=EscrowStaffOperation.objects.create(
@@ -100,7 +103,9 @@ def prepare(request):
             with transaction.atomic():
                 actor=User.objects.select_for_update().get(pk=request.user.pk)
                 target=User.objects.select_for_update().get(pk=target.pk)
-                record=EscrowStaffOperation.objects.select_for_update().get(pk=reservation.pk)
+                record=EscrowStaffOperation.objects.select_for_update().filter(pk=reservation.pk).first()
+                if record is None:
+                    raise StellarVerificationError('Permission preparation expired. Refresh and try again.')
                 try:
                     permission(actor,target,role)
                     current_source=get_object_or_404(EscrowStaffWallet,user=actor).address

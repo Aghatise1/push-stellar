@@ -576,3 +576,15 @@ class WalletSetupRecoveryTests(TestCase):
         self.assertEqual(build.call_count,1)
         self.assertEqual(EscrowTransaction.objects.filter(escrow=agreement).count(),1)
         self.assertEqual(EscrowTransaction.objects.get(escrow=agreement).state,'prepared')
+
+        # If an external cleanup removes a genuinely expired reservation while
+        # the network call is in flight, return a recoverable client error
+        # instead of leaking a missing-record failure as a generic 503.
+        EscrowTransaction.objects.filter(escrow=agreement).delete()
+        def expire_reservation(*_args,**_kwargs):
+            EscrowTransaction.objects.filter(escrow=agreement,state='preparing').delete()
+            return tx
+        build.side_effect=expire_reservation
+        expired=self.client.post(url,{'action':'fund'},content_type='application/json')
+        self.assertEqual(expired.status_code,400)
+        self.assertIn('expired',expired.json()['message'].lower())

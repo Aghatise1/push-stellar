@@ -229,7 +229,10 @@ def prepare(request,pk):
             source=(request.user.escrow_staff_wallet.address if agreement.staff_governed else agreement.reviewer_address) if action=='resolve' else agreement.worker_address if request.user.pk==item.worker_id else agreement.client_address
             if request.session.get('staff_wallet_connected_address' if action=='resolve' else 'wallet_connected_address')!=source:
                 raise StellarVerificationError('Connect the exact wallet recorded in this agreement.')
-            agreement.transactions.filter(state='preparing',created_at__lt=timezone.now()-timedelta(seconds=30)).delete()
+            # Keep an in-flight reservation for the same five-minute window used
+            # by the wallet signing request. A second request must not evict a
+            # slow but still valid Stellar preparation.
+            agreement.transactions.filter(state='preparing',created_at__lt=timezone.now()-timedelta(minutes=5)).delete()
             if agreement.transactions.filter(state__in=['preparing','prepared','pending']).exists():
                 raise StellarVerificationError('A transaction is already prepared or pending. Check its status before preparing another.')
             reservation=EscrowTransaction.objects.create(
@@ -247,7 +250,9 @@ def prepare(request,pk):
         with transaction.atomic():
             item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
             agreement=EscrowAgreement.objects.select_for_update().get(pk=agreement.pk)
-            record=EscrowTransaction.objects.select_for_update().get(pk=reservation.pk)
+            record=EscrowTransaction.objects.select_for_update().filter(pk=reservation.pk).first()
+            if record is None:
+                raise StellarVerificationError('Transaction preparation expired. Refresh the workroom and try again.')
             actor=User.objects.get(pk=request.user.pk)
             try:
                 if not actor.is_active or not actor.email_verified:

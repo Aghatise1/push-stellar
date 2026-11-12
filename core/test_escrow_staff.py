@@ -365,3 +365,19 @@ class StaffConnectionTests(StaffWalletTests):
         )
         self.assertEqual(aborted.status_code,400)
         self.assertEqual(EscrowStaffOperation.objects.count(),0)
+
+        # A reservation removed by genuine expiry or external cleanup must
+        # produce an explicit retry response, not a generic server error.
+        self.support.staff_access.status='approved'
+        self.support.staff_access.save(update_fields=['status'])
+        def expire_reservation(*_args,**_kwargs):
+            EscrowStaffOperation.objects.filter(state='preparing').delete()
+            return tx
+        build_staff.side_effect=expire_reservation
+        expired=self.client.post(
+            reverse('escrow_staff_prepare'),
+            {'action':'set_staff','target':self.support.pk,'role':1},
+            content_type='application/json',
+        )
+        self.assertEqual(expired.status_code,400)
+        self.assertIn('expired',expired.json()['message'].lower())
