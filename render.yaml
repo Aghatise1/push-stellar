@@ -13,6 +13,8 @@ services:
         value: production
       - key: PUSH_ALLOWED_HOSTS
         value: pushearn.xyz,www.pushearn.xyz,push-preview.onrender.com
+      - key: PUSH_TRUST_RENDER_CLIENT_IP
+        value: true
       - key: PUSH_ORIGIN
         value: https://pushearn.xyz
       - key: PUSH_SECRET_KEY

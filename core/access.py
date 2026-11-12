@@ -18,7 +18,11 @@ from .models import RateBucket, StaffAccess, User
 
 def client_ip(request):
     """Return the validated client IP under the configured trusted proxy policy."""
-    return validated_client_ip(request, getattr(settings, 'PUSH_TRUSTED_PROXIES', ()))
+    return validated_client_ip(
+        request,
+        getattr(settings, 'PUSH_TRUSTED_PROXIES', ()),
+        getattr(settings, 'PUSH_TRUST_RENDER_CLIENT_IP', False),
+    )
 
 
 def request_identity(request, scope, *, subject=None, include_ip=False):
