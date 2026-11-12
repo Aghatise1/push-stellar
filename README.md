@@ -110,3 +110,7 @@ Never upload `.local-key`, `.env`, `db.sqlite3`, database journals, `private-mai
 `PUSH_ENV=production` disables debug output, requires a long signing key, an email transport and an HTTPS site origin, and enables secure cookies and HTTPS protections. The deployed testnet MVP uses Render, Supabase PostgreSQL and the Brevo HTTPS mail API described in `EMAIL-SETUP.md`. Backups, external monitoring and real payment integration remain release gates. See `LAUNCH-CHECKLIST.md`.
 
 No system can honestly promise zero bugs or immunity to attack. This is a tested foundation with explicit release gates, not a completed independent security audit.
+
+## Licence
+
+Push is open source under the [MIT License](LICENSE). Copyright (c) 2026 Aghatise Ehioghae.
