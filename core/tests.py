@@ -1653,6 +1653,35 @@ class WorkspaceTests(TestCase):
         )
         self.assertEqual(blocked.status_code,429)
 
+    @override_settings(PUSH_TRUSTED_PROXIES=(),PUSH_TRUST_RENDER_CLIENT_IP=True)
+    def test_render_edge_client_header_separates_anonymous_rate_limits(self):
+        payload={
+            'name':'Tester','role':'Designer','skills':'UX','intended_use':'Test jobs',
+            'reason':'Join pilot','accepted_testing_terms':'on',
+        }
+        # All requests share the Render socket address, but the edge-protected
+        # client header keeps independent visitors out of one shared bucket.
+        for i in range(6):
+            response=self.client.post(
+                reverse('waitlist'),
+                {**payload,'email':f'render-{i}@example.test'},
+                REMOTE_ADDR='10.0.0.1',
+                HTTP_CF_CONNECTING_IP=f'198.51.100.{i + 1}',
+                HTTP_X_FORWARDED_FOR='203.0.113.250',
+            )
+            self.assertEqual(response.status_code,200)
+
+        # A malformed protected header falls back to the socket address rather
+        # than trusting the caller-controlled forwarded chain.
+        from .access import client_ip
+        from django.test import RequestFactory
+        request=RequestFactory().get(
+            '/',REMOTE_ADDR='10.0.0.9',
+            HTTP_CF_CONNECTING_IP='not-an-ip',
+            HTTP_X_FORWARDED_FOR='8.8.8.8',
+        )
+        self.assertEqual(client_ip(request),'10.0.0.9')
+
     @override_settings(PUSH_TRUSTED_PROXIES=('10.0.0.0/8','127.0.0.1'))
     def test_trusted_proxy_policy_handles_forwarded_forged_missing_and_malformed_headers(self):
         payload={

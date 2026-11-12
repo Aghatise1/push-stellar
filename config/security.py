@@ -19,9 +19,19 @@ def _ip_in_networks(address, networks):
     return any(address.version == network.version and address in network for network in networks)
 
 
-def validated_client_ip(request, trusted_proxies=None):
+def validated_client_ip(request, trusted_proxies=None, trust_render_client_ip=False):
     """Extract the client IP, trusting X-Forwarded-For only from configured proxies."""
     meta = getattr(request, 'META', None) or {}
+    if trust_render_client_ip:
+        # Render public web traffic reaches the container through its managed
+        # edge, which overwrites CF-Connecting-IP. This mode is explicit so a
+        # self-hosted deployment never trusts a caller-supplied header by
+        # accident.
+        raw_render_client = str(meta.get('HTTP_CF_CONNECTING_IP', '') or '').strip()
+        try:
+            return str(ipaddress.ip_address(raw_render_client))
+        except ValueError:
+            pass
     raw_remote = str(meta.get('REMOTE_ADDR', '') or '').strip()
     try:
         remote_ip = ipaddress.ip_address(raw_remote)

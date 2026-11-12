@@ -45,6 +45,10 @@ PUSH_TRUSTED_PROXIES = tuple(
     for entry in os.environ.get('PUSH_TRUSTED_PROXIES', '').split(',')
     if entry.strip()
 )
+PUSH_TRUST_RENDER_CLIENT_IP = (
+    PRODUCTION
+    and os.environ.get('PUSH_TRUST_RENDER_CLIENT_IP', 'false').lower() == 'true'
+)
 try:
     parse_trusted_proxies(PUSH_TRUSTED_PROXIES)
 except ValueError as exc:
