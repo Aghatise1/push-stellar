@@ -1,3 +1,57 @@
+import ipaddress
+
+
+def parse_trusted_proxies(entries):
+    """Parse configured trusted proxy IPs or CIDRs into network objects."""
+    if not entries:
+        return ()
+    if isinstance(entries, str):
+        raw_items = [item.strip() for item in entries.split(',') if item.strip()]
+    else:
+        raw_items = [str(item).strip() for item in entries if str(item).strip()]
+    networks = []
+    for item in raw_items:
+        networks.append(ipaddress.ip_network(item, strict=False))
+    return tuple(networks)
+
+
+def _ip_in_networks(address, networks):
+    return any(address.version == network.version and address in network for network in networks)
+
+
+def validated_client_ip(request, trusted_proxies=None):
+    """Extract the client IP, trusting X-Forwarded-For only from configured proxies."""
+    meta = getattr(request, 'META', None) or {}
+    raw_remote = str(meta.get('REMOTE_ADDR', '') or '').strip()
+    try:
+        remote_ip = ipaddress.ip_address(raw_remote)
+    except ValueError:
+        return 'unknown'
+    try:
+        networks = parse_trusted_proxies(trusted_proxies)
+    except ValueError:
+        networks = ()
+    if not networks or not _ip_in_networks(remote_ip, networks):
+        return str(remote_ip)
+    forwarded_for = str(meta.get('HTTP_X_FORWARDED_FOR', '') or '').strip()
+    if not forwarded_for:
+        return str(remote_ip)
+    fallback = str(remote_ip)
+    for raw_hop in reversed(forwarded_for.split(',')):
+        hop = raw_hop.strip()
+        if not hop:
+            return fallback
+        try:
+            hop_ip = ipaddress.ip_address(hop)
+        except ValueError:
+            return fallback
+        if _ip_in_networks(hop_ip, networks):
+            fallback = str(hop_ip)
+            continue
+        return str(hop_ip)
+    return fallback
+
+
 def trusted_csrf_origins(origin, allowed_hosts, render_hostname):
     """Trust the canonical HTTPS origin and this service's allowed Render alias.
 

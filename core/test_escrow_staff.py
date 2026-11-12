@@ -93,6 +93,53 @@ class StaffWalletTests(TestCase):
         self.owner.staff_access.refresh_from_db()
         self.assertEqual(self.owner.staff_access.role,'owner')
 
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55)
+    @patch('core.views.escrow_chain.registry_role',return_value=1)
+    def test_staff_access_cannot_be_blocked_while_contract_role_remains(self,registry_role):
+        wallet=EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.client.force_login(self.owner)
+        for decision in ('suspended','revoked'):
+            with self.subTest(decision=decision):
+                response=self.client.post(
+                    reverse('staff_access_update',args=[self.support.staff_access.pk]),
+                    {'decision':decision},
+                )
+                self.assertEqual(response.status_code,409)
+                self.support.staff_access.refresh_from_db()
+                self.assertEqual(self.support.staff_access.status,'approved')
+        registry_role.assert_called_with('C'+'A'*55,wallet.address)
+
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55)
+    @patch('core.views.escrow_chain.registry_role',return_value=0)
+    def test_confirmed_contract_revocation_allows_staff_access_revocation(self,registry_role):
+        EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.support.is_staff=True
+        self.support.save(update_fields=['is_staff'])
+        self.client.force_login(self.owner)
+        response=self.client.post(
+            reverse('staff_access_update',args=[self.support.staff_access.pk]),
+            {'decision':'revoked'},
+        )
+        self.assertEqual(response.status_code,302)
+        self.support.staff_access.refresh_from_db()
+        self.support.refresh_from_db()
+        self.assertEqual(self.support.staff_access.status,'revoked')
+        self.assertFalse(self.support.is_staff)
+
+    @override_settings(PUSH_TESTNET_ESCROW_STAFF_CONTRACT='')
+    @patch('core.views.escrow_chain.registry_role')
+    def test_registered_wallet_blocks_local_revocation_when_contract_is_unconfigured(self,registry_role):
+        EscrowStaffWallet.objects.create(user=self.support,address=self.signer.public_key)
+        self.client.force_login(self.owner)
+        response=self.client.post(
+            reverse('staff_access_update',args=[self.support.staff_access.pk]),
+            {'decision':'revoked'},
+        )
+        self.assertEqual(response.status_code,503)
+        self.support.staff_access.refresh_from_db()
+        self.assertEqual(self.support.staff_access.status,'approved')
+        registry_role.assert_not_called()
+
 
 class TestnetOnlyTests(TestCase):
     def setUp(self):
@@ -168,6 +215,44 @@ class EscrowConcurrencyTests(TransactionTestCase):
         self.assertEqual(sorted(results),[200,400])
         self.assertEqual(EscrowTransaction.objects.count(),1);self.assertEqual(build.call_count,1)
 
+    @skipUnlessDBFeature('has_select_for_update')
+    @patch('core.escrow_records.chain.read_agreement')
+    @patch('core.escrow.server')
+    def test_concurrent_submissions_reconcile_only_one_settlement(self,server,read):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from django.db import close_old_connections, connections
+        from django.test import Client
+        from datetime import timedelta
+        from stellar_sdk import Account, TransactionBuilder
+        from stellar_sdk.soroban_rpc import GetTransactionStatus as Get
+        from .models import Job,Assignment,EscrowAgreement,EscrowTransaction
+        signer=Keypair.random()
+        attrs={'email_verified':True,'terms_version':TERMS_VERSION,'terms_accepted_at':timezone.now()}
+        client=User.objects.create_user(username='submit-client',email='client@submit.test',stellar_address=signer.public_key,**attrs)
+        worker=User.objects.create_user(username='submit-worker',email='worker@submit.test',**attrs)
+        reviewer=User.objects.create_user(username='submit-reviewer',email='reviewer@submit.test',**attrs)
+        job=Job.objects.create(owner=client,title='Submit Concurrency',budget=5,deadline=timezone.localdate()+timedelta(days=2))
+        item=Assignment.objects.create(job=job,worker=worker,budget=5,escrow_required=True,status='submitted')
+        agreement=EscrowAgreement.objects.create(assignment=item,reviewer=reviewer,contract='Ctest',agreement_id='b'*64,client_address=signer.public_key,worker_address='worker',reviewer_address='reviewer',asset='USDC',token_address='token',amount=5,deadline=9999999999,review_seconds=86400,revision_limit=1,chain_status='Submitted',accepted_at=timezone.now())
+        tx=TransactionBuilder(Account(signer.public_key,1),NETWORK,100).append_manage_data_op('approve','1').set_timeout(300).build()
+        tx.sign(signer)
+        record=EscrowTransaction.objects.create(escrow=agreement,actor=client,action='approve',source=signer.public_key,prepared_xdr=tx.to_xdr(),signed_xdr=tx.to_xdr(),tx_hash=tx.hash_hex(),state='pending')
+        server.return_value.get_transaction.return_value=Obj(status=Get.SUCCESS)
+        read.return_value={'status':['Released'],'deadline':9999999999,'review_until':0}
+        ready=Barrier(2)
+        def submit_once():
+            close_old_connections()
+            try:
+                c=Client();c.force_login(User.objects.get(pk=client.pk));session=c.session;session['wallet_connected_address']=signer.public_key;session.save()
+                ready.wait(timeout=10)
+                return c.post(reverse('escrow_submit',args=[item.pk]),{'token':str(record.pk)},content_type='application/json').status_code
+            finally: connections.close_all()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results=list(executor.map(lambda _:submit_once(),range(2)))
+        self.assertEqual(results,[200,200])
+        self.assertEqual(Payment.objects.filter(assignment=item).count(),1)
+
 class StaffConnectionTests(StaffWalletTests):
     def connect_staff(self,body):
         response=self.client.post(reverse('staff_wallet_connect'),body,content_type='application/json')
@@ -238,3 +323,61 @@ class StaffConnectionTests(StaffWalletTests):
         self.assertTrue(self.client.get('/healthz/').json()['escrow_enabled'])
         with override_settings(PUSH_TESTNET_ESCROW_ENABLED=False):
             self.assertFalse(self.client.get('/healthz/').json()['escrow_enabled'])
+
+
+    @override_settings(PUSH_TESTNET_ESCROW_ENABLED=True,PUSH_TESTNET_ESCROW_STAFF_CONTRACT='C'+'A'*55)
+    @patch('core.escrow_staff.chain.build_staff')
+    def test_staff_prepare_does_not_hold_db_lock_and_revalidates_after_rpc(self,build_staff):
+        from django.db import connection
+        from stellar_sdk import Account, TransactionBuilder
+        owner_wallet=Keypair.random()
+        support_wallet=Keypair.random()
+        EscrowStaffWallet.objects.create(user=self.owner,address=owner_wallet.public_key)
+        EscrowStaffWallet.objects.create(user=self.support,address=support_wallet.public_key)
+        tx=TransactionBuilder(Account(owner_wallet.public_key,1),NETWORK,100).append_manage_data_op('staff','1').set_timeout(300).build()
+        baseline_depth=len(connection.atomic_blocks)
+        atomic_states=[]
+        def check_unlocked(*_args,**_kwargs):
+            atomic_states.append(len(connection.atomic_blocks)>baseline_depth)
+            return tx
+        build_staff.side_effect=check_unlocked
+        self.client.force_login(self.owner)
+        session=self.client.session;session['staff_wallet_connected_address']=owner_wallet.public_key;session.save()
+        ok=self.client.post(
+            reverse('escrow_staff_prepare'),
+            {'action':'set_staff','target':self.support.pk,'role':1},
+            content_type='application/json',
+        )
+        self.assertEqual(ok.status_code,200)
+        self.assertEqual(atomic_states,[False])
+        EscrowStaffOperation.objects.all().delete()
+
+        # If target staff access is revoked while build_staff is in flight, preparation aborts cleanly.
+        def revoke_target_during_rpc(*_args,**_kwargs):
+            self.support.staff_access.status='revoked'
+            self.support.staff_access.save(update_fields=['status'])
+            return tx
+        build_staff.side_effect=revoke_target_during_rpc
+        aborted=self.client.post(
+            reverse('escrow_staff_prepare'),
+            {'action':'set_staff','target':self.support.pk,'role':1},
+            content_type='application/json',
+        )
+        self.assertEqual(aborted.status_code,400)
+        self.assertEqual(EscrowStaffOperation.objects.count(),0)
+
+        # A reservation removed by genuine expiry or external cleanup must
+        # produce an explicit retry response, not a generic server error.
+        self.support.staff_access.status='approved'
+        self.support.staff_access.save(update_fields=['status'])
+        def expire_reservation(*_args,**_kwargs):
+            EscrowStaffOperation.objects.filter(state='preparing').delete()
+            return tx
+        build_staff.side_effect=expire_reservation
+        expired=self.client.post(
+            reverse('escrow_staff_prepare'),
+            {'action':'set_staff','target':self.support.pk,'role':1},
+            content_type='application/json',
+        )
+        self.assertEqual(expired.status_code,400)
+        self.assertIn('expired',expired.json()['message'].lower())

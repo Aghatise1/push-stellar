@@ -28,7 +28,8 @@ from django.views.decorators.cache import never_cache
 from .models import User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Submission, Event, Payment, WalletTransfer, RateBucket, Message, Dispute, AccountSanction, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketReply, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .forms import Registration, LoginForm, StaffLoginForm, StaffAccessForm, RecoveryForm, VerificationCodeForm, ProfileForm, JobForm, ApplicationForm, SubmissionForm, ActionForm, MessageForm, WalletRequestForm, DisputeResolutionForm, SanctionForm, WaitlistForm, InvitationCodeForm, StaffInvitationForm, SupportTicketForm, TicketReplyForm, StaffTicketUpdateForm, DocumentationArticleForm, CommunityPostForm, CommunityReplyForm, CommunityReportForm
 from .reporting import report_data
-from .access import has_staff_access, staff_only, staff_role
+from .access import has_staff_access, rate_limited, staff_only, staff_role
+from . import escrow as escrow_chain
 from .mailer import send_tracked_email
 from .stellar import StellarVerificationError, account_balances, assignment_memo, payment_uri, prepare_payment, submit_signed_payment, verify_payment, valid_account_id
 from .invitations import consume_invitation, current_invitation, hash_invitation_code, remember_invitation
@@ -167,16 +168,8 @@ def audit(actor,action,target,detail=None):
     )
 
 
-def limited(request,scope,limit=12):
-    # REMOTE_ADDR only: do not trust client-supplied forwarding headers.
-    identity = f'{scope}:{request.META.get("REMOTE_ADDR", "unknown")}'
-    key = hashlib.sha256(identity.encode()).hexdigest()
-    now = timezone.now()
-    with transaction.atomic():
-        bucket,_ = RateBucket.objects.get_or_create(key=key,defaults={'expires':now+timedelta(minutes=15)})
-        if bucket.expires <= now:
-            RateBucket.objects.filter(pk=bucket.pk,expires__lte=now).update(count=0,expires=now+timedelta(minutes=15))
-        return RateBucket.objects.filter(pk=bucket.pk,count__lt=limit).update(count=F('count')+1) == 0
+def limited(request,scope,limit=12,**kwargs):
+    return rate_limited(request,scope,limit=limit,**kwargs)
 
 
 def verified(view):
@@ -457,7 +450,7 @@ def register(request):
     if invitation is None:
         messages.info(request,'Account creation for the current testnet pilot requires an invitation. Enter your invitation code first.')
         return redirect('invite_redeem')
-    if request.method == 'POST' and limited(request,'register',6):
+    if request.method == 'POST' and limited(request,'register',6,recipient=invitation.email):
         form=Registration(request.POST)
         form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
         return render(request,'registration/register.html',{'form':form,'invitation':invitation},status=429)
@@ -467,6 +460,19 @@ def register(request):
         if invitation.email.casefold() != email.casefold():
             form.add_error('email',f'Use the approved email address: {invitation.email}')
             return render(request,'registration/register.html',{'form':form,'invitation':invitation})
+        already_issued=(
+            PendingRegistration.objects.filter(email__iexact=email).exists()
+            or EmailDelivery.objects.filter(
+                recipient__iexact=email,category='verification',
+                created_at__gt=timezone.now()-timedelta(minutes=15),
+            ).exists()
+        )
+        if already_issued and limited(request,'registration-resend',3,subject=f'recipient:{email.casefold()}',recipient=email,ip_limit=15):
+            existing=PendingRegistration.objects.filter(email__iexact=email).first()
+            if existing:
+                request.session['pending_registration_id']=str(existing.pk)
+            messages.error(request,'Too many code requests. Please try again in 15 minutes.')
+            return redirect('verify_registration')
         pending,_=PendingRegistration.objects.update_or_create(
             email=email,
             defaults={
@@ -501,6 +507,9 @@ def verify_registration(request):
         return redirect('register')
     form=VerificationCodeForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
+        if limited(request,'registration-verify-attempt',25,subject=f'recipient:{pending.email.casefold()}',ip_limit=75):
+            form.add_error('code','Too many verification attempts. Please wait 15 minutes or request a new code.')
+            return render(request,'registration/verify_registration.html',{'form':form,'pending':pending},status=429)
         with transaction.atomic():
             pending=PendingRegistration.objects.select_for_update().filter(pk=pending.pk).first()
             if pending is None:
@@ -548,7 +557,7 @@ def verify_registration(request):
 def resend_registration(request):
     pending=pending_registration(request)
     if pending is None: return redirect('register')
-    if limited(request,'registration-resend',3):
+    if limited(request,'registration-resend',3,subject=f'recipient:{pending.email.casefold()}',recipient=pending.email,ip_limit=15):
         messages.error(request,'Too many code requests. Please try again in 15 minutes.')
         return redirect('verify_registration')
     try: send_registration_verification(pending)
@@ -755,7 +764,7 @@ class Recovery(PasswordResetView):
     form_class = RecoveryForm
     success_url = reverse_lazy('password_reset_done')
     def dispatch(self,request,*args,**kwargs):
-        if request.method == 'POST' and limited(request,'recovery',5):
+        if request.method == 'POST' and limited(request,'recovery',5,recipient=request.POST.get('email')):
             form=self.form_class(request.POST)
             form.add_error(None,'Too many attempts. Please try again in 15 minutes.')
             return render(request,self.template_name,{'form':form},status=429)
@@ -766,37 +775,43 @@ class Recovery(PasswordResetView):
 def verify_email(request):
     if request.user.email_verified:
         return redirect('workspace')
-    record = EmailVerificationCode.objects.filter(user=request.user,expires_at__gt=timezone.now()).first()
-    if request.method == 'GET' and record is None:
+    record = EmailVerificationCode.objects.filter(user=request.user).first()
+    recent_delivery = EmailDelivery.objects.filter(
+        recipient__iexact=request.user.email,category='verification',
+        created_at__gt=timezone.now()-timedelta(minutes=15),
+    ).exists()
+    if request.method == 'GET' and record is None and not recent_delivery and not limited(request,'verify-initial',3,recipient=request.user.email,ip_limit=30):
         try:
             send_verification(request.user)
         except Exception:
             messages.error(request,'We could not create a verification email. Use “Send a new code” to try again.')
     form = VerificationCodeForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        record = EmailVerificationCode.objects.filter(user=request.user).first()
-        if not record or record.expires_at <= timezone.now():
-            if record: record.delete()
-            form.add_error('code','That code has expired. Send a new code and try again.')
-        elif record.attempts >= 5:
-            record.delete()
-            form.add_error('code','Too many incorrect attempts. Send a new code.')
-        else:
-            expected = salted_hmac('push.verify.code',f'{request.user.pk}:{form.cleaned_data["code"]}').hexdigest()
-            if not hmac.compare_digest(record.code_hash,expected):
-                record.attempts = F('attempts') + 1
-                record.save(update_fields=['attempts'])
-                form.add_error('code','That code is incorrect. Check the email and try again.')
+        if limited(request,'verify-attempt',25,ip_limit=75):
+            form.add_error('code','Too many verification attempts. Please wait 15 minutes or request a new code.')
+            return render(request,'registration/verify_code.html',{'form':form},status=429)
+        with transaction.atomic():
+            record = EmailVerificationCode.objects.select_for_update().filter(user=request.user).first()
+            if not record or record.expires_at <= timezone.now():
+                form.add_error('code','That code has expired. Send a new code and try again.')
+            elif record.attempts >= 5:
+                form.add_error('code','Too many incorrect attempts. Send a new code.')
             else:
-                User.objects.filter(pk=request.user.pk,email_verified=False).update(email_verified=True)
-                record.delete()
-                request.user.email_verified = True
-                queue_verification_success(
-                    request,'Email verified.',
-                    'Wallet, messages and protected work actions are now available.',
-                    'workspace',
-                )
-                return redirect('verification_success')
+                expected = salted_hmac('push.verify.code',f'{request.user.pk}:{form.cleaned_data["code"]}').hexdigest()
+                if not hmac.compare_digest(record.code_hash,expected):
+                    record.attempts = F('attempts') + 1
+                    record.save(update_fields=['attempts'])
+                    form.add_error('code','That code is incorrect. Check the email and try again.')
+                else:
+                    User.objects.filter(pk=request.user.pk,email_verified=False).update(email_verified=True)
+                    record.delete()
+                    request.user.email_verified = True
+                    queue_verification_success(
+                        request,'Email verified.',
+                        'Wallet, messages and protected work actions are now available.',
+                        'workspace',
+                    )
+                    return redirect('verification_success')
     return render(request,'registration/verify_code.html',{'form':form})
 
 
@@ -822,7 +837,7 @@ def verify_link(request,code):
 @require_POST
 def resend(request):
     if request.user.email_verified: return redirect('workspace')
-    if limited(request,'verify-resend',3):
+    if limited(request,'verify-resend',3,recipient=request.user.email,ip_limit=30):
         return HttpResponse('Please wait before requesting another email.',status=429)
     try: send_verification(request.user)
     except Exception: messages.error(request,'We could not send a verification code. Check the email delivery settings and try again.')
@@ -1341,7 +1356,7 @@ def profile(request):
             user.resume_file=None;user.resume_filename=''
         resume=form.cleaned_data.get('resume_file')
         if resume:
-            user.resume_file=resume.read();user.resume_filename=os.path.basename(resume.name)[:160]
+            user.resume_file=resume.push_safe_pdf;user.resume_filename=os.path.basename(resume.name)[:160]
         user.save()
         messages.success(request,'Profile saved. Your email stays private.')
         return redirect('profile')
@@ -1356,7 +1371,7 @@ def public_profile(request,pk):
 @require_GET
 def profile_image(request,pk):
     person=get_object_or_404(User,pk=pk,is_active=True)
-    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or has_staff_access(request.user))):
         raise Http404
     if not person.profile_image: raise Http404
     content_type=person.profile_image_content_type if person.profile_image_content_type in {'image/jpeg','image/png','image/webp'} else 'application/octet-stream'
@@ -1369,7 +1384,7 @@ def profile_image(request,pk):
 @require_GET
 def resume_download(request,pk):
     person=get_object_or_404(User,pk=pk,is_active=True)
-    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or request.user.is_staff)):
+    if not person.public_profile and not (request.user.is_authenticated and (request.user.pk==person.pk or has_staff_access(request.user))):
         raise Http404
     if not person.resume_file: raise Http404
     filename=person.resume_filename or 'resume.pdf'
@@ -2130,12 +2145,34 @@ def staff_access_update(request,pk):
         return HttpResponseBadRequest('Another owner or administrator must change your own access.')
     if staff_role(request.user) == 'admin' and access.role in {'owner','admin'}:
         return HttpResponseBadRequest('Only an owner can change owner or administrator access.')
+    wallet=getattr(access.user,'escrow_staff_wallet',None)
+    contract=settings.PUSH_TESTNET_ESCROW_STAFF_CONTRACT
+    if decision in {'suspended','revoked'} and wallet:
+        if not contract:
+            return HttpResponse(
+                'The staff escrow contract is not configured, so wallet permission cannot be verified. No staff access change was made.',
+                status=503,
+            )
+        try:
+            contract_role=escrow_chain.registry_role(contract,wallet.address)
+        except Exception:
+            return HttpResponse(
+                'The wallet contract permission could not be verified. No staff access change was made.',
+                status=503,
+            )
+        if contract_role != 0:
+            return HttpResponse(
+                'Revoke this wallet in Escrow staff access and wait for on-chain confirmation before blocking the Push account.',
+                status=409,
+            )
     access.status=decision
     if decision == 'approved':
         access.approved_by=request.user;access.approved_at=timezone.now()
     access.save(update_fields=['status','approved_by','approved_at','updated_at'])
-    if decision in ('suspended','revoked') and hasattr(access.user,'escrow_staff_wallet'):
-        messages.warning(request,'Push access is blocked. Also revoke this wallet in Escrow staff access; the contract permission remains until its revocation is confirmed.')
+    desired_is_staff=decision == 'approved'
+    if access.user.is_staff != desired_is_staff:
+        access.user.is_staff=desired_is_staff
+        access.user.save(update_fields=['is_staff'])
     audit(request.user,'staff.access.updated',access,{'status':decision,'user_id':access.user_id})
     messages.success(request,f'Operations access for {access.user.email} is now {access.get_status_display().lower()}.')
     return redirect('staff_team')

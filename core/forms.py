@@ -1,4 +1,10 @@
+from io import BytesIO
+import re
+
 from django import forms
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import PdfReadError
+from pypdf.generic import ArrayObject, DictionaryObject, IndirectObject, NameObject
 from django.conf import settings
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordResetForm
 from django.core.exceptions import ValidationError
@@ -185,6 +191,45 @@ class VerificationCodeForm(forms.Form):
         }),
     )
 
+PDF_BLOCKED_NAMES={
+    '/aa','/acroform','/embeddedfile','/embeddedfiles','/javascript','/js',
+    '/launch','/openaction','/richmedia','/xfa',
+}
+
+
+def _normalise_pdf_name(value):
+    return re.sub(
+        r'#([0-9a-fA-F]{2})',
+        lambda match: chr(int(match.group(1),16)),
+        str(value),
+    ).lower()
+
+
+def _assert_passive_pdf(root):
+    pending=[root]
+    seen=set()
+    visited=0
+    while pending:
+        current=pending.pop()
+        if isinstance(current,IndirectObject):
+            marker=(current.idnum,current.generation)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            current=current.get_object()
+        visited+=1
+        if visited > 10000:
+            raise PdfReadError('PDF object limit exceeded')
+        if isinstance(current,DictionaryObject):
+            if any(_normalise_pdf_name(key) in PDF_BLOCKED_NAMES for key in current):
+                raise PdfReadError('Active PDF content is not allowed')
+            pending.extend(current.values())
+        elif isinstance(current,ArrayObject):
+            pending.extend(current)
+        elif isinstance(current,NameObject) and _normalise_pdf_name(current) in PDF_BLOCKED_NAMES:
+            raise PdfReadError('Active PDF content is not allowed')
+
+
 class ProfileForm(forms.ModelForm):
     profile_image = forms.FileField(
         required=False,
@@ -234,9 +279,24 @@ class ProfileForm(forms.ModelForm):
         if not value: return value
         if value.size > 5*1024*1024:
             raise forms.ValidationError('Choose a PDF smaller than 5 MB.')
-        header=value.read(5);value.seek(0)
-        if header != b'%PDF-':
-            raise forms.ValidationError('Upload a valid PDF résumé.')
+        value.seek(0)
+        try:
+            reader=PdfReader(value,strict=True)
+            if reader.is_encrypted or not 1 <= len(reader.pages) <= 20:
+                raise PdfReadError('Unsupported PDF structure')
+            _assert_passive_pdf(reader.trailer['/Root'])
+            writer=PdfWriter()
+            for page in reader.pages:
+                if '/Annots' in page:
+                    del page['/Annots']
+                writer.add_page(page)
+            cleaned=BytesIO()
+            writer.write(cleaned)
+            value.push_safe_pdf=cleaned.getvalue()
+        except (PdfReadError,ValueError,TypeError,KeyError,RecursionError):
+            value.seek(0)
+            raise forms.ValidationError('Upload a safe, structurally valid PDF résumé.')
+        value.seek(0)
         return value
 
 class JobForm(forms.ModelForm):

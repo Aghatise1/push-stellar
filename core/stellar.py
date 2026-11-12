@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from stellar_sdk import Asset, Keypair, Network, Server, TransactionBuilder, TransactionEnvelope
+from stellar_sdk.client.requests_client import RequestsClient
 from stellar_sdk.exceptions import BadRequestError, BadSignatureError, BaseRequestError, NotFoundError
 
 
@@ -161,7 +162,7 @@ def prepare_payment(*, source, destination, amount, memo, asset='XLM'):
         available = source_balances['xlm']
     if available < amount_decimal:
         raise StellarVerificationError(f'Your wallet does not have enough testnet {asset} for this payment.')
-    server = Server(settings.STELLAR_TESTNET_HORIZON)
+    server = Server(settings.STELLAR_TESTNET_HORIZON, client=RequestsClient(request_timeout=8))
     try:
         source_account = server.load_account(source)
         base_fee = server.fetch_base_fee()
@@ -216,7 +217,7 @@ def submit_signed_payment(**expected):
     signed_xdr = expected.pop('signed_xdr')
     envelope = validate_signed_payment(signed_xdr=signed_xdr,**expected)
     try:
-        result = Server(settings.STELLAR_TESTNET_HORIZON).submit_transaction(envelope)
+        result = Server(settings.STELLAR_TESTNET_HORIZON, client=RequestsClient(request_timeout=8)).submit_transaction(envelope)
     except BadRequestError as exc:
         codes = getattr(exc,'extras',{}).get('result_codes',{}) if getattr(exc,'extras',None) else {}
         transaction_code = codes.get('transaction','')

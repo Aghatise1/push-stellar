@@ -37,3 +37,7 @@ The pilot was previously enabled on Render. Recheck /healthz/ and deployment set
 Recorded QA transactions used command line signatures. Actual owner dispute signing and complete Freighter browser acceptance remain outstanding. See [acceptance checks](pilot-acceptance.md). Uncertain submissions remain pending for reconciliation and must not be blindly replaced or marked paid.
 
 See [security readiness](security-readiness.md) before real money use. No platform fee or staff compensation system is specified here.
+
+## Escrow transaction state handling
+
+Escrow transaction and staff permission preparations reserve a short-lived `preparing` state inside a brief database lock, execute outbound Stellar RPC simulation and contract queries outside `transaction.atomic()`, and revalidate account permissions, pinned wallets, and agreement state in a second brief lock before transitioning to `prepared`. Signed submissions transition `prepared -> pending` before network broadcast so a post-broadcast timeout remains `pending` rather than failing or enabling a duplicate payment; subsequent status checks reconcile on-chain state idempotently (`pending -> confirmed | failed | expired`) before allowing any retry.

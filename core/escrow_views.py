@@ -1,6 +1,7 @@
 """Testnet workroom views; escrow remains disabled until release configuration."""
 import hashlib
 import json
+import uuid
 from datetime import datetime,time,timezone as dt_timezone,timedelta
 from django.conf import settings
 from django.db import transaction
@@ -70,19 +71,27 @@ def create_agreement(item):
     deadline=int(datetime.combine(item.job.deadline,time.max,tzinfo=dt_timezone.utc).timestamp())
     if deadline<=timezone.now().timestamp():raise StellarVerificationError('The delivery deadline has passed.')
     root_address=chain.registry_owner(contract)
-    root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
-    if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
-        raise StellarVerificationError('The contract owner must register and verify their staff wallet first.')
     snapshot=item.agreement_snapshot;asset=snapshot.get('payment_asset',item.job.payment_asset)
-    return EscrowAgreement.objects.create(
-        assignment=item,reviewer=root.user,contract=contract,staff_governed=settings.PUSH_TESTNET_ONLY,
-        agreement_id=hashlib.sha256(('push-escrow:'+str(item.pk)).encode()).hexdigest(),
-        client_address=item.job.owner.stellar_address,worker_address=item.worker.stellar_address,
-        reviewer_address=root.address,asset=asset,token_address=chain.token_address(asset),
-        amount=item.budget,deadline=deadline,
-        review_seconds=int(snapshot.get('response_days',item.job.response_days))*86400,
-        revision_limit=int(snapshot.get('revision_limit',item.job.revision_limit)),
-    )
+    token_addr=chain.token_address(asset)
+    with transaction.atomic():
+        locked_item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
+        existing=EscrowAgreement.objects.filter(assignment=locked_item).first()
+        if existing:return existing
+        problem=agreement_setup_problem(locked_item)
+        if problem:raise StellarVerificationError(problem)
+        if deadline<=timezone.now().timestamp():raise StellarVerificationError('The delivery deadline has passed.')
+        root=EscrowStaffWallet.objects.select_related('user').filter(address=root_address).first()
+        if not root or not root.user.is_active or staff_role(root.user)!='owner' or not root.user.email_verified:
+            raise StellarVerificationError('The contract owner must register and verify their staff wallet first.')
+        return EscrowAgreement.objects.create(
+            assignment=locked_item,reviewer=root.user,contract=contract,staff_governed=settings.PUSH_TESTNET_ONLY,
+            agreement_id=hashlib.sha256(('push-escrow:'+str(locked_item.pk)).encode()).hexdigest(),
+            client_address=locked_item.job.owner.stellar_address,worker_address=locked_item.worker.stellar_address,
+            reviewer_address=root.address,asset=asset,token_address=token_addr,
+            amount=locked_item.budget,deadline=deadline,
+            review_seconds=int(snapshot.get('response_days',locked_item.job.response_days))*86400,
+            revision_limit=int(snapshot.get('revision_limit',locked_item.job.revision_limit)),
+        )
 
 
 def state_version(item,agreement=None):
@@ -158,19 +167,30 @@ def agreement_action(request,item):
     if not settings.PUSH_TESTNET_ESCROW_ENABLED or action!='configure':
         try:chain.require_enabled()
         except StellarVerificationError as exc:return workroom_error(str(exc))
+    if action=='configure':
+        item=Assignment.objects.select_related('job__owner','worker').get(pk=item.pk)
+        if item.status!='awaiting_acceptance':
+            return workroom_error('Use the wallet-authorised escrow controls.')
+        if request.user.pk!=item.job.owner_id or EscrowAgreement.objects.filter(assignment=item).exists():
+            return workroom_error('This action is unavailable. Refresh the workroom.')
+        problem=wallet_setup_problem(request,item)
+        if problem:
+            return workroom_error(problem)
+        try:
+            create_agreement(item)
+        except StellarVerificationError as exc:
+            return workroom_error(str(exc))
+        except Exception:
+            return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
+        with transaction.atomic():
+            item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
+            Event.objects.create(assignment=item,actor=request.user,kind=action,note='Testnet escrow agreement terms')
+        return redirect('escrow_detail',pk=item.pk)
     with transaction.atomic():
         item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
         agreement=EscrowAgreement.objects.filter(assignment=item).first()
         if item.status!='awaiting_acceptance' and action!='cancel':return workroom_error('Use the wallet-authorised escrow controls.')
-        if action=='configure' and request.user.pk==item.job.owner_id and not agreement:
-            problem=wallet_setup_problem(request,item)
-            if problem: return workroom_error(problem)
-            try:create_agreement(item)
-            except StellarVerificationError as exc:
-                return workroom_error(str(exc))
-            except Exception:
-                return workroom_error('The testnet staff authority could not be verified. Try again shortly; no tokens were moved.')
-        elif action=='accept' and request.user.pk==item.worker_id and agreement:
+        if action=='accept' and request.user.pk==item.worker_id and agreement:
             if not agreement.staff_governed and not can_review(agreement.reviewer,agreement):
                 return workroom_error('The assigned reviewer is no longer authorised. Cancel this unfunded agreement and prepare new terms.')
             if not request.POST.get('accept_terms') or (agreement.asset=='XLM' and not request.POST.get('accept_xlm')):
@@ -180,7 +200,7 @@ def agreement_action(request,item):
             agreement.accepted_at=timezone.now();agreement.xlm_acknowledged=agreement.asset=='XLM';agreement.save()
             item.accepted_terms_at=agreement.accepted_at;item.status='awaiting_funding';item.save(update_fields=['accepted_terms_at','status'])
         elif action=='cancel' and request.user.pk in (item.worker_id,item.job.owner_id) and item.status in ('awaiting_acceptance','awaiting_funding'):
-            if agreement and (agreement.chain_status!='Unfunded' or agreement.transactions.filter(state__in=['prepared','pending']).exists()):
+            if agreement and (agreement.chain_status!='Unfunded' or agreement.transactions.filter(state__in=['preparing','prepared','pending']).exists()):
                 return workroom_error('Check any prepared or pending transaction before cancellation.')
             item.status='cancelled';item.save(update_fields=['status'])
         else:return workroom_error('This action is unavailable. Refresh the workroom.')
@@ -202,20 +222,56 @@ def prepare(request,pk):
     try:
         chain.require_enabled();data=request_payload(request);item=accessible(request,pk)
         with transaction.atomic():
-            item=Assignment.objects.select_for_update().get(pk=item.pk)
+            item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
             agreement=EscrowAgreement.objects.select_for_update().get(assignment=item)
             action=str(data.get('action',''))
             payload=action_payload(item,agreement,request.user,action,data)
             source=(request.user.escrow_staff_wallet.address if agreement.staff_governed else agreement.reviewer_address) if action=='resolve' else agreement.worker_address if request.user.pk==item.worker_id else agreement.client_address
             if request.session.get('staff_wallet_connected_address' if action=='resolve' else 'wallet_connected_address')!=source:
                 raise StellarVerificationError('Connect the exact wallet recorded in this agreement.')
+            # Keep an in-flight reservation for the same five-minute window used
+            # by the wallet signing request. A second request must not evict a
+            # slow but still valid Stellar preparation.
+            agreement.transactions.filter(state='preparing',created_at__lt=timezone.now()-timedelta(minutes=5)).delete()
+            if agreement.transactions.filter(state__in=['preparing','prepared','pending']).exists():
+                raise StellarVerificationError('A transaction is already prepared or pending. Check its status before preparing another.')
+            reservation=EscrowTransaction.objects.create(
+                escrow=agreement,actor=request.user,action=action,source=source,
+                prepared_xdr='',tx_hash=f'preparing-{uuid.uuid4().hex}',state='preparing',payload=payload,
+            )
+        try:
             if action=='resolve' and agreement.staff_governed and chain.registry_role(agreement.contract,source)==0:
                 raise StellarVerificationError('Your wallet has no active contract permission. An owner or administrator must grant access first.')
-            if agreement.transactions.filter(state__in=['prepared','pending']).exists():
-                raise StellarVerificationError('A transaction is already prepared or pending. Check its status before preparing another.')
             envelope=chain.build(agreement,action,source,payload)
-            record=EscrowTransaction.objects.create(escrow=agreement,actor=request.user,action=action,source=source,
-                prepared_xdr=envelope.to_xdr(),tx_hash=envelope.hash_hex(),payload=payload)
+        except Exception:
+            EscrowTransaction.objects.filter(pk=reservation.pk,state='preparing').delete()
+            raise
+        revalidation_error=None
+        with transaction.atomic():
+            item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
+            agreement=EscrowAgreement.objects.select_for_update().get(pk=agreement.pk)
+            record=EscrowTransaction.objects.select_for_update().filter(pk=reservation.pk).first()
+            if record is None:
+                raise StellarVerificationError('Transaction preparation expired. Refresh the workroom and try again.')
+            actor=User.objects.get(pk=request.user.pk)
+            try:
+                if not actor.is_active or not actor.email_verified:
+                    raise PermissionError('Account access is no longer active.')
+                revalidated_payload=action_payload(item,agreement,actor,action,data)
+                expected_source=(actor.escrow_staff_wallet.address if agreement.staff_governed else agreement.reviewer_address) if action=='resolve' else agreement.worker_address if actor.pk==item.worker_id else agreement.client_address
+                if expected_source!=source or record.state!='preparing':
+                    raise StellarVerificationError('Agreement state or wallet authority changed during preparation. Refresh and try again.')
+            except Exception as exc:
+                record.delete()
+                revalidation_error=exc
+            else:
+                record.prepared_xdr=envelope.to_xdr()
+                record.tx_hash=envelope.hash_hex()
+                record.state='prepared'
+                record.payload=revalidated_payload
+                record.save(update_fields=['prepared_xdr','tx_hash','state','payload'])
+        if revalidation_error is not None:
+            raise revalidation_error
         return JsonResponse({'ok':True,'token':str(record.pk),'source':source,'xdr':record.prepared_xdr,
             'networkPassphrase':chain.NETWORK,'fee':str(envelope.transaction.fee/chain.SCALE),
             'message':f'Testnet {action}: {agreement.amount} {agreement.asset}. Network fee is additional.'})
@@ -231,12 +287,19 @@ def submit(request,pk):
     from .escrow_records import reconcile
     from stellar_sdk.soroban_rpc import SendTransactionStatus
     try:
-        chain.require_enabled();item=accessible(request,pk);data=request_payload(request)
-        record=get_object_or_404(EscrowTransaction,pk=data.get('token'),escrow__assignment=item)
+        chain.require_enabled();data=request_payload(request)
+        item=get_object_or_404(Assignment.objects.select_related('job__owner','worker'),pk=pk,escrow_required=True)
+        record=get_object_or_404(EscrowTransaction.objects.select_related('escrow__assignment'),pk=data.get('token'),escrow__assignment=item)
         if record.actor_id!=request.user.pk:raise PermissionError('Only the preparing account may submit or retry this transaction.')
-        if record.action=='resolve' and not can_review(request.user,record.escrow):raise PermissionError('Reviewer access is no longer active.')
         if record.state=='confirmed':return completion(item,record)
         if record.state not in ('prepared','pending'):raise StellarVerificationError('This transaction is closed. Refresh the workroom.')
+        # Reconcile an already-broadcast transaction before checking current reviewer permissions,
+        # so an on-chain settlement that already succeeded is recorded even if staff access was later revoked.
+        if record.state=='pending' and reconcile(record):
+            return completion(item,record)
+        accessible(request,pk)
+        if record.action=='resolve' and not can_review(request.user,record.escrow):
+            raise PermissionError('Reviewer access is no longer active.')
         if record.state=='prepared':
             if request.session.get('staff_wallet_connected_address' if record.action=='resolve' else 'wallet_connected_address')!=record.source:raise StellarVerificationError('Reconnect the agreement wallet.')
             if timezone.now()-record.created_at>timedelta(minutes=5):
@@ -246,11 +309,19 @@ def submit(request,pk):
                 return JsonResponse({'ok':False,'message':'Approval was not submitted. Wait five minutes for this unsigned request to expire, then prepare again.'},status=400)
             envelope=chain.validate_signature(record,data['signedXdr'])
             with transaction.atomic():
+                locked_item=Assignment.objects.select_for_update().select_related('job__owner','worker').get(pk=item.pk)
+                locked_agreement=EscrowAgreement.objects.select_for_update().get(pk=record.escrow_id)
                 locked=EscrowTransaction.objects.select_for_update().get(pk=record.pk)
+                actor=User.objects.get(pk=request.user.pk)
+                if locked.state=='confirmed':
+                    return completion(locked_item,locked)
                 if locked.state=='prepared':
+                    if locked.action=='resolve' and not can_review(actor,locked_agreement):
+                        raise PermissionError('Reviewer access is no longer active.')
+                    action_payload(locked_item,locked_agreement,actor,locked.action,{**locked.payload,'action':locked.action,'worker_amount':locked.payload.get('worker_amount',0)})
                     locked.signed_xdr=envelope.to_xdr();locked.state='pending';locked.save(update_fields=['signed_xdr','state'])
             record.refresh_from_db()
-        if reconcile(record):return completion(item,record)
+            if reconcile(record):return completion(item,record)
         # Retry the same signed envelope only. Its hash and sequence cannot create a second payment.
         envelope=chain.validate_signature(record,record.signed_xdr)
         result=chain.server().send_transaction(envelope)

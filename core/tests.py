@@ -1,6 +1,6 @@
 import re
 import json
-from io import StringIO
+from io import BytesIO, StringIO
 from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
@@ -16,7 +16,8 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
 from stellar_sdk import Account, Asset, Keypair, Network, TransactionBuilder
-from .models import AccountActivity, User, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
+from pypdf import PdfWriter
+from .models import AccountActivity, User, EmailVerificationCode, PendingRegistration, Job, Application, Assignment, Payment, WalletTransfer, Event, RateBucket, Dispute, AccountSanction, Submission, Notification, WaitlistApplication, Invitation, StaffAccess, SupportTicket, TicketFeedback, EmailDelivery, AuditEvent, DocumentationArticle, CommunityPost, CommunityReply, CommunityReport
 from .invitations import hash_invitation_code
 from .stellar import StellarVerificationError, assignment_memo, build_payment_xdr, payment_uri, prepare_payment, valid_account_id, validate_signed_payment, verify_payment
 from .email_backend import BrevoEmailBackend
@@ -273,6 +274,26 @@ class WorkspaceTests(TestCase):
         self.assertEqual(response['Retry-After'],'900')
         middleware=AppSecurityMiddleware(lambda request: JsonResponse({'error':'Try later.'},status=429))
         self.assertEqual(json.loads(middleware(request).content),{'error':'Try later.'})
+
+    @patch('core.middleware.logging.getLogger')
+    def test_unhandled_error_logs_redacted_password_reset_path(self,get_logger):
+        from .middleware import AppSecurityMiddleware
+        request=RequestFactory().get('/reset/encoded-user/live-secret-token/')
+        request.user=self.worker
+        def fail(_request):
+            raise RuntimeError('forced failure')
+        with self.assertRaises(RuntimeError):
+            AppSecurityMiddleware(fail)(request)
+        get_logger.return_value.exception.assert_called_once_with(
+            'Unhandled request error',
+            extra={'path':'/reset/[redacted]/[redacted]/','method':'GET'},
+        )
+
+    def test_sensitive_log_path_redacts_authentication_credentials(self):
+        from .middleware import safe_log_path
+        self.assertEqual(safe_log_path('/reset/user/token'),'/reset/[redacted]/[redacted]/')
+        self.assertEqual(safe_log_path('/verify/email-secret/'),'/verify/[redacted]/')
+        self.assertEqual(safe_log_path('/jobs/ordinary-slug/'),'/jobs/ordinary-slug/')
 
     def test_staff_waitlist_approval_checks_csrf_on_both_public_hosts_behind_proxy(self):
         from config.security import trusted_csrf_origins
@@ -745,7 +766,8 @@ class WorkspaceTests(TestCase):
     def test_profile_photo_and_resume_are_database_backed_and_privacy_scoped(self):
         self.login_as(self.worker)
         image=SimpleUploadedFile('portrait.png',b'\x89PNG\r\n\x1a\n'+b'profile-image',content_type='image/png')
-        resume=SimpleUploadedFile('worker-resume.pdf',b'%PDF-1.4\nresume',content_type='application/pdf')
+        pdf=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792);writer.write(pdf)
+        resume=SimpleUploadedFile('worker-resume.pdf',pdf.getvalue()+b'UNREFERENCED-TRAILER',content_type='application/pdf')
         response=self.client.post(reverse('profile'),{
             'display_name':'Worker','bio':'Product designer','skills':'Design','portfolio':'',
             'stellar_address':'','profile_image':image,'resume_file':resume,
@@ -755,6 +777,7 @@ class WorkspaceTests(TestCase):
         self.assertEqual(bytes(self.worker.profile_image),b'\x89PNG\r\n\x1a\nprofile-image')
         self.assertEqual(self.worker.profile_image_content_type,'image/png')
         self.assertEqual(self.worker.resume_filename,'worker-resume.pdf')
+        self.assertNotIn(b'UNREFERENCED-TRAILER',bytes(self.worker.resume_file))
 
         outsider=Client()
         self.assertEqual(outsider.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
@@ -768,6 +791,34 @@ class WorkspaceTests(TestCase):
         self.assertIn('attachment',download['Content-Disposition'])
         self.assertContains(outsider.get(reverse('public_profile',args=[self.worker.pk])),'Download résumé')
 
+    def test_revoked_staff_flag_does_not_grant_private_profile_media_access(self):
+        self.worker.profile_image=b'private-image'
+        self.worker.profile_image_content_type='image/png'
+        self.worker.resume_file=b'private-resume'
+        self.worker.resume_filename='private.pdf'
+        self.worker.public_profile=False
+        self.worker.save(update_fields=['profile_image','profile_image_content_type','resume_file','resume_filename','public_profile'])
+        self.grant_staff(self.outsider,'trust_support')
+        self.outsider.staff_access.status='revoked'
+        self.outsider.staff_access.save(update_fields=['status'])
+        staff_client=Client()
+        staff_client.force_login(self.outsider)
+        self.assertEqual(staff_client.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(staff_client.get(reverse('resume_download',args=[self.worker.pk])).status_code,404)
+
+    def test_revoked_superuser_does_not_grant_private_profile_media_access(self):
+        self.worker.profile_image=b'private-image'
+        self.worker.profile_image_content_type='image/png'
+        self.worker.resume_file=b'private-resume'
+        self.worker.resume_filename='private.pdf'
+        self.worker.public_profile=False
+        self.worker.save(update_fields=['profile_image','profile_image_content_type','resume_file','resume_filename','public_profile'])
+        superuser=User.objects.create_superuser(username='former-owner',email='former-owner@example.test',password='Independent-cobalt-732!')
+        StaffAccess.objects.create(user=superuser,role='owner',status='revoked')
+        staff_client=Client();staff_client.force_login(superuser)
+        self.assertEqual(staff_client.get(reverse('profile_image',args=[self.worker.pk])).status_code,404)
+        self.assertEqual(staff_client.get(reverse('resume_download',args=[self.worker.pk])).status_code,404)
+
     def test_profile_rejects_disguised_uploads(self):
         self.login_as(self.worker)
         response=self.client.post(reverse('profile'),{
@@ -777,7 +828,37 @@ class WorkspaceTests(TestCase):
         })
         self.assertEqual(response.status_code,200)
         self.assertContains(response,'Upload a valid JPG, PNG or WebP image')
-        self.assertContains(response,'Upload a valid PDF résumé')
+        self.assertContains(response,'Upload a safe, structurally valid PDF résumé')
+
+    def test_profile_rejects_header_only_and_active_content_pdfs(self):
+        self.login_as(self.worker)
+        active=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792);writer.add_js('app.alert(1)');writer.write(active)
+        samples=(
+            b'%PDF-1.4\nresume',
+            active.getvalue(),
+        )
+        for index,payload in enumerate(samples):
+            with self.subTest(index=index):
+                response=self.client.post(reverse('profile'),{
+                    'display_name':'Worker','bio':'','skills':'','portfolio':'','stellar_address':'',
+                    'resume_file':SimpleUploadedFile(f'unsafe-{index}.pdf',payload,content_type='application/pdf'),
+                })
+                self.assertEqual(response.status_code,200)
+                self.assertContains(response,'Upload a safe, structurally valid PDF résumé')
+
+    def test_profile_strips_link_annotations_from_stored_pdf(self):
+        self.login_as(self.worker)
+        linked=BytesIO();writer=PdfWriter();writer.add_blank_page(width=612,height=792)
+        writer.add_uri(0,'javascript:alert(1)',(0,0,100,100));writer.write(linked)
+        response=self.client.post(reverse('profile'),{
+            'display_name':'Worker','bio':'','skills':'','portfolio':'','stellar_address':'',
+            'resume_file':SimpleUploadedFile('linked.pdf',linked.getvalue(),content_type='application/pdf'),
+        })
+        self.assertRedirects(response,reverse('profile'))
+        self.worker.refresh_from_db()
+        from pypdf import PdfReader
+        stored=PdfReader(BytesIO(bytes(self.worker.resume_file)),strict=True)
+        self.assertNotIn('/Annots',stored.pages[0])
     def test_applications_private_and_duplicate_prevented(self):
         self.login_as(self.worker)
         url=reverse('apply',args=[self.job.pk])
@@ -1542,3 +1623,225 @@ class WorkspaceTests(TestCase):
         self.assertContains(response,'noindex, nofollow, noarchive')
         self.assertEqual(self.client.get(reverse('robots')).content,b'User-agent: *\nDisallow: /\n')
         self.assertEqual(self.client.get(reverse('sitemap')).status_code,404)
+
+    def test_independent_authenticated_accounts_behind_proxy_have_separate_limits(self):
+        worker_client=Client();worker_client.force_login(self.worker)
+        owner_client=Client();owner_client.force_login(self.owner)
+        payload={'subject':'Need help','category':'account','description':'Checking account support limit.'}
+        for _ in range(10):
+            response=worker_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5')
+            self.assertEqual(response.status_code,302)
+        self.assertEqual(worker_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5').status_code,429)
+        owner_response=owner_client.post(reverse('support'),payload,REMOTE_ADDR='10.0.0.5')
+        self.assertEqual(owner_response.status_code,302)
+
+    @override_settings(PUSH_TRUSTED_PROXIES=())
+    def test_untrusted_forged_forwarded_headers_do_not_bypass_limits(self):
+        for i in range(12):
+            response=self.client.post(
+                reverse('login'),
+                {'username':f'absent-{i}@example.test','password':'wrong'},
+                REMOTE_ADDR='203.0.113.9',
+                HTTP_X_FORWARDED_FOR=f'198.51.100.{i + 1}',
+            )
+            self.assertEqual(response.status_code,200)
+        blocked=self.client.post(
+            reverse('login'),
+            {'username':'absent-final@example.test','password':'wrong'},
+            REMOTE_ADDR='203.0.113.9',
+            HTTP_X_FORWARDED_FOR='198.51.100.250',
+        )
+        self.assertEqual(blocked.status_code,429)
+
+    @override_settings(PUSH_TRUSTED_PROXIES=('10.0.0.0/8','127.0.0.1'))
+    def test_trusted_proxy_policy_handles_forwarded_forged_missing_and_malformed_headers(self):
+        payload={
+            'name':'Tester','role':'Designer','skills':'UX','intended_use':'Test jobs',
+            'reason':'Join pilot','accepted_testing_terms':'on',
+        }
+        for i in range(5):
+            response=self.client.post(
+                reverse('waitlist'),
+                {**payload,'email':f'first-{i}@example.test'},
+                REMOTE_ADDR='10.0.0.1',
+                HTTP_X_FORWARDED_FOR=f'1.1.1.{i + 1}, 198.51.100.10',
+            )
+            self.assertEqual(response.status_code,200)
+        spoofed=self.client.post(
+            reverse('waitlist'),
+            {**payload,'email':'first-blocked@example.test'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='8.8.8.8, 198.51.100.10',
+        )
+        self.assertEqual(spoofed.status_code,429)
+        second_client=self.client.post(
+            reverse('waitlist'),
+            {**payload,'email':'second-client@example.test'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.20',
+        )
+        self.assertEqual(second_client.status_code,200)
+        for bad_header in ('', 'not-an-ip', 'garbage, :::', '198.51.100.30, malformed'):
+            res=self.client.post(
+                reverse('waitlist'),
+                {**payload,'email':'malformed@example.test'},
+                REMOTE_ADDR='10.0.0.2',
+                HTTP_X_FORWARDED_FOR=bad_header,
+            )
+            self.assertIn(res.status_code,(200,429))
+
+    @override_settings(PUSH_TRUSTED_PROXIES=('10.0.0.0/8',))
+    def test_staff_limits_preserved_and_bucket_keys_remain_hashed(self):
+        staff_two=User.objects.create_user(
+            username='admin2@example.test',email='admin2@example.test',password='Independent-cobalt-732!',
+            display_name='Admin Two',email_verified=True,terms_version='2026-10-06.1',terms_accepted_at=timezone.now(),
+        )
+        self.grant_staff(self.owner,'owner')
+        self.grant_staff(staff_two,'admin')
+        owner_client=Client();owner_client.force_login(self.owner)
+        admin_client=Client();admin_client.force_login(staff_two)
+        for i in range(30):
+            res=owner_client.post(
+                reverse('create_staff_invitation'),
+                {'name':f'Invitee {i}','email':f'invitee-{i}@example.test','role':'Tester'},
+                REMOTE_ADDR='10.0.0.1',
+                HTTP_X_FORWARDED_FOR='198.51.100.40',
+            )
+            self.assertEqual(res.status_code,302)
+        limited_owner=owner_client.post(
+            reverse('create_staff_invitation'),
+            {'name':'Overflow','email':'overflow@example.test','role':'Tester'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.40',
+            follow=True,
+        )
+        self.assertContains(limited_owner,'Too many invitations were created recently.')
+        admin_ok=admin_client.post(
+            reverse('create_staff_invitation'),
+            {'name':'Admin Invitee','email':'admin-invitee@example.test','role':'Tester'},
+            REMOTE_ADDR='10.0.0.1',
+            HTTP_X_FORWARDED_FOR='198.51.100.40',
+            follow=True,
+        )
+        self.assertContains(admin_ok,'Invitation created')
+        for key in RateBucket.objects.values_list('key',flat=True):
+            self.assertEqual(len(key),64)
+            self.assertNotIn('198.51.100',key)
+            self.assertNotIn('10.0.0',key)
+        for key in RateBucket.objects.values_list('key',flat=True):
+            self.assertEqual(len(key),64)
+            self.assertNotIn('198.51.100',key)
+            self.assertNotIn('10.0.0',key)
+            self.assertNotIn('@',key)
+
+    def test_verify_email_exhaustion_expiry_deletion_and_repeated_gets_do_not_bypass_resend_limit(self):
+        self.worker.email_verified=False;self.worker.save(update_fields=['email_verified'])
+        self.login_as(self.worker)
+        mail.outbox.clear()
+
+        # Initial GET sends the first code; repeated GETs do not send more.
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        for _ in range(3):
+            self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhausting 5 wrong attempts and refreshing via GET must not send a new code.
+        for _ in range(5):
+            res=self.client.post(reverse('verify_email'),{'code':'000000'})
+            self.assertContains(res,'That code is incorrect')
+        exhausted=self.client.post(reverse('verify_email'),{'code':'000000'})
+        self.assertContains(exhausted,'Too many incorrect attempts. Send a new code.')
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Expiry and record deletion must also not cause GET to auto-send a new code.
+        EmailVerificationCode.objects.filter(user=self.worker).update(expires_at=timezone.now()-timedelta(minutes=1),attempts=0)
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        expired_post=self.client.post(reverse('verify_email'),{'code':'000000'})
+        self.assertContains(expired_post,'That code has expired. Send a new code and try again.')
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+        EmailVerificationCode.objects.filter(user=self.worker).delete()
+        self.assertEqual(self.client.get(reverse('verify_email')).status_code,200)
+        self.assertEqual(len(mail.outbox),1)
+
+        # Explicit resend allows 3 sends, even if the user repeatedly exhausts codes in between.
+        for expected_count in (2,3,4):
+            resend_res=self.client.post(reverse('resend'))
+            self.assertEqual(resend_res.status_code,302)
+            self.assertEqual(len(mail.outbox),expected_count)
+            if expected_count < 4:
+                for _ in range(6):
+                    self.client.post(reverse('verify_email'),{'code':'000000'})
+                self.client.get(reverse('verify_email'))
+                self.assertEqual(len(mail.outbox),expected_count)
+
+        # 4th explicit resend is blocked with 429.
+        self.assertEqual(self.client.post(reverse('resend')).status_code,429)
+        self.assertEqual(len(mail.outbox),4)
+
+        # The latest issued code still verifies the account cleanly.
+        latest_code=re.search(r'\b(\d{6})\b',mail.outbox[-1].body).group(1)
+        verified_res=self.client.post(reverse('verify_email'),{'code':latest_code})
+        self.assertRedirects(verified_res,reverse('verification_success'))
+        self.worker.refresh_from_db()
+        self.assertTrue(self.worker.email_verified)
+
+    def test_registration_verification_exhaustion_cooldown_and_independent_users(self):
+        mail.outbox.clear()
+        self.grant_invitation('reg1@example.test','PUSH-AAAA1111-BBBB2222')
+        self.grant_invitation('reg2@example.test','PUSH-CCCC3333-DDDD4444')
+        client_one=Client()
+        client_two=Client()
+        client_one.post(reverse('invite_redeem'),{'code':'PUSH-AAAA1111-BBBB2222'},REMOTE_ADDR='10.0.0.8')
+        client_two.post(reverse('invite_redeem'),{'code':'PUSH-CCCC3333-DDDD4444'},REMOTE_ADDR='10.0.0.8')
+
+        reg_one=client_one.post(
+            reverse('register'),
+            {'display_name':'Reg One','email':'reg1@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+        )
+        self.assertRedirects(reg_one,reverse('verify_registration'))
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhausting 5 wrong codes on registration verification blocks further attempts and GET does not resend.
+        for _ in range(5):
+            res=client_one.post(reverse('verify_registration'),{'code':'000000'},REMOTE_ADDR='10.0.0.8')
+            self.assertContains(res,'That code is incorrect')
+        locked=client_one.post(reverse('verify_registration'),{'code':'000000'},REMOTE_ADDR='10.0.0.8')
+        self.assertContains(locked,'Too many incorrect attempts. Send a new code.')
+        client_one.get(reverse('verify_registration'),REMOTE_ADDR='10.0.0.8')
+        self.assertEqual(len(mail.outbox),1)
+
+        # Exhaust 3 registration resends for client_one; 4th resend and re-POST to register are blocked from sending email.
+        for expected_count in (2,3,4):
+            res=client_one.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8')
+            self.assertEqual(res.status_code,302)
+            self.assertEqual(len(mail.outbox),expected_count)
+        blocked_resend=client_one.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8',follow=True)
+        self.assertContains(blocked_resend,'Too many code requests')
+        self.assertEqual(len(mail.outbox),4)
+        repost_reg=client_one.post(
+            reverse('register'),
+            {'display_name':'Reg One','email':'reg1@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+            follow=True,
+        )
+        self.assertEqual(len(mail.outbox),4)
+
+        # Independent user behind the same proxy can still register, resend, and verify.
+        reg_two=client_two.post(
+            reverse('register'),
+            {'display_name':'Reg Two','email':'reg2@example.test','password1':'Long-example-password-723!','password2':'Long-example-password-723!','accept_terms':'on'},
+            REMOTE_ADDR='10.0.0.8',
+        )
+        self.assertRedirects(reg_two,reverse('verify_registration'))
+        self.assertEqual(len(mail.outbox),5)
+        self.assertEqual(client_two.post(reverse('resend_registration'),REMOTE_ADDR='10.0.0.8').status_code,302)
+        self.assertEqual(len(mail.outbox),6)
+        code_two=re.search(r'\b(\d{6})\b',mail.outbox[-1].body).group(1)
+        ok_two=client_two.post(reverse('verify_registration'),{'code':code_two},REMOTE_ADDR='10.0.0.8')
+        self.assertRedirects(ok_two,reverse('verification_success'))
+        self.assertTrue(User.objects.filter(email='reg2@example.test',email_verified=True).exists())
